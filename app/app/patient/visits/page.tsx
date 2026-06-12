@@ -41,12 +41,28 @@ const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
 
 // ── Reserved slot selection card ──────────────────────────────────────────────
 
-function ReservedSlotCard({ appt, onConfirm }: {
+function ReservedSlotCard({ appt, onConfirm, onDecline }: {
   appt: PortalAppointment;
   onConfirm: (slotId: string) => void;
+  onDecline: () => void;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  const [declined, setDeclined] = useState(false);
+
+  if (declined) {
+    return (
+      <div className="rounded-2xl border border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/10 p-5">
+        <div className="flex items-center gap-3">
+          <CheckCircle2 className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">Thanks! We'll send you new options soon.</p>
+            <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">Your care coordinator has been notified and will reach out with alternative times.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (confirmed) {
     const slot = appt.slotOptions!.find(s => s.slotId === selected)!;
@@ -147,6 +163,12 @@ function ReservedSlotCard({ appt, onConfirm }: {
             {selected ? `You selected: ${fmtDateShort(appt.slotOptions!.find(s => s.slotId === selected)!.date)} at ${fmt12(appt.slotOptions!.find(s => s.slotId === selected)!.startTime)}` : "Select a slot above to confirm"}
           </p>
         </div>
+
+        {/* None of these work */}
+        <button onClick={() => { onDecline(); setDeclined(true); }}
+          className="w-full py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+          None of these times work for me — Request new options
+        </button>
 
         {/* Copay note */}
         {appt.copay !== undefined && (
@@ -265,6 +287,10 @@ export default function VisitsPage() {
     }));
   }
 
+  function handleSlotDecline(apptId: string) {
+    setAppointments(prev => prev.filter(a => a.id !== apptId));
+  }
+
   const reserved = appointments.filter(a => a.appointmentType === "reserved" && a.status === "requested");
   const regular = appointments.filter(a => !(a.appointmentType === "reserved" && a.status === "requested"));
 
@@ -306,7 +332,7 @@ export default function VisitsPage() {
             </p>
           </div>
           {reserved.map(appt => (
-            <ReservedSlotCard key={appt.id} appt={appt} onConfirm={(slotId) => handleSlotConfirm(appt.id, slotId)} />
+            <ReservedSlotCard key={appt.id} appt={appt} onConfirm={(slotId) => handleSlotConfirm(appt.id, slotId)} onDecline={() => handleSlotDecline(appt.id)} />
           ))}
         </div>
       )}

@@ -180,7 +180,7 @@ export default function FormsPage() {
   const completed = PATIENT_FORMS.filter(f => f.status === "completed");
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6">
       <div>
         <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Forms & Intake</h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Complete assigned forms and view past submissions</p>

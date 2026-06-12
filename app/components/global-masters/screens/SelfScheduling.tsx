@@ -5,6 +5,12 @@ import { Globe, Save, CheckCircle } from "lucide-react";
 import Toggle from "@/components/ui/Toggle";
 import { cn } from "@/lib/utils";
 
+const AVAILABLE_FORMS = [
+  "Patient Intake Form", "Consent to Treat", "HIPAA Notice", "Privacy Practice Agreement",
+  "Telehealth Consent", "PHQ-9 Depression Screening", "GAD-7 Anxiety Screening",
+  "Release of Information", "Financial Agreement", "Columbia Suicide Severity Rating",
+];
+
 export default function SelfSchedulingScreen() {
   const [settings, setSettings] = useState({
     enabled: true,
@@ -26,6 +32,8 @@ export default function SelfSchedulingScreen() {
     showAvailabilityCount: false,
     collectChiefComplaint: true,
     requireReferral: false,
+    telehealthConsentForm: "Telehealth Consent",
+    cancellationPolicyForm: "Financial Agreement",
   });
   const [saved, setSaved] = useState(false);
 
@@ -186,6 +194,31 @@ export default function SelfSchedulingScreen() {
                 placeholder="Optional message shown at the top of the booking page…"
                 className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
               />
+            </div>
+
+            {/* Form Designations */}
+            <div className="space-y-3">
+              <h2 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Form Designations</h2>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Telehealth Consent Form</label>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-1.5">This form will be highlighted as a link in the patient telehealth booking confirmation step.</p>
+                  <select value={settings.telehealthConsentForm} onChange={e => update("telehealthConsentForm", e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">— None —</option>
+                    {AVAILABLE_FORMS.map(f => <option key={f} value={f}>{f}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Cancellation Policy Form</label>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-1.5">This form will be highlighted as a link in the patient booking confirmation step.</p>
+                  <select value={settings.cancellationPolicyForm} onChange={e => update("cancellationPolicyForm", e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">— None —</option>
+                    {AVAILABLE_FORMS.map(f => <option key={f} value={f}>{f}</option>)}
+                  </select>
+                </div>
+              </div>
             </div>
 
           </div>

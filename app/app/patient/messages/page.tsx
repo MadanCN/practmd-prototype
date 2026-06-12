@@ -117,7 +117,7 @@ export default function MessagesPage() {
   const totalUnread = threads.reduce((s, t) => s + t.unreadCount, 0);
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex flex-col">
+    <div className="h-[calc(100vh-60px)] flex flex-col">
       {showNew && <NewThreadModal onClose={() => setShowNew(false)} onSend={newThread} />}
 
       <div className="flex items-center justify-between gap-4 mb-4 shrink-0">

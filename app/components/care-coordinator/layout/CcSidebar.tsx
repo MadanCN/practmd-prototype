@@ -7,6 +7,7 @@ import {
   LayoutDashboard, Users, CalendarDays, MessageSquare, CheckSquare,
   FileText, FolderOpen, BarChart3, Clock, Settings, ChevronLeft,
   ChevronRight, ChevronDown, ChevronUp, List, Inbox, Hourglass, ClipboardList,
+  DoorOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +33,7 @@ const NAV: NavItem[] = [
       { label: "Requests", href: `${BASE}/appointments/requests`, icon: Inbox },
     ],
   },
+  { label: "Waiting Room", href: `${BASE}/waiting-room`, icon: DoorOpen },
   { label: "Messages", href: `${BASE}/messages`, icon: MessageSquare },
   { label: "Tasks", href: `${BASE}/tasks`, icon: CheckSquare },
   { label: "Submissions", href: `${BASE}/submissions`, icon: ClipboardList },

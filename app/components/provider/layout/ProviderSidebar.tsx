@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Users, CalendarDays, MessageSquare, CheckSquare,
   BarChart3, Clock, Settings, ChevronLeft, ChevronRight,
   ChevronDown, ChevronUp, List, CalendarRange, UserCircle, HelpCircle,
-  DoorOpen,
+  DoorOpen, Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +29,7 @@ const NAV: NavItem[] = [
     children: [
       { label: "Calendar", href: `${BASE}/appointments`, icon: CalendarDays },
       { label: "List", href: `${BASE}/appointments/list`, icon: List },
+      { label: "New Appointment", href: `${BASE}/appointments/new`, icon: Plus },
     ],
   },
   { label: "Messages", href: `${BASE}/messages`, icon: MessageSquare },

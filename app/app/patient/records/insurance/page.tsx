@@ -159,7 +159,7 @@ export default function InsurancePage() {
   const [showAdd, setShowAdd] = useState(false);
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Insurance</h1>

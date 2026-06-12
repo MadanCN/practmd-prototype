@@ -600,7 +600,7 @@ export default function ProfilePage() {
   const [active, setActive] = useState<Section>("profile");
 
   return (
-    <div className="flex gap-6 max-w-4xl">
+    <div className="flex gap-6">
       {/* Sidebar nav */}
       <div className="w-56 shrink-0 space-y-1">
         {NAV.map(item => {

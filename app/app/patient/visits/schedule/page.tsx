@@ -104,8 +104,6 @@ export default function SchedulePage() {
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [selectedSlot, setSelectedSlot] = useState<string>("");
   const [insurance] = useState(PATIENT_INSURANCES[0]);
-  const [eligChecked, setEligChecked] = useState(false);
-  const [eligLoading, setEligLoading] = useState(false);
   const [chiefComplaint, setChiefComplaint] = useState("");
   const [notes, setNotes] = useState("");
   const [accommodation, setAccommodation] = useState("");
@@ -123,16 +121,19 @@ export default function SchedulePage() {
     });
   }, [selectedMode, selectedReason]);
 
+  const effectiveProvider = selectedProvider
+    ?? (selectedProviderId === "any" && availableProviders.length > 0 ? availableProviders[0] : undefined);
+
   // Slots for selected provider + date
   const allSlots = useMemo(() => {
-    if (!selectedProvider || !selectedDate || !selectedReason) return [];
-    return generateSlots(selectedProvider, selectedDate, selectedReason.duration);
-  }, [selectedProvider, selectedDate, selectedReason]);
+    if (!effectiveProvider || !selectedDate || !selectedReason) return [];
+    return generateSlots(effectiveProvider, selectedDate, selectedReason.duration);
+  }, [effectiveProvider, selectedDate, selectedReason]);
 
   const bookedSlots = useMemo(() => {
-    if (!selectedProvider || !selectedDate) return [];
-    return getBookedSlots(selectedProvider.id, selectedDate);
-  }, [selectedProvider, selectedDate]);
+    if (!effectiveProvider || !selectedDate) return [];
+    return getBookedSlots(effectiveProvider.id, selectedDate);
+  }, [effectiveProvider, selectedDate]);
 
   const currentIndex = STEP_ORDER.indexOf(step);
 
@@ -143,11 +144,6 @@ export default function SchedulePage() {
   function back() {
     const prevStep = STEP_ORDER[currentIndex - 1];
     if (prevStep) setStep(prevStep);
-  }
-
-  function runEligCheck() {
-    setEligLoading(true);
-    setTimeout(() => { setEligLoading(false); setEligChecked(true); }, 1800);
   }
 
   function handleBook() {
@@ -177,7 +173,7 @@ export default function SchedulePage() {
   });
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="space-y-6">
       {/* Header */}
       {step !== "booked" && (
         <div>
@@ -353,7 +349,7 @@ export default function SchedulePage() {
       )}
 
       {/* ── STEP: Date & Time ── */}
-      {step === "datetime" && selectedProvider && (
+      {step === "datetime" && effectiveProvider && (
         <div className="space-y-5">
           <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200">Pick a date and time</h2>
 
@@ -362,8 +358,8 @@ export default function SchedulePage() {
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Available Dates</p>
             <div className="grid grid-cols-7 gap-1.5">
               {calDates.map(iso => {
-                const slots = generateSlots(selectedProvider, iso, selectedReason?.duration ?? 30);
-                const booked = getBookedSlots(selectedProvider.id, iso);
+                const slots = generateSlots(effectiveProvider, iso, selectedReason?.duration ?? 30);
+                const booked = getBookedSlots(effectiveProvider.id, iso);
                 const available = slots.filter(s => !booked.includes(s)).length;
                 const sel = selectedDate === iso;
                 const d = new Date(iso + "T12:00:00");
@@ -448,21 +444,13 @@ export default function SchedulePage() {
               ))}
             </div>
 
-            {!eligChecked ? (
-              <button onClick={runEligCheck} disabled={eligLoading}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition-colors disabled:opacity-60">
-                {eligLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
-                {eligLoading ? "Checking eligibility…" : "Run Eligibility Check"}
-              </button>
-            ) : (
-              <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <div>
-                  <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">Eligibility Confirmed</p>
-                  <p className="text-xs text-emerald-600 dark:text-emerald-400">Your {insurance.provider} plan is active and covers this visit type. Estimated co-pay: ${insurance.copay}.</p>
-                </div>
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">Coverage Verified</p>
+                <p className="text-xs text-emerald-600 dark:text-emerald-400">Your {insurance.provider} plan covers this visit type. Estimated co-pay: ${insurance.copay}.</p>
               </div>
-            )}
+            </div>
           </div>
 
           <button className="w-full py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-center gap-2">
@@ -508,14 +496,14 @@ export default function SchedulePage() {
       )}
 
       {/* ── STEP: Confirm ── */}
-      {step === "confirm" && selectedProvider && selectedReason && selectedDate && selectedSlot && (
+      {step === "confirm" && effectiveProvider && selectedReason && selectedDate && selectedSlot && (
         <div className="space-y-4">
           <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200">Review & Confirm</h2>
 
           <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/40 dark:bg-emerald-950/10 p-5 space-y-3">
             {[
               { label: "Visit Type", val: selectedReason.visitType },
-              { label: "Provider", val: `${selectedProvider.displayName}, ${selectedProvider.credentials}` },
+              { label: "Provider", val: `${effectiveProvider.displayName}, ${effectiveProvider.credentials}` },
               { label: "Date", val: fmtDate(selectedDate) },
               { label: "Time", val: `${fmt12(selectedSlot)} (${selectedReason.duration} min)` },
               { label: "Mode", val: selectedMode === "telehealth" ? "Telehealth — Video Call" : selectedMode === "in-person" ? "In Person — Penfield Psychiatry" : "Phone Call" },
@@ -534,15 +522,21 @@ export default function SchedulePage() {
             <input type="checkbox" checked={consentChecked} onChange={e => setConsentChecked(e.target.checked)}
               className="accent-emerald-600 w-4 h-4 mt-0.5 shrink-0" />
             <p className="text-sm text-slate-700 dark:text-slate-300">
-              I confirm this appointment and consent to treatment. I understand the cancellation policy (24-hour notice required).
-              For telehealth, I consent to video-based care delivery.
+              I confirm this appointment and consent to treatment. I have read and agree to the{" "}
+              <span className="font-semibold underline text-emerald-700 dark:text-emerald-400 cursor-pointer">Cancellation Policy</span>
+              {selectedMode === "telehealth" && (
+                <> and the{" "}
+                <span className="font-semibold underline text-emerald-700 dark:text-emerald-400 cursor-pointer">Telehealth Consent</span>
+                </>
+              )}
+              .{selectedMode === "telehealth" && " By joining this session, I consent to video-based care delivery."}
             </p>
           </label>
         </div>
       )}
 
       {/* ── BOOKED SUCCESS ── */}
-      {step === "booked" && selectedProvider && selectedReason && selectedDate && selectedSlot && (
+      {step === "booked" && effectiveProvider && selectedReason && selectedDate && selectedSlot && (
         <div className="text-center space-y-6 py-8">
           <div className="w-20 h-20 rounded-full bg-emerald-100 dark:bg-emerald-950/40 flex items-center justify-center mx-auto">
             <CheckCircle2 className="w-10 h-10 text-emerald-600" />
@@ -553,7 +547,7 @@ export default function SchedulePage() {
           </div>
           <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/40 dark:bg-emerald-950/10 p-5 text-left space-y-3 max-w-sm mx-auto">
             <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">{selectedReason.visitType}</p>
-            <p className="text-sm text-slate-700 dark:text-slate-300">{selectedProvider.displayName}</p>
+            <p className="text-sm text-slate-700 dark:text-slate-300">{effectiveProvider.displayName}</p>
             <p className="text-sm text-slate-700 dark:text-slate-300">{fmtDate(selectedDate)} at {fmt12(selectedSlot)}</p>
             <p className="text-sm text-slate-500">{selectedMode === "telehealth" ? "📹 Telehealth — link will be sent before the visit" : "📍 " + "Penfield Psychiatry, 500 Penfield Road"}</p>
           </div>
