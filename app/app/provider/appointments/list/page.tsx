@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import ProviderLayout from "@/components/provider/layout/ProviderLayout";
 import { ProviderApptDetail } from "@/components/provider/appointments/ProviderApptDetail";
-import { CC_APPOINTMENTS, type CcAppointment, type AppointmentMode } from "@/data/cc-appointments";
+import { CC_APPOINTMENTS, type AppointmentMode } from "@/data/cc-appointments";
 import { CC_PATIENTS } from "@/data/cc-patients";
 import { Search, Video, Phone, MapPin, CalendarDays, NotebookPen, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -67,14 +67,9 @@ export default function ProviderAppointmentsListPage() {
         const q = query.toLowerCase();
         return (p?.displayName.toLowerCase().includes(q) ?? false) || a.visitType.toLowerCase().includes(q);
       })
-      .sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime) * (range === "Past" ? -1 : 1));
+      // Always newest appointment first — regardless of range.
+      .sort((a, b) => (b.date + b.startTime).localeCompare(a.date + a.startTime));
   }, [range, statusFilter, modeFilter, visitFilter, query, todayIso, in7]);
-
-  const grouped = useMemo(() => {
-    const g: Record<string, CcAppointment[]> = {};
-    for (const a of appts) (g[a.date] ??= []).push(a);
-    return g;
-  }, [appts]);
 
   const selectedRaw = selectedId ? CC_APPOINTMENTS.find((a) => a.id === selectedId) ?? null : null;
 
@@ -87,11 +82,13 @@ export default function ProviderAppointmentsListPage() {
     if (typeof window !== "undefined") window.history.replaceState(null, "", "/provider/appointments/list");
   }
 
+  const thisYear = new Date().getFullYear();
   function fmtDate(iso: string) {
+    if (iso === todayIso) return "Today";
     const d = new Date(iso + "T12:00:00");
-    return iso === todayIso
-      ? `Today · ${d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}`
-      : d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+    return d.toLocaleDateString("en-US", d.getFullYear() === thisYear
+      ? { weekday: "short", month: "short", day: "numeric" }
+      : { month: "short", day: "numeric", year: "numeric" });
   }
 
   const selCls = "px-2.5 py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300";
@@ -148,65 +145,61 @@ export default function ProviderAppointmentsListPage() {
           </select>
         </div>
 
-        {/* table */}
-        {Object.keys(grouped).length === 0 ? (
+        {/* table — one list, newest appointment first */}
+        {appts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <CalendarDays className="w-8 h-8 text-slate-300 mb-3" />
             <p className="text-sm text-slate-400">No appointments match these filters.</p>
           </div>
         ) : (
-          <div className="space-y-6" data-tour="list-table">
-            {Object.entries(grouped).map(([date, rows]) => (
-              <div key={date}>
-                <h3 className={cn("text-xs font-semibold uppercase tracking-wide mb-2", date === todayIso ? "text-brand-600 dark:text-brand-400" : "text-slate-500 dark:text-slate-400")}>{fmtDate(date)}</h3>
-                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto">
-                  <table className="w-full text-sm min-w-[720px]">
-                    <thead>
-                      <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 text-left text-xs font-semibold text-slate-500 dark:text-slate-400">
-                        <th className="px-4 py-2.5">Time</th>
-                        <th className="px-4 py-2.5">Patient</th>
-                        <th className="px-4 py-2.5">Visit type</th>
-                        <th className="px-4 py-2.5">Mode</th>
-                        <th className="px-4 py-2.5">Status</th>
-                        <th className="px-4 py-2.5">Note</th>
-                        <th className="px-4 py-2.5"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50 dark:divide-slate-800/60">
-                      {rows.map((a) => {
-                        const p = CC_PATIENTS.find((x) => x.id === a.patientId);
-                        const st = STATUS_LABEL[a.status] ?? { label: a.status, cls: "" };
-                        const ModeIcon = a.mode === "telehealth" ? Video : a.mode === "phone" ? Phone : MapPin;
-                        const noteId = getNoteIdForAppointment(a.id);
-                        const noteDoc = getNoteForAppointment(a.id);
-                        return (
-                          <tr key={a.id} onClick={() => openAppt(a.id)} className={cn("cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors", a.status === "cancelled" && "opacity-50")}>
-                            <td className="px-4 py-3 whitespace-nowrap text-slate-600 dark:text-slate-300">{fmt12(a.startTime)}</td>
-                            <td className="px-4 py-3 font-medium text-slate-800 dark:text-slate-200 whitespace-nowrap">{p?.displayName ?? "—"}</td>
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              <span className="inline-flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
-                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: visitColor(a.visitType) }} />{a.visitType}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-slate-500 dark:text-slate-400"><span className="inline-flex items-center gap-1.5 capitalize"><ModeIcon className="w-3.5 h-3.5" />{a.mode}</span></td>
-                            <td className="px-4 py-3"><span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", st.cls)}>{st.label}</span></td>
-                            <td className="px-4 py-3">
-                              {noteId ? (
-                                <span className={cn("inline-flex items-center gap-1 text-xs font-medium",
-                                  noteDoc?.status === "signed" ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400")}>
-                                  <NotebookPen className="w-3.5 h-3.5" /> {noteDoc?.status === "signed" ? "Signed" : "Draft"}
-                                </span>
-                              ) : <span className="text-xs text-slate-300 dark:text-slate-600">—</span>}
-                            </td>
-                            <td className="px-4 py-3 text-right"><ChevronRight className="w-4 h-4 text-slate-300 inline" /></td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ))}
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-x-auto" data-tour="list-table">
+            <table className="w-full text-sm min-w-[760px]">
+              <thead>
+                <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 text-left text-xs font-semibold text-slate-500 dark:text-slate-400">
+                  <th className="px-4 py-2.5">Date</th>
+                  <th className="px-4 py-2.5">Time</th>
+                  <th className="px-4 py-2.5">Patient</th>
+                  <th className="px-4 py-2.5">Visit type</th>
+                  <th className="px-4 py-2.5">Mode</th>
+                  <th className="px-4 py-2.5">Status</th>
+                  <th className="px-4 py-2.5">Note</th>
+                  <th className="px-4 py-2.5"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50 dark:divide-slate-800/60">
+                {appts.map((a) => {
+                  const p = CC_PATIENTS.find((x) => x.id === a.patientId);
+                  const st = STATUS_LABEL[a.status] ?? { label: a.status, cls: "" };
+                  const ModeIcon = a.mode === "telehealth" ? Video : a.mode === "phone" ? Phone : MapPin;
+                  const noteId = getNoteIdForAppointment(a.id);
+                  const noteDoc = getNoteForAppointment(a.id);
+                  const isToday = a.date === todayIso;
+                  return (
+                    <tr key={a.id} onClick={() => openAppt(a.id)} className={cn("cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors", a.status === "cancelled" && "opacity-50")}>
+                      <td className={cn("px-4 py-3 whitespace-nowrap font-medium", isToday ? "text-brand-600 dark:text-brand-400" : "text-slate-500 dark:text-slate-400")}>{fmtDate(a.date)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-slate-600 dark:text-slate-300">{fmt12(a.startTime)}</td>
+                      <td className="px-4 py-3 font-medium text-slate-800 dark:text-slate-200 whitespace-nowrap">{p?.displayName ?? "—"}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: visitColor(a.visitType) }} />{a.visitType}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-500 dark:text-slate-400"><span className="inline-flex items-center gap-1.5 capitalize"><ModeIcon className="w-3.5 h-3.5" />{a.mode}</span></td>
+                      <td className="px-4 py-3"><span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full", st.cls)}>{st.label}</span></td>
+                      <td className="px-4 py-3">
+                        {noteId ? (
+                          <span className={cn("inline-flex items-center gap-1 text-xs font-medium",
+                            noteDoc?.status === "signed" ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400")}>
+                            <NotebookPen className="w-3.5 h-3.5" /> {noteDoc?.status === "signed" ? "Signed" : "Draft"}
+                          </span>
+                        ) : <span className="text-xs text-slate-300 dark:text-slate-600">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-right"><ChevronRight className="w-4 h-4 text-slate-300 inline" /></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
