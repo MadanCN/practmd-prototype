@@ -1,8 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Shield, HeartHandshake, Stethoscope, User } from "lucide-react";
+import { Shield, HeartHandshake, Stethoscope, User, Banknote } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PractMdLockup } from "@/components/brand/PractMdLogo";
 
 const ROLES = [
   {
@@ -30,7 +31,7 @@ const ROLES = [
     icon: Stethoscope,
     href: "/provider",
     available: true,
-    accent: "violet",
+    accent: "brand",
   },
   {
     id: "patient",
@@ -40,6 +41,15 @@ const ROLES = [
     href: "/patient",
     available: true,
     accent: "emerald",
+  },
+  {
+    id: "revenue-management",
+    label: "Revenue Management",
+    description: "Verify insurance eligibility and work the billing worklist",
+    icon: Banknote,
+    href: "/revenue-management/worklist",
+    available: true,
+    accent: "amber",
   },
 ] as const;
 
@@ -60,13 +70,13 @@ const accentMap = {
     badge: "bg-teal-600 text-white",
     hover: "hover:border-teal-400 hover:shadow-teal-100 dark:hover:shadow-teal-900/30",
   },
-  violet: {
-    ring: "ring-violet-500",
-    bg: "bg-violet-600",
-    iconBg: "bg-violet-600/10",
-    iconColor: "text-violet-500",
-    badge: "bg-violet-600 text-white",
-    hover: "hover:border-violet-400 hover:shadow-violet-100 dark:hover:shadow-violet-900/30",
+  brand: {
+    ring: "ring-brand-500",
+    bg: "bg-brand-600",
+    iconBg: "bg-brand-600/10",
+    iconColor: "text-brand-500",
+    badge: "bg-brand-600 text-white",
+    hover: "hover:border-brand-400 hover:shadow-brand-100 dark:hover:shadow-brand-900/30",
   },
   emerald: {
     ring: "ring-emerald-500",
@@ -75,6 +85,14 @@ const accentMap = {
     iconColor: "text-emerald-500",
     badge: "bg-emerald-600 text-white",
     hover: "hover:border-emerald-400 hover:shadow-emerald-100 dark:hover:shadow-emerald-900/30",
+  },
+  amber: {
+    ring: "ring-amber-500",
+    bg: "bg-amber-600",
+    iconBg: "bg-amber-600/10",
+    iconColor: "text-amber-500",
+    badge: "bg-amber-600 text-white",
+    hover: "hover:border-amber-400 hover:shadow-amber-100 dark:hover:shadow-amber-900/30",
   },
 };
 
@@ -89,11 +107,8 @@ export default function RoleSelector() {
       <div className="relative z-10 w-full max-w-4xl">
         {/* Logo + heading */}
         <div className="text-center mb-12">
-          <div className="inline-flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-blue-900/50">
-              P
-            </div>
-            <span className="text-3xl font-bold text-white tracking-tight">PractMD</span>
+          <div className="inline-flex items-center justify-center mb-6">
+            <PractMdLockup className="h-8" boxClassName="shadow-xl shadow-navy-950/40 px-4 py-2.5" />
           </div>
           <h1 className="text-2xl font-semibold text-white mb-2">Welcome back</h1>
           <p className="text-slate-400 text-base">Select your role to continue</p>
@@ -101,9 +116,10 @@ export default function RoleSelector() {
 
         {/* Role cards */}
         <div className="grid grid-cols-2 gap-4">
-          {ROLES.map((role) => {
+          {ROLES.map((role, i) => {
             const Icon = role.icon;
             const a = accentMap[role.accent];
+            const isLastOdd = i === ROLES.length - 1 && ROLES.length % 2 === 1;
             return (
               <button
                 key={role.id}
@@ -112,6 +128,7 @@ export default function RoleSelector() {
                 className={cn(
                   "group relative text-left p-6 rounded-2xl border border-slate-800 bg-slate-900/60 backdrop-blur-sm",
                   "transition-all duration-200 shadow-lg",
+                  isLastOdd && "col-span-2",
                   role.available
                     ? cn("cursor-pointer hover:shadow-xl", a.hover)
                     : "cursor-not-allowed opacity-60"
@@ -149,8 +166,14 @@ export default function RoleSelector() {
           })}
         </div>
 
-        <p className="text-center text-xs text-slate-600 mt-8">
-          PractMD Admin Platform · v2.0 · All rights reserved
+        <p className="text-center text-sm mt-8">
+          <button onClick={() => router.push("/onboarding")} className="text-emerald-400 hover:text-emerald-300 font-medium transition-colors">
+            New patient? Start onboarding →
+          </button>
+        </p>
+
+        <p className="text-center text-xs text-slate-600 mt-4">
+          PractMD Platform · v2.0 · All rights reserved
         </p>
       </div>
     </div>

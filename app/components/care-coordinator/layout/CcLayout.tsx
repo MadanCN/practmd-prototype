@@ -52,7 +52,7 @@ export default function CcLayout({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 pt-[60px] overflow-hidden">
+        <main className="flex-1 pt-[60px] overflow-y-auto">
           {children}
         </main>
       </div>

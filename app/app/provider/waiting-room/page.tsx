@@ -1,85 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Clock, Video, Phone, MapPin, AlertCircle, CheckCircle2,
-  UserCheck, Loader2, RefreshCw, MessageSquare, FileText,
+  UserCheck, Loader2, RefreshCw, MessageSquare, FileText, Stethoscope, LogOut,
 } from "lucide-react";
 import ProviderLayout from "@/components/provider/layout/ProviderLayout";
+import { buildWaitingRoom, type WrEntry, type WrStatus } from "@/lib/provider-schedule";
 import { CC_APPOINTMENTS } from "@/data/cc-appointments";
-import { CC_PATIENTS } from "@/data/cc-patients";
+import { useEncounterStore, markCalled, startSession, checkOutPatient } from "@/lib/encounter-store";
 import { cn } from "@/lib/utils";
 
 const CURRENT_PROVIDER_ID = "p1";
 
-type WrStatus = "waiting" | "called" | "with-provider" | "telehealth-waiting";
-
-interface WrEntry {
-  appointmentId: string;
-  patientId: string;
-  patientName: string;
-  mrn: string;
-  visitType: string;
-  mode: "in-person" | "telehealth" | "phone";
-  scheduledTime: string;
-  arrivedAt: string;
-  status: WrStatus;
-  waitMinutes: number;
-  room?: string;
-  priority: "normal" | "urgent" | "crisis";
-  insuranceStatus: "active" | "inactive" | "pending";
-}
-
-const PATIENT_MAP = Object.fromEntries(CC_PATIENTS.map(p => [p.id, p]));
-
-function buildWaitingRoom(): WrEntry[] {
-  const today = CC_APPOINTMENTS.filter(a =>
-    a.providerId === CURRENT_PROVIDER_ID &&
-    (a.status === "confirmed" || a.status === "arrived" || a.status === "in-session")
-  );
-
-  const now = new Date();
-  const nowMins = now.getHours() * 60 + now.getMinutes();
-
-  return today.map((appt, i) => {
-    const [h, m] = appt.startTime.split(":").map(Number);
-    const schMins = h * 60 + m;
-    const diff = nowMins - schMins;
-
-    let status: WrStatus;
-    if (appt.mode === "telehealth") status = "telehealth-waiting";
-    else if (i === 0) status = "with-provider";
-    else if (i === 1) status = "called";
-    else status = "waiting";
-
-    const patient = PATIENT_MAP[appt.patientId];
-
-    const arrivedMinsAgo = Math.max(0, diff > 0 ? Math.min(diff, 15) : 5);
-    const arriveTime = new Date(now.getTime() - arrivedMinsAgo * 60000);
-    const arrivedAt = `${String(arriveTime.getHours()).padStart(2, "0")}:${String(arriveTime.getMinutes()).padStart(2, "0")}`;
-
-    return {
-      appointmentId: appt.id,
-      patientId: appt.patientId,
-      patientName: patient?.displayName ?? "Unknown",
-      mrn: patient?.mrn ?? "",
-      visitType: appt.visitType,
-      mode: appt.mode,
-      scheduledTime: appt.startTime,
-      arrivedAt,
-      status,
-      waitMinutes: Math.max(0, diff > 0 ? diff : 0),
-      room: appt.mode === "in-person" ? `Room ${i + 1}0${i + 1}` : undefined,
-      priority: "normal",
-      insuranceStatus: patient?.insuranceStatus ?? "active",
-    };
-  });
-}
-
 const MODE_CFG = {
   "in-person": { icon: MapPin, label: "In Person", cls: "text-blue-600 bg-blue-50 dark:bg-blue-950/30 dark:text-blue-400" },
-  telehealth:  { icon: Video,  label: "Telehealth", cls: "text-violet-600 bg-violet-50 dark:bg-violet-950/30 dark:text-violet-400" },
+  telehealth:  { icon: Video,  label: "Telehealth", cls: "text-brand-600 bg-brand-50 dark:bg-brand-950/30 dark:text-brand-400" },
   phone:       { icon: Phone,  label: "Phone", cls: "text-teal-600 bg-teal-50 dark:bg-teal-950/30 dark:text-teal-400" },
 };
 
@@ -87,7 +24,7 @@ const STATUS_CFG: Record<WrStatus, { label: string; cls: string; dot: string }> 
   waiting:             { label: "Waiting",          cls: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400", dot: "bg-amber-400 animate-pulse" },
   called:              { label: "Called In",         cls: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400",   dot: "bg-blue-500" },
   "with-provider":     { label: "With Provider",     cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400", dot: "bg-emerald-500" },
-  "telehealth-waiting":{ label: "In Virtual Lobby", cls: "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400", dot: "bg-violet-500 animate-pulse" },
+  "telehealth-waiting":{ label: "In Virtual Lobby", cls: "bg-brand-100 text-brand-700 dark:bg-brand-950/40 dark:text-brand-400", dot: "bg-brand-500 animate-pulse" },
 };
 
 function fmt12(t: string): string {
@@ -99,10 +36,25 @@ type ModeFilter = "all" | "in-person" | "telehealth" | "phone";
 
 export default function WaitingRoomPage() {
   const router = useRouter();
-  const [entries, setEntries] = useState<WrEntry[]>(buildWaitingRoom);
+  useEncounterStore(); // subscribe so this page re-renders on call-in / session / check-out
+  const entries = buildWaitingRoom(CURRENT_PROVIDER_ID); // re-derived fresh from the store on every render
   const [refreshing, setRefreshing] = useState(false);
   const [calling, setCalling] = useState<string | null>(null);
   const [activeMode, setActiveMode] = useState<ModeFilter>("all");
+  const [highlightId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return new URLSearchParams(window.location.search).get("appt");
+  });
+  const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Deep-link support: /provider/waiting-room?appt=<id> scrolls to that entry.
+  useEffect(() => {
+    if (!highlightId) return;
+    const t = setTimeout(() => {
+      cardRefs.current[highlightId]?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 150);
+    return () => clearTimeout(t);
+  }, [highlightId]);
 
   function refresh() {
     setRefreshing(true);
@@ -112,9 +64,16 @@ export default function WaitingRoomPage() {
   function callIn(id: string) {
     setCalling(id);
     setTimeout(() => {
-      setEntries(prev => prev.map(e => e.appointmentId === id ? { ...e, status: "called" } : e));
+      markCalled(id);
       setCalling(null);
     }, 800);
+  }
+
+  function startPatientSession(appointmentId: string) {
+    const appt = CC_APPOINTMENTS.find((a) => a.id === appointmentId);
+    if (!appt) return;
+    const { noteId } = startSession(appt);
+    router.push(`/provider/encounters/${noteId}`);
   }
 
   const filteredEntries = activeMode === "all" ? entries : entries.filter(e => e.mode === activeMode);
@@ -125,7 +84,7 @@ export default function WaitingRoomPage() {
     { label: "In Waiting Room", value: waiting.length, cls: "text-amber-600" },
     { label: "With Provider", value: inProgress.length, cls: "text-emerald-600" },
     { label: "Avg Wait", value: waiting.length > 0 ? `${Math.round(waiting.reduce((s, e) => s + e.waitMinutes, 0) / waiting.length)}m` : "0m", cls: "text-blue-600" },
-    { label: "Total Today", value: entries.length, cls: "text-slate-600 dark:text-slate-400" },
+    { label: "Checked In", value: entries.length, cls: "text-slate-600 dark:text-slate-400" },
   ];
 
   const modeLabelMap: Record<ModeFilter, string> = {
@@ -154,7 +113,7 @@ export default function WaitingRoomPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-4 gap-3" data-tour="wr-stats">
         {stats.map(s => (
           <div key={s.label} className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-4 text-center">
             <p className={cn("text-2xl font-bold", s.cls)}>{s.value}</p>
@@ -164,7 +123,7 @@ export default function WaitingRoomPage() {
       </div>
 
       {/* Mode Tabs */}
-      <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800">
+      <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800" data-tour="wr-tabs">
         {[
           { id: "all" as ModeFilter, label: "All", count: entries.length },
           { id: "in-person" as ModeFilter, label: "In Person", count: entries.filter(e => e.mode === "in-person").length },
@@ -173,9 +132,9 @@ export default function WaitingRoomPage() {
         ].map(tab => (
           <button key={tab.id} onClick={() => setActiveMode(tab.id)}
             className={cn("flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors",
-              activeMode === tab.id ? "border-violet-600 text-violet-600 dark:text-violet-400" : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300")}>
+              activeMode === tab.id ? "border-brand-600 text-brand-600 dark:text-brand-400" : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300")}>
             {tab.label}
-            {tab.count > 0 && <span className={cn("text-xs px-1.5 py-0.5 rounded-full font-semibold", activeMode === tab.id ? "bg-violet-100 dark:bg-violet-950/40 text-violet-700 dark:text-violet-400" : "bg-slate-100 dark:bg-slate-800 text-slate-500")}>{tab.count}</span>}
+            {tab.count > 0 && <span className={cn("text-xs px-1.5 py-0.5 rounded-full font-semibold", activeMode === tab.id ? "bg-brand-100 dark:bg-brand-950/40 text-brand-700 dark:text-brand-400" : "bg-slate-100 dark:bg-slate-800 text-slate-500")}>{tab.count}</span>}
           </button>
         ))}
       </div>
@@ -184,18 +143,32 @@ export default function WaitingRoomPage() {
       {inProgress.length > 0 && (
         <div className="space-y-3">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Currently With Provider</p>
-          {inProgress.map(e => <PatientCard key={e.appointmentId} entry={e} onCall={() => callIn(e.appointmentId)} calling={calling === e.appointmentId} onJoin={() => router.push(`/provider/telehealth/${e.appointmentId}`)} />)}
+          {inProgress.map(e => (
+            <PatientCard key={e.appointmentId} entry={e} onCall={() => callIn(e.appointmentId)} calling={calling === e.appointmentId}
+              onJoin={() => router.push(`/provider/telehealth/${e.appointmentId}`)}
+              onStartSession={() => startPatientSession(e.appointmentId)}
+              onCheckOut={() => checkOutPatient(e.appointmentId)}
+              highlighted={e.appointmentId === highlightId}
+              cardRef={(el) => { cardRefs.current[e.appointmentId] = el; }} />
+          ))}
         </div>
       )}
 
       {/* Waiting */}
       {waiting.length > 0 ? (
-        <div className="space-y-3">
+        <div className="space-y-3" data-tour="wr-list">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Waiting</p>
-          {waiting.map(e => <PatientCard key={e.appointmentId} entry={e} onCall={() => callIn(e.appointmentId)} calling={calling === e.appointmentId} onJoin={() => router.push(`/provider/telehealth/${e.appointmentId}`)} />)}
+          {waiting.map(e => (
+            <PatientCard key={e.appointmentId} entry={e} onCall={() => callIn(e.appointmentId)} calling={calling === e.appointmentId}
+              onJoin={() => router.push(`/provider/telehealth/${e.appointmentId}`)}
+              onStartSession={() => startPatientSession(e.appointmentId)}
+              onCheckOut={() => checkOutPatient(e.appointmentId)}
+              highlighted={e.appointmentId === highlightId}
+              cardRef={(el) => { cardRefs.current[e.appointmentId] = el; }} />
+          ))}
         </div>
       ) : (
-        <div className="text-center py-12">
+        <div className="text-center py-12" data-tour="wr-list">
           <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-3" />
           <p className="text-sm font-medium text-slate-500">Waiting room is clear</p>
           <p className="text-xs text-slate-400 mt-1">
@@ -208,11 +181,15 @@ export default function WaitingRoomPage() {
   );
 }
 
-function PatientCard({ entry, onCall, calling, onJoin }: {
+function PatientCard({ entry, onCall, calling, onJoin, onStartSession, onCheckOut, highlighted, cardRef }: {
   entry: WrEntry;
   onCall: () => void;
   calling: boolean;
   onJoin: () => void;
+  onStartSession: () => void;
+  onCheckOut: () => void;
+  highlighted?: boolean;
+  cardRef?: (el: HTMLDivElement | null) => void;
 }) {
   const modeCfg = MODE_CFG[entry.mode];
   const ModeIcon = modeCfg.icon;
@@ -221,10 +198,13 @@ function PatientCard({ entry, onCall, calling, onJoin }: {
   const isPhone = entry.mode === "phone";
 
   return (
-    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-5">
+    <div ref={cardRef} className={cn(
+      "rounded-2xl border bg-white dark:bg-slate-900/40 p-5 transition-shadow",
+      highlighted ? "border-brand-400 dark:border-brand-600 ring-2 ring-brand-300 dark:ring-brand-700" : "border-slate-200 dark:border-slate-800"
+    )}>
       <div className="flex items-start gap-4">
         {/* Avatar */}
-        <div className="w-11 h-11 rounded-full bg-violet-600 flex items-center justify-center text-white text-sm font-bold shrink-0">
+        <div className="w-11 h-11 rounded-full bg-brand-600 flex items-center justify-center text-white text-sm font-bold shrink-0">
           {entry.patientName.split(" ").map(n => n[0]).join("").slice(0, 2)}
         </div>
 
@@ -269,24 +249,45 @@ function PatientCard({ entry, onCall, calling, onJoin }: {
           <button className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 transition-colors" title="Message patient">
             <MessageSquare className="w-4 h-4" />
           </button>
-          {isTelehealth ? (
+          {entry.status === "with-provider" ? (
+            isTelehealth ? (
+              <button onClick={onJoin}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl practmd-gradient text-white text-xs font-semibold transition-colors">
+                <Video className="w-3.5 h-3.5" /> Rejoin Call
+              </button>
+            ) : (
+              <>
+                <button onClick={onStartSession}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold transition-colors">
+                  <FileText className="w-3.5 h-3.5" /> Resume note
+                </button>
+                <button onClick={onCheckOut}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors">
+                  <LogOut className="w-3.5 h-3.5" /> Check Out
+                </button>
+              </>
+            )
+          ) : isTelehealth ? (
             <button onClick={onJoin}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold transition-colors">
+              className="flex items-center gap-2 px-4 py-2 rounded-xl practmd-gradient text-white text-xs font-semibold transition-colors">
               <Video className="w-3.5 h-3.5" /> Join Call
             </button>
-          ) : isPhone ? (
+          ) : isPhone && entry.status === "waiting" ? (
             <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold transition-colors">
               <Phone className="w-3.5 h-3.5" /> Call Patient
             </button>
-          ) : (
-            entry.status === "waiting" && (
-              <button onClick={onCall} disabled={calling}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-70 text-white text-xs font-semibold transition-colors">
-                {calling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserCheck className="w-3.5 h-3.5" />}
-                Call In
-              </button>
-            )
-          )}
+          ) : entry.status === "waiting" ? (
+            <button onClick={onCall} disabled={calling}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl practmd-gradient disabled:opacity-70 text-white text-xs font-semibold transition-colors">
+              {calling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserCheck className="w-3.5 h-3.5" />}
+              Call In
+            </button>
+          ) : entry.status === "called" ? (
+            <button onClick={onStartSession}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors">
+              <Stethoscope className="w-3.5 h-3.5" /> Start Session
+            </button>
+          ) : null}
         </div>
       </div>
     </div>

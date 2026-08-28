@@ -77,6 +77,7 @@ export const GM_SECTIONS: GmSection[] = [
       group("providers", "Providers", [
         leaf("Provider Types", `${base}/users-access/providers/provider-types`),
         leaf("Specializations", `${base}/users-access/providers/specializations`),
+        leaf("Provider Availability", `${base}/users-access/providers/provider-availability`),
       ]),
     ],
   },

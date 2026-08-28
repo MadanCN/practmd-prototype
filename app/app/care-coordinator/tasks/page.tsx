@@ -1,10 +1,10 @@
 import CcLayout from "@/components/care-coordinator/layout/CcLayout";
-import ComingSoon from "@/components/ui/ComingSoon";
+import TasksList from "@/components/care-coordinator/TasksList";
 
 export default function TasksPage() {
   return (
     <CcLayout>
-      <ComingSoon title="Tasks" description="Task management and care coordination workflows coming soon." />
+      <TasksList />
     </CcLayout>
   );
 }

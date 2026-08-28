@@ -6,6 +6,8 @@ import {
   Camera, Upload, X, AlertCircle, DollarSign,
 } from "lucide-react";
 import { PATIENT_INSURANCES, type PatientInsurance } from "@/data/patient-portal";
+import { useOnboardingStore } from "@/lib/onboarding-store";
+import LiveEligibilityCard from "@/components/patient/LiveEligibilityCard";
 import { cn } from "@/lib/utils";
 
 function EligBadge({ status }: { status: PatientInsurance["eligibilityStatus"] }) {
@@ -157,6 +159,7 @@ function InsuranceCard({ ins }: { ins: PatientInsurance }) {
 
 export default function InsurancePage() {
   const [showAdd, setShowAdd] = useState(false);
+  const store = useOnboardingStore();
 
   return (
     <div className="space-y-6">
@@ -191,6 +194,8 @@ export default function InsurancePage() {
           </div>
         </div>
       )}
+
+      {store.worklist.map((item) => <LiveEligibilityCard key={item.id} item={item} />)}
 
       {PATIENT_INSURANCES.map(ins => <InsuranceCard key={ins.id} ins={ins} />)}
 

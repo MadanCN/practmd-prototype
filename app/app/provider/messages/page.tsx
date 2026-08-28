@@ -1,11 +1,5 @@
-import ProviderLayout from "@/components/provider/layout/ProviderLayout";
-import ComingSoon from "@/components/ui/ComingSoon";
-import { MessageSquare } from "lucide-react";
+import { redirect } from "next/navigation";
 
-export default function Page() {
-  return (
-    <ProviderLayout>
-      <ComingSoon title="Messages" description="Provider messaging coming soon." icon={MessageSquare} />
-    </ProviderLayout>
-  );
+export default function ProviderMessagesRootPage() {
+  redirect("/provider/messages/patients");
 }

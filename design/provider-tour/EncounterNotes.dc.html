@@ -1,0 +1,481 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;450;500;600;700&display=swap');
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; color: #0f172a; }
+    a { color: #0a827a; text-decoration: none; } a:hover { color: #0e625d; }
+    .ico { width: 18px; height: 18px; flex: none; }
+    .ico use { stroke: currentColor; stroke-width: 1.7; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .app { position: relative; width: 1440px; height: 980px; background: #f8fafc; overflow: hidden; }
+
+    /* sidebar */
+    .side { position: absolute; left: 0; top: 0; width: 240px; height: 980px; background: #fff; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; }
+    .brand { height: 60px; display: flex; align-items: center; gap: 9px; padding: 0 16px; border-bottom: 1px solid #eef2f6; }
+    .brand-mark { width: 26px; height: 18px; flex: none; }
+    .brand-txt { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+    .brand-txt b { color: #002b61; } .brand-txt i { color: #05a99a; font-style: normal; }
+    .nav { flex: 1; overflow: hidden; padding: 12px 8px; display: flex; flex-direction: column; gap: 2px; }
+    .nav-lbl { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #94a3b8; padding: 10px 12px 4px; }
+    .nav-i { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 8px; font-size: 13.5px; font-weight: 500; color: #64748b; cursor: pointer; }
+    .nav-i:hover { background: #f1f5f9; color: #0f172a; }
+    .nav-i.on { background: #ecfefb; color: #002b61; font-weight: 600; box-shadow: inset 3px 0 0 #05a99a; }
+    .nav-i.on { color: #05a99a; }
+    .nav-i.on span { color: #002b61; }
+    .nav-i .lbl { flex: 1; }
+    .badge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: #f59e0b; color: #fff; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+    .soon { font-size: 9px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; background: #f1f5f9; color: #64748b; padding: 2px 6px; border-radius: 5px; }
+    .side-b { border-top: 1px solid #eef2f6; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+    .who { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+    .who.on { background: #ecfefb; box-shadow: inset 3px 0 0 #05a99a; }
+    .who-av { width: 28px; height: 28px; border-radius: 50%; background: linear-gradient(135deg, #1ed9c6, #1a5c9e); color: #fff; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+    .who b { font-size: 12px; font-weight: 600; color: #0f172a; display: block; }
+    .who span { font-size: 10px; color: #94a3b8; }
+
+    /* header */
+    .hdr { position: absolute; left: 240px; right: 0; top: 0; height: 60px; background: #fff; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 16px; padding: 0 16px; z-index: 20; }
+    .search { display: flex; align-items: center; gap: 8px; width: 224px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 9px; padding: 7px 11px; color: #94a3b8; font-size: 13px; }
+    .crumb { flex: 1; display: flex; align-items: center; gap: 7px; font-size: 13px; color: #94a3b8; }
+    .crumb b { color: #0f172a; font-weight: 600; }
+    .hright { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    .clinic { display: flex; align-items: center; gap: 7px; padding: 7px 11px; border: 1px solid #e2e8f0; border-radius: 9px; font-size: 13px; font-weight: 500; color: #475569; }
+    .clinic .ico:first-child use { stroke: #05a99a; }
+    .hbtn { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 8px; color: #64748b; cursor: pointer; position: relative; }
+    .hbtn:hover { background: #f1f5f9; }
+    .hbtn.act { background: #ecfefb; color: #05a99a; }
+    .bell-dot { position: absolute; top: 5px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: #ef4444; border: 1.5px solid #fff; }
+
+    /* page body */
+    .body { position: absolute; left: 240px; right: 0; top: 60px; bottom: 0; overflow: auto; padding: 24px; }
+    .h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+    .sub { font-size: 13px; color: #64748b; margin-top: 2px; }
+    .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; }
+    .row { display: flex; align-items: center; }
+    .muted { color: #64748b; }
+
+    /* kpi */
+    .kpis { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; margin-top: 18px; }
+    .kpi { border: 1px solid #e2e8f0; border-radius: 12px; padding: 15px; background: #fff; }
+    .kpi.amber { background: #fffbeb; border-color: #fde68a; box-shadow: 0 0 0 1px #fcd34d; }
+    .kpi .kl { display: flex; align-items: center; gap: 7px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #64748b; }
+    .kpi.amber .kl { color: #b45309; }
+    .kpi .kv { font-size: 26px; font-weight: 700; margin-top: 8px; letter-spacing: -0.02em; }
+    .kpi .kd { font-size: 11px; color: #64748b; margin-top: 2px; }
+    .kpi.amber .kd { color: #b45309; }
+
+    /* generic section card */
+    .sec { margin-top: 20px; }
+    .sec-h { display: flex; align-items: center; justify-content: space-between; padding: 13px 18px; border-bottom: 1px solid #f1f5f9; }
+    .sec-h .st { display: flex; align-items: center; gap: 9px; font-size: 13.5px; font-weight: 600; }
+    .sec-h .sa { font-size: 12px; font-weight: 500; color: #0a827a; display: flex; align-items: center; gap: 4px; }
+    .sec-ic { width: 26px; height: 26px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+
+    table.t { width: 100%; border-collapse: collapse; font-size: 13px; }
+    table.t td { padding: 11px 18px; border-top: 1px solid #f1f5f9; }
+    table.t tr:first-child td { border-top: none; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; display: inline-block; }
+    .pill { font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
+
+    .sched-row { display: flex; align-items: center; gap: 12px; padding: 11px 18px; border-top: 1px solid #f1f5f9; }
+    .sched-row:first-child { border-top: none; }
+    .bar { width: 4px; height: 38px; border-radius: 3px; flex: none; }
+    .mini-btn { font-size: 11px; font-weight: 700; padding: 5px 11px; border-radius: 8px; border: none; color: #fff; background-image: linear-gradient(120deg,#002b61,#0a827a); cursor: pointer; font-family: inherit; }
+
+    .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 20px; }
+    .bars { display: flex; align-items: flex-end; gap: 10px; height: 92px; }
+    .bars i { flex: 1; background: #cbfbf3; border-radius: 4px 4px 0 0; display: block; }
+    .bars i.on { background: #05a99a; }
+    .donut { width: 76px; height: 76px; border-radius: 50%; background: conic-gradient(#10b981 0 62%, #fde68a 62% 100%); position: relative; flex: none; }
+    .donut::after { content: ''; position: absolute; inset: 12px; border-radius: 50%; background: #fff; }
+
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 20px; }
+    .mini { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; }
+    .mini b { font-size: 13px; font-weight: 600; }
+    .mini .li { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #475569; padding: 6px 0; }
+
+    /* shared page-content helpers */
+    .toolbar { display: flex; align-items: center; gap: 10px; padding: 12px 0; }
+    .seg { display: inline-flex; border: 1px solid #e2e8f0; border-radius: 9px; overflow: hidden; }
+    .seg b { font-size: 12px; font-weight: 600; color: #64748b; padding: 7px 13px; cursor: pointer; }
+    .seg b.on { background: #05a99a; color: #fff; }
+    .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: #475569; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 11px; background: #fff; }
+    .chip .ico { width: 14px; height: 14px; color: #94a3b8; }
+    .tabbar { display: flex; gap: 4px; border-bottom: 1px solid #e2e8f0; }
+    .tab { font-size: 13px; font-weight: 500; color: #64748b; padding: 9px 4px; margin-right: 16px; border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; }
+    .tab.on { color: #05a99a; border-bottom-color: #05a99a; font-weight: 600; }
+    .pillbtn { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 8px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 14px; padding: 10px 0; }
+    .legend span { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 500; color: #475569; }
+    .legend i { width: 10px; height: 10px; border-radius: 3px; display: block; }
+    .wk { display: grid; grid-template-columns: 48px repeat(7, 1fr); border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background: #fff; position: relative; }
+    .wk-h { text-align: center; padding: 8px 0; font-size: 11px; font-weight: 600; color: #64748b; border-left: 1px solid #f1f5f9; }
+    .wk-h.on { background: #ecfefb; color: #05a99a; }
+    .wk-c { border-left: 1px solid #f1f5f9; border-top: 1px solid #f1f5f9; height: 320px; position: relative; }
+    .wk-t { border-top: 1px solid #f1f5f9; font-size: 9px; color: #94a3b8; text-align: right; padding: 2px 4px 0 0; }
+    .appt { position: absolute; left: 3px; right: 3px; border-radius: 6px; border-left: 3px solid; padding: 4px 6px; font-size: 9px; line-height: 1.25; overflow: hidden; }
+    .nowline { position: absolute; height: 0; border-top: 1.5px solid #ef4444; z-index: 3; }
+    .nowline::before { content: ''; position: absolute; left: -3px; top: -3px; width: 6px; height: 6px; border-radius: 50%; background: #ef4444; }
+    .st-rail { width: 176px; flex: none; display: flex; flex-direction: column; gap: 2px; }
+    .st-rail div { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 500; color: #64748b; padding: 8px 11px; border-radius: 8px; cursor: pointer; }
+    .st-rail div.on { background: #ecfefb; color: #0a827a; font-weight: 600; }
+    .st-rail .ico { width: 15px; height: 15px; }
+    .fld { border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 11px; font-size: 12.5px; color: #475569; background: #fff; }
+    .toggle { width: 38px; height: 22px; border-radius: 999px; background: #05a99a; position: relative; flex: none; }
+    .toggle::after { content: ''; position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; }
+    .toggle.off { background: #cbd5e1; }
+    .toggle.off::after { right: auto; left: 2px; }
+    .avatar { width: 34px; height: 34px; border-radius: 50%; background: #cbfbf3; color: #0a827a; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: none; }
+    .row-b { border-top: 1px solid #f1f5f9; }
+    .kpi3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; }
+
+    /* ===== tour engine (fixed = artboard-viewport coords) ===== */
+    .blocker { position: fixed; inset: 0; z-index: 44; cursor: pointer; }
+    .spot { position: fixed; z-index: 45; border-radius: 10px; pointer-events: none;
+      box-shadow: 0 0 0 3px #03d3bf, 0 0 0 9999px rgba(15,23,42,0.60);
+      transition: top .3s cubic-bezier(.4,0,.2,1), left .3s cubic-bezier(.4,0,.2,1), width .3s cubic-bezier(.4,0,.2,1), height .3s cubic-bezier(.4,0,.2,1); }
+    .coach { position: fixed; z-index: 60; width: 336px; background: #fff; border-radius: 14px;
+      box-shadow: 0 22px 48px -14px rgba(0,43,97,0.34), 0 0 0 1px rgba(0,43,97,0.05); padding: 16px 18px 15px;
+      transition: top .3s cubic-bezier(.4,0,.2,1), left .3s cubic-bezier(.4,0,.2,1); }
+    .coach-top { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+    .coach-step { font-size: 11px; font-weight: 700; color: #05a99a; background: #ecfefb; padding: 2px 8px; border-radius: 999px; }
+    .coach-tag { font-size: 11px; font-weight: 600; color: #94a3b8; letter-spacing: 0.02em; }
+    .coach-x { margin-left: auto; color: #cbd5e1; cursor: pointer; display: flex; }
+    .coach-x:hover { color: #64748b; }
+    .coach h3 { margin: 0 0 5px; font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+    .coach p { margin: 0; font-size: 13px; line-height: 1.55; color: #475569; }
+    .coach-dots { display: flex; gap: 5px; margin: 13px 0 12px; }
+    .coach-dots i { width: 6px; height: 6px; border-radius: 50%; background: #e2e8f0; }
+    .coach-dots i.on { background: #05a99a; }
+    .coach-btns { display: flex; align-items: center; gap: 8px; }
+    .cb { border-radius: 9px; padding: 8px 15px; font-size: 12.5px; font-weight: 600; cursor: pointer; font-family: inherit; border: none; }
+    .cb-skip { background: none; color: #94a3b8; padding: 8px 6px; }
+    .cb-skip:hover { color: #64748b; }
+    .cb-back { background: #fff; border: 1px solid #e2e8f0; color: #475569; margin-left: auto; }
+    .cb-back:hover { background: #f8fafc; }
+    .cb-next { background-image: linear-gradient(120deg,#002b61,#0a827a); color: #fff; }
+    .cb-next:hover { background-image: linear-gradient(120deg,#033b78,#0b968c); }
+
+    /* welcome */
+    .w-back { position: fixed; inset: 0; z-index: 70; background: rgba(15,23,42,0.55); display: flex; align-items: center; justify-content: center; }
+    .w-card { width: 404px; background: #fff; border-radius: 18px; padding: 30px 28px 24px; text-align: center;
+      box-shadow: 0 0 0 1px rgba(0,43,97,0.04), 0 24px 60px -16px rgba(0,43,97,0.28), 0 60px 100px -40px rgba(0,43,97,0.24); }
+    .w-ic { width: 52px; height: 52px; border-radius: 14px; background: #ecfefb; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
+    .w-ic .ico { width: 26px; height: 26px; color: #05a99a; }
+    .w-card h2 { margin: 0 0 7px; font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }
+    .w-card p { margin: 0 0 20px; font-size: 13.5px; line-height: 1.55; color: #64748b; }
+    .w-btns { display: flex; gap: 10px; justify-content: center; }
+    .w-foot { margin-top: 16px; font-size: 11.5px; color: #94a3b8; }
+    .w-foot b { color: #64748b; font-weight: 600; }
+
+    /* help panel */
+    .help-back { position: fixed; inset: 0; z-index: 80; background: rgba(15,23,42,0.22); }
+    .help { position: fixed; right: 0; top: 0; height: 100%; width: 424px; background: #fff; border-left: 1px solid #e2e8f0; z-index: 81;
+      box-shadow: -18px 0 50px -16px rgba(0,43,97,0.20); display: flex; flex-direction: column; }
+    .help-h { height: 60px; display: flex; align-items: center; gap: 10px; padding: 0 18px; border-bottom: 1px solid #eef2f6; }
+    .help-h b { font-size: 14px; font-weight: 700; }
+    .help-mod { font-size: 11px; font-weight: 600; color: #05a99a; background: #ecfefb; padding: 2px 9px; border-radius: 999px; }
+    .help-h .coach-x { color: #94a3b8; }
+    .help-body { flex: 1; overflow: auto; padding: 20px 20px 8px; }
+    .help-intro { font-size: 12.5px; line-height: 1.55; color: #64748b; margin: 0 0 16px; }
+    .help-sec-t { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #94a3b8; margin: 4px 0 10px; }
+    .help-blk { padding: 11px 0; border-top: 1px solid #f1f5f9; }
+    .help-blk:first-of-type { border-top: none; }
+    .help-blk h4 { margin: 0 0 3px; font-size: 13px; font-weight: 600; color: #0f172a; }
+    .help-blk p { margin: 0; font-size: 12.5px; line-height: 1.5; color: #64748b; }
+    .help-res { margin-top: 18px; }
+    .res-i { display: flex; align-items: center; gap: 10px; padding: 9px 0; font-size: 13px; color: #334155; border-top: 1px solid #f1f5f9; }
+    .res-i:first-child { border-top: none; }
+    .res-i .ico { width: 15px; height: 15px; color: #94a3b8; }
+    .res-i .ext { margin-left: auto; width: 13px; height: 13px; color: #cbd5e1; }
+    .help-foot { border-top: 1px solid #eef2f6; padding: 14px 18px; }
+    .retour { width: 100%; border: none; border-radius: 10px; padding: 11px; font-size: 13px; font-weight: 700; color: #fff;
+      background-image: linear-gradient(120deg,#002b61,#0a827a); cursor: pointer; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .retour:hover { background-image: linear-gradient(120deg,#033b78,#0b968c); }
+    .help-fb { text-align: center; font-size: 11px; color: #94a3b8; margin-top: 10px; }
+    .help-fb a { font-weight: 600; margin: 0 4px; }
+  </style>
+</helmet>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-today" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+  <symbol id="i-note" viewBox="0 0 24 24"><path d="M15 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M15 3v5h5M9 13h6M9 17h4"/></symbol>
+  <symbol id="i-door" viewBox="0 0 24 24"><path d="M13 4h3a2 2 0 0 1 2 2v14M2 20h20M13 2v20M10 12v.01"/></symbol>
+  <symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-task" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></symbol>
+  <symbol id="i-flask" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3M7 14h10"/></symbol>
+  <symbol id="i-pill" viewBox="0 0 24 24"><rect x="2" y="8" width="20" height="8" rx="4" transform="rotate(45 12 12)"/><path d="M8.5 8.5l7 7"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18M8 17V9M13 17V5M18 17v-6"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-avail" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4M9 15l2 2 4-4"/></symbol>
+  <symbol id="i-set" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-life" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M4.9 4.9l4.2 4.2M14.9 14.9l4.2 4.2M14.9 9.1l4.2-4.2M4.9 19.1l4.2-4.2"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10l9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></symbol>
+  <symbol id="i-chevr" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></symbol>
+  <symbol id="i-chevd" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-bld" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4M9 6h.01M15 6h.01M9 10h.01M15 10h.01M9 14h.01M15 14h.01"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M16.2 7.8l-2.9 6.4-6.4 2.9 2.9-6.4z"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M10.8 12.2 21 2M17 7l3 3M15 9l3 3"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/></symbol>
+  <symbol id="i-video" viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M22 8l-6 4 6 4z"/></symbol>
+  <symbol id="i-refer" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></symbol>
+  <symbol id="i-slid" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+  <symbol id="i-plane" viewBox="0 0 24 24"><path d="M17.8 19.8 4 21l4-7L4 7l13.8 1.2a2 2 0 0 1 1.6 2.3l-.9 4a2 2 0 0 1-1.5 1.5z"/></symbol>
+  <symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6 18.4 18.4"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+</defs></svg>
+
+<div class="app" id="root">
+
+  <!-- ============ sidebar ============ -->
+  <aside class="side">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 40 28" fill="none"><path d="M12 4C6 4 3 9 3 14s3 10 9 10c5 0 8-4 10-10 2-6 5-10 10-10s9 5 9 10-3 10-9 10c-5 0-8-4-10-10" stroke="#03d3bf" stroke-width="4.4" stroke-linecap="round"/></svg>
+      <span class="brand-txt"><b>Pract</b><i>MD</i></span>
+    </div>
+    <nav class="nav">
+      <div data-k="today" class="nav-i"><svg class="ico"><use href="#i-today"/></svg><span class="lbl">Today</span></div>
+      <div class="nav-lbl">Schedule</div>
+      <div data-k="calendar" class="nav-i"><svg class="ico"><use href="#i-cal"/></svg><span class="lbl">Calendar</span></div>
+      <div data-k="list" class="nav-i"><svg class="ico"><use href="#i-list"/></svg><span class="lbl">List</span></div>
+      <div data-k="notes" class="nav-i on"><svg class="ico"><use href="#i-note"/></svg><span class="lbl">Encounter Notes</span><span class="badge" id="nav-badge">3</span></div>
+      <div data-k="waiting" class="nav-i"><svg class="ico"><use href="#i-door"/></svg><span class="lbl">Waiting Room</span><span class="badge">2</span></div>
+      <div data-k="messages" class="nav-i"><svg class="ico"><use href="#i-msg"/></svg><span class="lbl">Messages</span></div>
+      <div data-k="patients" class="nav-i"><svg class="ico"><use href="#i-users"/></svg><span class="lbl">Patients</span></div>
+      <div data-k="tasks" class="nav-i"><svg class="ico"><use href="#i-task"/></svg><span class="lbl">Tasks</span></div>
+      <div data-k="results" class="nav-i"><svg class="ico"><use href="#i-flask"/></svg><span class="lbl">Results</span><span class="soon">Soon</span></div>
+      <div data-k="reports" class="nav-i"><svg class="ico"><use href="#i-chart"/></svg><span class="lbl">Reports</span></div>
+      <div data-k="recents" class="nav-i"><svg class="ico"><use href="#i-clock"/></svg><span class="lbl">Recents</span></div>
+      <div data-k="availability" class="nav-i"><svg class="ico"><use href="#i-avail"/></svg><span class="lbl">My Availability</span></div>
+    </nav>
+    <div class="side-b">
+      <div data-k="settings" class="nav-i"><svg class="ico"><use href="#i-set"/></svg><span class="lbl">Settings</span></div>
+      <div data-k="support" class="nav-i"><svg class="ico"><use href="#i-life"/></svg><span class="lbl">Support</span></div>
+      <div data-k="profile" class="who"><div class="who-av">SM</div><div><b>Dr. Sarah Mitchell</b><span>Psychiatrist</span></div></div>
+    </div>
+  </aside>
+
+  <!-- ============ header ============ -->
+  <header class="hdr">
+    <div class="search"><svg class="ico" style="width:15px;height:15px"><use href="#i-search"/></svg>Search…</div>
+    <div class="crumb"><svg class="ico" style="width:15px;height:15px;color:#cbd5e1"><use href="#i-home"/></svg><svg class="ico" style="width:13px;height:13px;color:#cbd5e1"><use href="#i-chevr"/></svg><b>{{crumb}}</b></div>
+    <div class="hright">
+      <div class="clinic"><svg class="ico" style="width:15px;height:15px"><use href="#i-bld"/></svg>Penfield Psychiatry<svg class="ico" style="width:13px;height:13px;color:#94a3b8"><use href="#i-chevd"/></svg></div>
+      <div class="hbtn {{helpBtnCls}}" id="help-btn" onClick="{{toggleHelp}}"><svg class="ico"><use href="#i-help"/></svg></div>
+      <div class="hbtn"><svg class="ico"><use href="#i-bell"/></svg><span class="bell-dot"></span></div>
+      <div class="hbtn"><svg class="ico"><use href="#i-moon"/></svg></div>
+    </div>
+  </header>
+
+  <!-- ============ page body ============ -->
+  <div class="body">
+    <!--BODY:START-->
+<div class="row" id="en-intro" style="gap:12px;margin-bottom:6px"><span class="sec-ic" style="width:38px;height:38px;background:#cbfbf3"><svg class="ico" style="color:#0a827a"><use href="#i-note"/></svg></span><div><div class="h1">Encounter Notes</div><div class="sub">Clinical documentation for your visits — an unsigned note is unbilled revenue.</div></div></div>
+    <div class="tabbar" id="en-tabs" style="margin-top:14px"><div class="tab on">Pending (3)</div><div class="tab">Signed</div></div>
+    <div class="toolbar"><span class="chip">All note types <svg class="ico"><use href="#i-chevd"/></svg></span><span class="chip"><svg class="ico"><use href="#i-search"/></svg>Search patient…</span></div>
+    <div class="card" style="overflow:hidden">
+      <table class="t">
+        <tr style="background:#f8fafc;font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.04em"><td>Patient</td><td>Visit type</td><td>Note type</td><td>Date of service</td><td>Status</td><td>Age</td><td></td></tr>
+        <tr><td style="font-weight:600">Carmen Rivera</td><td><span class="row" style="gap:7px"><span class="dot" style="background:#f43f5e"></span>Crisis Visit</span></td><td class="muted">SOAP</td><td class="muted">Aug 21, 2026</td><td><span class="pill" style="background:#f1f5f9;color:#475569">Draft</span></td><td id="en-age" style="color:#dc2626;font-weight:600">6d</td><td style="text-align:right"><span class="chip" id="en-open"><svg class="ico"><use href="#i-note"/></svg>Open</span></td></tr>
+        <tr><td style="font-weight:600">David Okafor</td><td><span class="row" style="gap:7px"><span class="dot" style="background:#05a99a"></span>Follow-Up</span></td><td class="muted">SOAP</td><td class="muted">Aug 24, 2026</td><td><span class="pill" style="background:#f1f5f9;color:#475569">Draft</span></td><td style="color:#d97706;font-weight:600">3d</td><td style="text-align:right"><span class="chip"><svg class="ico"><use href="#i-note"/></svg>Open</span></td></tr>
+        <tr><td style="font-weight:600">Daniel Carter</td><td><span class="row" style="gap:7px"><span class="dot" style="background:#1a5c9e"></span>Med Management</span></td><td class="muted">SOAP</td><td class="muted">Aug 26, 2026</td><td><span class="pill" style="background:#f1f5f9;color:#475569">Draft</span></td><td class="muted">1d</td><td style="text-align:right"><span class="chip"><svg class="ico"><use href="#i-note"/></svg>Open</span></td></tr>
+      </table>
+    </div>
+    <div style="height:24px"></div>
+    <!--BODY:END-->
+  </div>
+
+  <!-- ============ tour overlay ============ -->
+  <sc-if value="{{tour}}" hint-placeholder-val="{{ true }}">
+    <div class="blocker" onClick="{{next}}"></div>
+    <div class="spot" style="{{spotStyle}}"></div>
+    <div class="coach" style="{{coachStyle}}">
+      <div class="coach-top">
+        <span class="coach-step">{{stepNum}} / {{stepTotal}}</span>
+        <span class="coach-tag">{{pageName}} tour</span>
+        <span class="coach-x" onClick="{{skip}}"><svg class="ico" style="width:15px;height:15px"><use href="#i-x"/></svg></span>
+      </div>
+      <h3>{{stepTitle}}</h3>
+      <p>{{stepBody}}</p>
+      <div class="coach-dots"><sc-for list="{{dots}}" as="d" hint-placeholder-count="8"><i class="{{d.cls}}"></i></sc-for></div>
+      <div class="coach-btns">
+        <button class="cb cb-skip" onClick="{{skip}}">Skip tour</button>
+        <button class="cb cb-back" onClick="{{back}}">Back</button>
+        <button class="cb cb-next" onClick="{{next}}">{{nextLabel}}</button>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ welcome ============ -->
+  <sc-if value="{{showWelcome}}" hint-placeholder-val="{{ true }}">
+    <div class="w-back">
+      <div class="w-card">
+        <div class="w-ic"><svg class="ico"><use href="#i-compass"/></svg></div>
+        <h2>{{welcomeTitle}}</h2>
+        <p>{{welcomeBody}}</p>
+        <div class="w-btns">
+          <button class="cb cb-back" style="margin:0" onClick="{{skip}}">Skip for now</button>
+          <button class="cb cb-next" onClick="{{start}}">Start tour</button>
+        </div>
+        <div class="w-foot">Replay it anytime from the <b>?</b> in the top bar.</div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ help panel ============ -->
+  <sc-if value="{{help}}" hint-placeholder-val="{{ true }}">
+    <div class="help-back" onClick="{{closeHelp}}"></div>
+    <div class="help">
+      <div class="help-h">
+        <svg class="ico" style="color:#05a99a"><use href="#i-help"/></svg>
+        <b>Help</b><span class="help-mod">{{pageName}}</span>
+        <span class="coach-x" style="margin-left:auto" onClick="{{closeHelp}}"><svg class="ico" style="width:16px;height:16px"><use href="#i-x"/></svg></span>
+      </div>
+      <div class="help-body">
+        <p class="help-intro">{{helpIntro}}</p>
+        <div class="help-sec-t">In this section</div>
+        <sc-for list="{{helpBlocks}}" as="b" hint-placeholder-count="5">
+          <div class="help-blk"><h4>{{b.h}}</h4><p>{{b.p}}</p></div>
+        </sc-for>
+        <div class="help-res">
+          <div class="help-sec-t">Help resources</div>
+          <div class="res-i"><svg class="ico"><use href="#i-book"/></svg>Knowledge base<svg class="ico ext"><use href="#i-arrow"/></svg></div>
+          <div class="res-i"><svg class="ico"><use href="#i-play"/></svg>Video walkthroughs<svg class="ico ext"><use href="#i-arrow"/></svg></div>
+          <div class="res-i"><svg class="ico"><use href="#i-key"/></svg>Keyboard shortcuts</div>
+          <div class="res-i"><svg class="ico"><use href="#i-spark"/></svg>What's new</div>
+          <div class="res-i"><svg class="ico"><use href="#i-life"/></svg>Contact support <span class="muted" style="margin-left:auto;font-size:11px">~2 hr reply</span></div>
+        </div>
+      </div>
+      <div class="help-foot">
+        <button class="retour" onClick="{{restart}}"><svg class="ico" style="width:15px;height:15px"><use href="#i-play"/></svg>Take the {{pageName}} tour again</button>
+        <div class="help-fb">Was this helpful?<a>Yes</a>·<a>No</a></div>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"startPhase":{"editor":"enum","options":["welcome","tour","done","help"],"default":"welcome","section":"Preview state"},"startStep":{"editor":"int","default":0,"min":0,"max":9,"section":"Preview state"},"$preview":{"width":1440,"height":980}}'>
+class Component extends DCLogic {
+  state = {
+    phase: (this.props && this.props.startPhase === 'help') ? 'done' : ((this.props && this.props.startPhase) || 'welcome'),
+    step: (this.props && this.props.startStep) || 0,
+    help: !!(this.props && this.props.startPhase === 'help'),
+    rects: {},
+  };
+
+  /* ---- page-specific config ---- */
+  /*CFG:START*/
+  pageName() { return "Encounter Notes"; }
+  crumb() { return "Encounter Notes"; }
+  welcome() { return { title: "Where your notes get finished", body: "This is the queue of clinical notes for your visits. An unsigned note can't be billed — so this page has a revenue edge." }; }
+  steps() { return [{"id":"en-intro","title":"Unsigned = unbilled","body":"The heading says it plainly: until a note is signed, the visit behind it produces no revenue."},{"id":"en-tabs","title":"Pending vs Signed","body":"Pending holds drafts and notes awaiting co-signature. Signed is your completed history."},{"id":"en-age","title":"Age flags urgency","body":"How long a note has been sitting. It stays grey, turns amber after a couple of days, and red past a week."},{"id":"en-open","title":"Open to sign","body":"Open takes you into the full SOAP editor. Signing there also sends the charge to billing."},{"id":"nav-badge","title":"Always visible","body":"The number on 'Encounter Notes' in the sidebar is your unsigned count — it follows you around the portal."},{"id":"help-btn","title":"That's this page","body":"The ? opens the notes help guide and replays this tour any time.","isHelpBtn":true}]; }
+  helpIntro() { return "This is the working queue for clinical documentation. Every visit needs a signed note before it can be billed."; }
+  helpDoc() { return [{"h":"Pending tab","p":"Drafts and notes awaiting co-signature. The count matches the sidebar badge."},{"h":"Signed tab","p":"Your completed, locked notes, most recent first."},{"h":"Age column","p":"Time since the date of service. Grey, then amber after 2 days, then red past 7."},{"h":"Open / View","p":"Open loads the SOAP editor for a draft; View opens a signed note read-only."},{"h":"Signing sends the charge","p":"When you sign, a charge with the CPT and diagnoses is created for Revenue Management automatically."}]; }
+  /*CFG:END*/
+
+  /* ---- engine ---- */
+  componentDidMount() {
+    this._m = () => this.measure();
+    this.measure();
+    setTimeout(this._m, 60); setTimeout(this._m, 300);
+    window.addEventListener('resize', this._m);
+  }
+  componentWillUnmount() { window.removeEventListener('resize', this._m); }
+  measure() {
+    const rects = {};
+    this.steps().forEach((s) => {
+      const el = document.getElementById(s.id);
+      if (el) {
+        const b = el.getBoundingClientRect();
+        rects[s.id] = { x: b.left, y: b.top, w: b.width, h: b.height };
+      }
+    });
+    this.setState({ rects });
+  }
+  go(d) {
+    const n = this.state.step + d;
+    if (n < 0) return;
+    if (n >= this.steps().length) { this.setState({ phase: 'done' }); return; }
+    this.setState({ step: n });
+  }
+  start() { this.setState({ phase: 'tour', step: 0, help: false }); }
+  skip() { this.setState({ phase: 'done', help: false }); }
+  toggleHelp() { if (this.state.phase === 'welcome') return; this.setState({ help: !this.state.help }); }
+  closeHelp() { this.setState({ help: false }); }
+
+  renderVals() {
+    const S = this.steps();
+    const i = Math.max(0, Math.min(this.state.step, S.length - 1));
+    const cur = S[i];
+    const tour = this.state.phase === 'tour';
+    const W = 1440, H = 980, CW = 336, M = 14;
+
+    const r = this.state.rects[cur.id] || { x: 264, y: 84, w: 1150, h: 110 };
+    const pad = 8;
+    const spot = { x: r.x - pad, y: r.y - pad, w: r.w + pad * 2, h: r.h + pad * 2 };
+
+    let cx, cy;
+    if (cur.isHelpBtn) {
+      cx = W - CW - 22; cy = 70;
+    } else {
+      cy = spot.y + spot.h + M;
+      if (cy + 210 > H - 16) cy = spot.y - 210 - M;
+      if (cy < 16) cy = 16;
+      cx = spot.x + spot.w / 2 - CW / 2;
+      if (cx + CW > W - 16) cx = W - 16 - CW;
+      if (cx < 16) cx = 16;
+    }
+
+    const w = this.welcome();
+    return {
+      crumb: this.crumb(),
+      pageName: this.pageName(),
+      tour,
+      showWelcome: this.state.phase === 'welcome',
+      help: this.state.help,
+      helpBtnCls: (this.state.help || (tour && cur.isHelpBtn)) ? 'act' : '',
+      spotStyle: `top:${spot.y}px;left:${spot.x}px;width:${spot.w}px;height:${spot.h}px;`,
+      coachStyle: `top:${cy}px;left:${cx}px;`,
+      stepTitle: cur.title,
+      stepBody: cur.body,
+      stepNum: i + 1,
+      stepTotal: S.length,
+      nextLabel: i === S.length - 1 ? 'Finish' : 'Next',
+      dots: S.map((_, k) => ({ cls: k <= i ? 'on' : '' })),
+      welcomeTitle: w.title,
+      welcomeBody: w.body,
+      helpIntro: this.helpIntro(),
+      helpBlocks: this.helpDoc(),
+      next: () => this.go(1),
+      back: () => this.go(-1),
+      skip: () => this.skip(),
+      start: () => this.start(),
+      toggleHelp: () => this.toggleHelp(),
+      closeHelp: () => this.closeHelp(),
+      restart: () => this.start(),
+    };
+  }
+}
+</script>
+</body>
+</html>

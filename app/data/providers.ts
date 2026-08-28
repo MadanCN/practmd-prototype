@@ -43,6 +43,12 @@ export interface Provider {
   isDeleted: boolean;
   workingHours: WorkingHour[];
   kind: "provider";
+  // ── optional enriched-profile fields (populated for p1) ──
+  yearsExperience?: number;
+  education?: string[];
+  boardCertifications?: string[];
+  insuranceAccepted?: string[];
+  acceptingNewPatients?: boolean;
 }
 
 export interface StaffMember {
@@ -91,6 +97,18 @@ export const PROVIDERS: Provider[] = [
       wh("Friday", true, "09:00", "15:00", "", ""),
       wh("Saturday", false), wh("Sunday", false),
     ],
+    yearsExperience: 15,
+    education: [
+      "MD — University of Rochester School of Medicine (2004)",
+      "Residency, Psychiatry — Massachusetts General Hospital (2008)",
+      "Fellowship, Mood & Anxiety Disorders — McLean Hospital (2009)",
+    ],
+    boardCertifications: [
+      "American Board of Psychiatry & Neurology — Psychiatry (2009, recertified 2019)",
+      "Fellow, American Psychiatric Association (FAPA)",
+    ],
+    insuranceAccepted: ["Aetna", "Blue Cross Blue Shield", "Cigna", "UnitedHealthcare", "Medicare", "Optum Behavioral Health"],
+    acceptingNewPatients: true,
   },
   {
     id: "p2", kind: "provider",
