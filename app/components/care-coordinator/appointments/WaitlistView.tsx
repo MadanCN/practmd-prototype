@@ -112,8 +112,8 @@ function OfferDrawer({ apptId, patientName, visitType, provider, onClose, onOffe
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
           {confirmed ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="w-14 h-14 rounded-full bg-teal-100 dark:bg-teal-950/40 flex items-center justify-center mb-4">
-                <Check className="w-7 h-7 text-teal-600 dark:text-teal-400" />
+              <div className="w-14 h-14 rounded-full bg-brand-100 dark:bg-brand-950/40 flex items-center justify-center mb-4">
+                <Check className="w-7 h-7 text-brand-600 dark:text-brand-400" />
               </div>
               <p className="text-base font-semibold text-slate-800 dark:text-slate-200">Slot offer sent!</p>
               <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 max-w-xs">
@@ -156,16 +156,16 @@ function OfferDrawer({ apptId, patientName, visitType, provider, onClose, onOffe
                         className={cn(
                           "flex flex-col items-center py-2 rounded-xl text-xs transition-all",
                           isSelected
-                            ? "bg-teal-600 text-white font-semibold shadow-md"
+                            ? "bg-brand-600 text-white font-semibold shadow-md"
                             : hasSlots
-                            ? "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/30"
+                            ? "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/30"
                             : "bg-slate-50 dark:bg-slate-800/50 text-slate-300 dark:text-slate-600 cursor-not-allowed"
                         )}
                       >
                         <span className="text-[10px] font-medium">{dayLabel}</span>
                         <span className="text-sm font-bold mt-0.5">{dayNum}</span>
                         {hasSlots && !isSelected && (
-                          <span className="w-1 h-1 rounded-full bg-teal-500 mt-1" />
+                          <span className="w-1 h-1 rounded-full bg-brand-500 mt-1" />
                         )}
                       </button>
                     );
@@ -189,8 +189,8 @@ function OfferDrawer({ apptId, patientName, visitType, provider, onClose, onOffe
                         className={cn(
                           "px-3 py-2 rounded-xl text-xs font-medium transition-all border",
                           selectedTime === s
-                            ? "bg-teal-600 text-white border-teal-600 shadow-md"
-                            : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/30"
+                            ? "bg-brand-600 text-white border-brand-600 shadow-md"
+                            : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/30"
                         )}
                       >
                         {fmt12(s)}
@@ -209,7 +209,7 @@ function OfferDrawer({ apptId, patientName, visitType, provider, onClose, onOffe
             <button
               disabled={!selectedDate || !selectedTime}
               onClick={handleOffer}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
             >
               <CalendarPlus className="w-4 h-4" />
               Send Slot Offer to Patient
@@ -262,7 +262,7 @@ export default function WaitlistView({ onSchedule }: { onSchedule?: () => void }
             <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Waitlist</h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{waitlist.length} patients waiting · Drag to reprioritize</p>
           </div>
-          <button onClick={onSchedule} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold transition-colors">
+          <button onClick={onSchedule} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold transition-colors">
             <CalendarPlus className="w-3.5 h-3.5" />
             Schedule from Waitlist
           </button>
@@ -304,7 +304,7 @@ export default function WaitlistView({ onSchedule }: { onSchedule?: () => void }
                 "flex items-start gap-3 p-4 rounded-2xl border bg-white dark:bg-slate-900 transition-all hover:shadow-sm group",
                 offered
                   ? "border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/10"
-                  : "border-slate-200 dark:border-slate-700 hover:border-teal-300 dark:hover:border-teal-700"
+                  : "border-slate-200 dark:border-slate-700 hover:border-brand-300 dark:hover:border-brand-700"
               )}>
               {/* Drag handle + position */}
               <div className="flex flex-col items-center gap-1 shrink-0 pt-0.5">
@@ -365,7 +365,7 @@ export default function WaitlistView({ onSchedule }: { onSchedule?: () => void }
                   ) : (
                     <button
                       onClick={() => setDrawerEntry(appt.id)}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-medium transition-colors">
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium transition-colors">
                       <CalendarPlus className="w-3.5 h-3.5" />
                       Offer Slot
                     </button>

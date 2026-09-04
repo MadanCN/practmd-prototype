@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
-import { ChevronLeft, ChevronRight, Plus, Check, Video, Phone, Clock, Users, Eye, EyeOff } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Check, Video, Phone, Clock, Users, Eye, EyeOff, CalendarDays } from "lucide-react";
 import { CC_APPOINTMENTS, type CcAppointment } from "@/data/cc-appointments";
 import { CC_PATIENTS } from "@/data/cc-patients";
 import { PROVIDERS, type Provider } from "@/data/providers";
 import NewAppointmentDrawer, { type PrefilledSlot } from "./NewAppointmentDrawer";
 import AppointmentDetailDrawer from "./AppointmentDetailDrawer";
+import { VISIT_TYPES, visitColor } from "@/lib/visit-types";
 import { cn } from "@/lib/utils";
 
 // ── Calendar constants ───────────────────────────────────────────────────────
@@ -78,21 +79,7 @@ function isSameDay(a: Date, b: Date) {
 }
 
 const MODE_ICON: Record<string, React.ElementType> = { telehealth: Video, phone: Phone, "in-person": Check };
-
-// Visit type color palette — used for appointment card color coding
-const VISIT_TYPE_COLOR: Record<string, string> = {
-  "Initial Consultation":    "#0ea5e9",  // sky
-  "Follow-Up":               "#10b981",  // emerald
-  "Medication Check":        "#8b5cf6",  // violet
-  "Therapy Session":         "#f59e0b",  // amber
-  "Group Session":           "#ef4444",  // red
-  "Telehealth Consultation": "#06b6d4",  // cyan
-};
-const VISIT_TYPE_DEFAULT = "#64748b"; // slate fallback
-
-function visitColor(visitType: string): string {
-  return VISIT_TYPE_COLOR[visitType] ?? VISIT_TYPE_DEFAULT;
-}
+// visit-type colours come from the shared @/lib/visit-types module (imported above)
 
 // ── Provider selector pill ───────────────────────────────────────────────────
 function ProviderPill({ provider, selected, onToggle }: { provider: Provider; selected: boolean; onToggle: () => void }) {
@@ -107,8 +94,40 @@ function ProviderPill({ provider, selected, onToggle }: { provider: Provider; se
   );
 }
 
+// ── Overlap lane-packing (matches the provider calendar) ─────────────────────
+function toMin(t: string) { const [h, m] = t.split(":").map(Number); return h * 60 + m; }
+type PlacedAppt = { appt: CcAppointment; leftPct: number; widthPct: number };
+function packColumn(appts: CcAppointment[]): PlacedAppt[] {
+  const sorted = [...appts].sort((a, b) => toMin(a.startTime) - toMin(b.startTime) || toMin(a.endTime) - toMin(b.endTime));
+  const out: PlacedAppt[] = [];
+  let cluster: CcAppointment[] = [];
+  let clusterEnd = -1;
+  const flush = () => {
+    if (!cluster.length) return;
+    const colEnds: number[] = [];
+    const colOf = new Map<string, number>();
+    for (const a of cluster) {
+      const s = toMin(a.startTime);
+      let col = colEnds.findIndex((end) => end <= s);
+      if (col === -1) { col = colEnds.length; colEnds.push(0); }
+      colEnds[col] = toMin(a.endTime);
+      colOf.set(a.id, col);
+    }
+    const cols = colEnds.length;
+    for (const a of cluster) out.push({ appt: a, leftPct: ((colOf.get(a.id) ?? 0) / cols) * 100, widthPct: (1 / cols) * 100 });
+    cluster = []; clusterEnd = -1;
+  };
+  for (const a of sorted) {
+    if (cluster.length && toMin(a.startTime) >= clusterEnd) flush();
+    cluster.push(a);
+    clusterEnd = Math.max(clusterEnd, toMin(a.endTime));
+  }
+  flush();
+  return out;
+}
+
 // ── Appointment card (provider day view) ────────────────────────────────────
-function ApptCard({ appt, provider, onClick }: { appt: CcAppointment; provider: Provider; onClick?: () => void }) {
+function ApptCard({ appt, provider, onClick, leftPct = 0, widthPct = 100 }: { appt: CcAppointment; provider: Provider; onClick?: () => void; leftPct?: number; widthPct?: number }) {
   const patient = CC_PATIENTS.find(p => p.id === appt.patientId);
   const ModeIcon = MODE_ICON[appt.mode] ?? Check;
   const isWaitlist = appt.status === "waitlisted";
@@ -123,13 +142,15 @@ function ApptCard({ appt, provider, onClick }: { appt: CcAppointment; provider: 
     <div
       onClick={onClick}
       className={cn(
-        "absolute left-1.5 right-1.5 rounded-lg overflow-hidden cursor-pointer group transition-all hover:z-10 hover:shadow-lg",
+        "absolute rounded-lg overflow-hidden cursor-pointer group transition-all hover:z-20 hover:shadow-lg",
         (isWaitlist || isRequested) ? "border border-dashed" : "border-l-[3px] border border-t border-r border-b",
         isCancelled && "opacity-40 grayscale"
       )}
       style={{
         top: timeToY(appt.startTime) + 2,
         height: Math.max(h - 4, 20),
+        left: `calc(${leftPct}% + 5px)`,
+        width: `calc(${widthPct}% - 8px)`,
         backgroundColor: vColor + (isWaitlist || isRequested ? "15" : "18"),
         borderColor: vColor,
         borderLeftColor: vColor,
@@ -264,8 +285,10 @@ function ProviderDayView({ date, providers, appointments, showWaitlisted, showRe
                     </span>
                   </div>
                 ))}
-                {/* Appointments */}
-                {appts.map(a => <ApptCard key={a.id} appt={a} provider={p} onClick={() => onApptClick(a)} />)}
+                {/* Appointments — lane-packed so overlaps sit side by side */}
+                {packColumn(appts).map(({ appt: a, leftPct, widthPct }) => (
+                  <ApptCard key={a.id} appt={a} provider={p} onClick={() => onApptClick(a)} leftPct={leftPct} widthPct={widthPct} />
+                ))}
               </div>
             );
           })}
@@ -295,9 +318,9 @@ function WeekView({ date, selectedProviderIds, appointments, showWaitlisted, sho
         <div />
         {days.map(d => (
           <div key={d.toISOString()} className={cn("py-2.5 px-2 text-center border-l border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800",
-            isSameDay(d, today) && "bg-teal-50 dark:bg-teal-950/20")}>
+            isSameDay(d, today) && "bg-brand-50 dark:bg-brand-950/20")}>
             <p className="text-xs text-slate-500 uppercase tracking-wider">{d.toLocaleDateString("en-US", { weekday: "short" })}</p>
-            <p className={cn("text-base font-bold mt-0.5", isSameDay(d, today) ? "text-teal-600 dark:text-teal-400" : "text-slate-800 dark:text-slate-200")}>
+            <p className={cn("text-base font-bold mt-0.5", isSameDay(d, today) ? "text-brand-600 dark:text-brand-400" : "text-slate-800 dark:text-slate-200")}>
               {d.getDate()}
             </p>
           </div>
@@ -333,7 +356,7 @@ function WeekView({ date, selectedProviderIds, appointments, showWaitlisted, sho
                 return true;
               });
               return (
-                <div key={ds} className={cn("relative border-l border-slate-200 dark:border-slate-700", isSameDay(d, today) && "bg-teal-50/30 dark:bg-teal-950/10")}>
+                <div key={ds} className={cn("relative border-l border-slate-200 dark:border-slate-700", isSameDay(d, today) && "bg-brand-50/30 dark:bg-brand-950/10")}>
                   {dayAppts.map(a => {
                     const prov = PROVIDERS.find(p => p.id === a.providerId);
                     const patient = CC_PATIENTS.find(p => p.id === a.patientId);
@@ -388,9 +411,9 @@ function MonthView({ date, selectedProviderIds, appointments, showWaitlisted, sh
           return (
             <div key={ds} onClick={() => onDayClick(d)}
               className={cn("min-h-[90px] p-1.5 rounded-xl border cursor-pointer hover:shadow-md transition-all",
-                isToday_ ? "border-teal-400 bg-teal-50/50 dark:bg-teal-950/20" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900",
+                isToday_ ? "border-brand-400 bg-brand-50/50 dark:bg-brand-950/20" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900",
                 !isCurrentMonth && "opacity-40")}>
-              <p className={cn("text-xs font-bold mb-1", isToday_ ? "text-teal-600 dark:text-teal-400" : "text-slate-700 dark:text-slate-300")}>{d.getDate()}</p>
+              <p className={cn("text-xs font-bold mb-1", isToday_ ? "text-brand-600 dark:text-brand-400" : "text-slate-700 dark:text-slate-300")}>{d.getDate()}</p>
               <div className="space-y-0.5">
                 {dayAppts.slice(0, 3).map(a => {
                   const prov = PROVIDERS.find(p => p.id === a.providerId);
@@ -491,6 +514,15 @@ export default function CalendarView() {
           <button onClick={() => navigate(1)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors">
             <ChevronRight className="w-4 h-4" />
           </button>
+          {/* Jump to date */}
+          <label className="relative flex items-center">
+            <span className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 cursor-pointer transition-colors" title="Jump to date">
+              <CalendarDays className="w-4 h-4" />
+            </span>
+            <input type="date" value={dateStr(currentDate)}
+              onChange={(e) => { if (e.target.value) setCurrentDate(new Date(e.target.value + "T12:00:00")); }}
+              className="absolute inset-0 opacity-0 cursor-pointer" />
+          </label>
         </div>
 
         <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200 flex-1">{dateLabel}</h2>
@@ -540,7 +572,7 @@ export default function CalendarView() {
                 <div className="absolute right-0 top-10 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg p-3 w-56 space-y-1">
                   {PROVIDERS.map(p => (
                     <label key={p.id} className="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer">
-                      <input type="checkbox" className="accent-teal-600 w-4 h-4"
+                      <input type="checkbox" className="accent-brand-600 w-4 h-4"
                         checked={selectedProviderIds.includes(p.id)}
                         onChange={() => setSelectedProviderIds(ids => ids.includes(p.id) ? ids.filter(i => i !== p.id) : [...ids, p.id])} />
                       <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
@@ -558,14 +590,14 @@ export default function CalendarView() {
           {(["day", "week", "month"] as ViewMode[]).map(v => (
             <button key={v} onClick={() => setViewMode(v)}
               className={cn("px-3 h-8 text-xs font-medium transition-colors capitalize",
-                viewMode === v ? "bg-teal-600 text-white" : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800")}>
+                viewMode === v ? "bg-brand-600 text-white" : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800")}>
               {v}
             </button>
           ))}
         </div>
 
         {/* New appointment */}
-        <button onClick={() => openDrawer()} className="flex items-center gap-1.5 px-3 h-8 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold transition-colors">
+        <button onClick={() => openDrawer()} className="flex items-center gap-1.5 px-3 h-8 rounded-lg practmd-gradient text-white text-xs font-semibold transition-colors">
           <Plus className="w-3.5 h-3.5" />
           New Appointment
         </button>
@@ -584,6 +616,15 @@ export default function CalendarView() {
           ))}
         </div>
       )}
+
+      {/* Visit-type legend */}
+      <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5 px-5 py-2 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
+        {VISIT_TYPES.map(v => (
+          <span key={v.id} className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+            <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: v.color }} />{v.label}
+          </span>
+        ))}
+      </div>
 
       {/* ── Calendar body ── */}
       <div className="flex-1 overflow-hidden">

@@ -100,9 +100,9 @@ export default function CancelModal({ appointment, patient, provider, waitlistEn
               )}
 
               {/* Cancellation fee */}
-              <div className="rounded-xl border bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800 p-4 space-y-3">
+              <div className="rounded-xl border bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800 p-4 space-y-3">
                 <div className="flex items-center gap-2">
-                  <CreditCard className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+                  <CreditCard className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                   <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
                     {within24h ? "Late Cancellation Fee" : "Cancellation Fee"}
                   </span>
@@ -110,13 +110,13 @@ export default function CancelModal({ appointment, patient, provider, waitlistEn
                 </div>
                 <div className="flex items-center gap-3">
                   <label className="text-xs text-slate-600 dark:text-slate-400 shrink-0">Amount (USD)</label>
-                  <div className="flex items-center gap-1 border border-violet-200 dark:border-violet-700 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-900">
+                  <div className="flex items-center gap-1 border border-indigo-200 dark:border-indigo-700 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-900">
                     <span className="text-sm text-slate-500">$</span>
                     <input type="number" min={0} max={500} step={5} value={feeAmount}
                       onChange={e => setFeeAmount(Number(e.target.value))}
                       className="w-16 text-sm font-semibold text-slate-800 dark:text-slate-200 bg-transparent focus:outline-none" />
                   </div>
-                  <button onClick={() => setFeeAmount(CLINIC_CONFIG.lateCancellationFee)} className="text-xs text-slate-400 hover:text-teal-600 transition-colors">
+                  <button onClick={() => setFeeAmount(CLINIC_CONFIG.lateCancellationFee)} className="text-xs text-slate-400 hover:text-brand-600 transition-colors">
                     Reset to default
                   </button>
                 </div>
@@ -128,10 +128,10 @@ export default function CancelModal({ appointment, patient, provider, waitlistEn
                   ].map(pm => (
                     <label key={pm.value} className={cn("flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition-colors text-sm",
                       feePaymentMethod === pm.value
-                        ? "bg-white dark:bg-slate-800 border-violet-300 dark:border-violet-700 text-slate-800 dark:text-slate-200"
+                        ? "bg-white dark:bg-slate-800 border-indigo-300 dark:border-indigo-700 text-slate-800 dark:text-slate-200"
                         : "border-transparent text-slate-600 dark:text-slate-400 hover:bg-white/60 dark:hover:bg-slate-800/60")}>
                       <input type="radio" name="lateCancelPayment" value={pm.value} checked={feePaymentMethod === pm.value}
-                        onChange={() => setFeePaymentMethod(pm.value)} className="accent-violet-600 shrink-0" />
+                        onChange={() => setFeePaymentMethod(pm.value)} className="accent-indigo-600 shrink-0" />
                       {pm.label}
                     </label>
                   ))}
@@ -157,10 +157,10 @@ export default function CancelModal({ appointment, patient, provider, waitlistEn
               </div>
 
               {/* Notify patient toggle */}
-              <div className={cn("p-4 rounded-xl border transition-colors", notifyPatient ? "bg-teal-50 dark:bg-teal-950/20 border-teal-200 dark:border-teal-800" : "bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700")}>
+              <div className={cn("p-4 rounded-xl border transition-colors", notifyPatient ? "bg-brand-50 dark:bg-brand-950/20 border-brand-200 dark:border-brand-800" : "bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700")}>
                 <label className="flex items-start gap-3 cursor-pointer">
                   <input type="checkbox" checked={notifyPatient} onChange={e => setNotifyPatient(e.target.checked)}
-                    className="accent-teal-600 w-4 h-4 mt-0.5 shrink-0" />
+                    className="accent-brand-600 w-4 h-4 mt-0.5 shrink-0" />
                   <div className="flex-1">
                     <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Send cancellation notification to patient</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
@@ -168,7 +168,7 @@ export default function CancelModal({ appointment, patient, provider, waitlistEn
                       SMS: {patient.phone}
                     </p>
                   </div>
-                  {notifyPatient ? <Bell className="w-4 h-4 text-teal-600 shrink-0 mt-0.5" /> : <BellOff className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />}
+                  {notifyPatient ? <Bell className="w-4 h-4 text-brand-600 shrink-0 mt-0.5" /> : <BellOff className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />}
                 </label>
               </div>
             </div>
@@ -177,7 +177,7 @@ export default function CancelModal({ appointment, patient, provider, waitlistEn
           {/* ── PROCESSING phase ── */}
           {phase === "processing" && (
             <div className="flex flex-col items-center justify-center py-12 gap-4">
-              <Loader2 className="w-10 h-10 text-teal-600 animate-spin" />
+              <Loader2 className="w-10 h-10 text-brand-600 animate-spin" />
               <div className="text-center">
                 <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Processing cancellation…</p>
                 <p className="text-xs text-slate-500 mt-1">Updating status and checking waitlist</p>
@@ -206,7 +206,7 @@ export default function CancelModal({ appointment, patient, provider, waitlistEn
                     Late cancellation flagged in audit log
                   </div>
                 )}
-                <div className="flex items-center gap-2 text-sm text-violet-700 dark:text-violet-400">
+                <div className="flex items-center gap-2 text-sm text-indigo-700 dark:text-indigo-400">
                   <CreditCard className="w-4 h-4" />
                   {within24h ? "Late cancellation" : "Cancellation"} fee ${feeAmount} — {feePaymentMethod === "waive" ? "waived" : feePaymentMethod === "invoice" ? "invoiced to patient" : "charged to card on file"}
                 </div>

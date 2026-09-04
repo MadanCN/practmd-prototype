@@ -326,11 +326,11 @@ export default function WaitlistOfferPanel({ freedSlot, providerName, entries, p
           <label className={cn(
             "flex items-start gap-2.5 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors text-sm",
             autoAdvance
-              ? "bg-teal-50 dark:bg-teal-950/20 border-teal-200 dark:border-teal-800"
+              ? "bg-brand-50 dark:bg-brand-950/20 border-brand-200 dark:border-brand-800"
               : "bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700"
           )}>
             <input type="checkbox" checked={autoAdvance} onChange={e => setAutoAdvance(e.target.checked)}
-              className="accent-teal-600 w-4 h-4 mt-0.5 shrink-0" />
+              className="accent-brand-600 w-4 h-4 mt-0.5 shrink-0" />
             <div>
               <p className="font-medium text-slate-800 dark:text-slate-200">Auto-send to next patient if no response</p>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
@@ -342,7 +342,7 @@ export default function WaitlistOfferPanel({ freedSlot, providerName, entries, p
           {/* Send offer button */}
           {eligibleEntries.length > 0 && (
             <button onClick={handleSendOffer} disabled={!selectedId}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors">
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors">
               <Send className="w-4 h-4" />
               Send Slot Offer to {patientMap[entries.find(e => e.id === selectedId)?.patientId ?? ""]?.displayName ?? "Patient"}
             </button>

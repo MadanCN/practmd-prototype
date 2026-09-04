@@ -45,7 +45,7 @@ function generateSlots(provider: Provider, date: string): string[] {
   return slots;
 }
 
-const INPUT = "w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500";
+const INPUT = "w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500";
 
 interface Props {
   appointment: CcAppointment;
@@ -156,7 +156,7 @@ export default function RescheduleModal({ appointment, patient, provider, allApp
                     </label>
                     <div className="flex items-center gap-3 text-xs text-slate-500">
                       <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border border-slate-300 bg-white dark:bg-slate-800 inline-block" />Available</span>
-                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-teal-500 inline-block" />Selected</span>
+                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-brand-500 inline-block" />Selected</span>
                       <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-slate-200 dark:bg-slate-700 inline-block opacity-50" />Booked</span>
                     </div>
                   </div>
@@ -176,8 +176,8 @@ export default function RescheduleModal({ appointment, patient, provider, allApp
                             className={cn(
                               "py-2 px-1 rounded-lg text-xs font-medium transition-all border",
                               isBooked && "bg-slate-100 dark:bg-slate-800 text-slate-400 border-transparent cursor-not-allowed opacity-50",
-                              isSelected && "bg-teal-500 border-teal-500 text-white shadow-sm",
-                              !isBooked && !isSelected && "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/30"
+                              isSelected && "bg-brand-500 border-brand-500 text-white shadow-sm",
+                              !isBooked && !isSelected && "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/30"
                             )}>
                             {fmt12(slot)}
                             {isBooked && <span className="block text-[10px] font-normal">Booked</span>}
@@ -189,7 +189,7 @@ export default function RescheduleModal({ appointment, patient, provider, allApp
                   )}
 
                   {selectedSlot && (
-                    <div className="mt-3 flex items-center gap-2 text-xs text-teal-600 dark:text-teal-400">
+                    <div className="mt-3 flex items-center gap-2 text-xs text-brand-600 dark:text-brand-400">
                       <Check className="w-3.5 h-3.5" />
                       New time: {fmtDate(newDate)} at {fmt12(selectedSlot)} ({appointment.duration} min)
                     </div>
@@ -198,10 +198,10 @@ export default function RescheduleModal({ appointment, patient, provider, allApp
               )}
 
               {/* Notify patient */}
-              <div className={cn("p-3 rounded-xl border transition-colors", notifyPatient ? "bg-teal-50 dark:bg-teal-950/20 border-teal-200 dark:border-teal-800" : "bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700")}>
+              <div className={cn("p-3 rounded-xl border transition-colors", notifyPatient ? "bg-brand-50 dark:bg-brand-950/20 border-brand-200 dark:border-brand-800" : "bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700")}>
                 <label className="flex items-center gap-3 cursor-pointer">
-                  <input type="checkbox" checked={notifyPatient} onChange={e => setNotifyPatient(e.target.checked)} className="accent-teal-600 w-4 h-4 shrink-0" />
-                  {notifyPatient ? <Bell className="w-4 h-4 text-teal-600 shrink-0" /> : <BellOff className="w-4 h-4 text-slate-400 shrink-0" />}
+                  <input type="checkbox" checked={notifyPatient} onChange={e => setNotifyPatient(e.target.checked)} className="accent-brand-600 w-4 h-4 shrink-0" />
+                  {notifyPatient ? <Bell className="w-4 h-4 text-brand-600 shrink-0" /> : <BellOff className="w-4 h-4 text-slate-400 shrink-0" />}
                   <div>
                     <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Notify patient of reschedule</p>
                     <p className="text-xs text-slate-400 mt-0.5">{patient.email} · {patient.phone}</p>
@@ -214,7 +214,7 @@ export default function RescheduleModal({ appointment, patient, provider, allApp
           {/* ── PROCESSING phase ── */}
           {phase === "processing" && (
             <div className="flex flex-col items-center justify-center py-12 gap-4">
-              <Loader2 className="w-10 h-10 text-teal-600 animate-spin" />
+              <Loader2 className="w-10 h-10 text-brand-600 animate-spin" />
               <div className="text-center">
                 <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Processing reschedule…</p>
                 <p className="text-xs text-slate-500 mt-1">Updating appointment and checking waitlist for freed slot</p>
@@ -265,7 +265,7 @@ export default function RescheduleModal({ appointment, patient, provider, allApp
                 Cancel
               </button>
               <button onClick={handleConfirm} disabled={!canConfirm}
-                className="flex-1 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors flex items-center justify-center gap-2">
+                className="flex-1 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold disabled:opacity-40 transition-colors flex items-center justify-center gap-2">
                 <Check className="w-4 h-4" />
                 Confirm Reschedule
               </button>

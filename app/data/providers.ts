@@ -123,6 +123,8 @@ export const PROVIDERS: Provider[] = [
     visitTypes: ["Initial Consultation", "Therapy Session"],
     services: ["Individual Therapy", "Psychological Testing"],
     telehealthEnabled: true, permissionRole: "Licensed Psychologist",
+    insuranceAccepted: ["Aetna", "Cigna", "UnitedHealthcare", "Optum Behavioral Health"],
+    acceptingNewPatients: true,
     isActive: true, isDeleted: false,
     workingHours: [
       wh("Monday", true, "10:00", "18:00", "13:00", "14:00"),
@@ -146,6 +148,8 @@ export const PROVIDERS: Provider[] = [
     visitTypes: ["Initial Consultation", "Therapy Session", "Group Session"],
     services: ["Individual Therapy", "Family Therapy", "Group Therapy"],
     telehealthEnabled: false, permissionRole: "Licensed Therapist",
+    insuranceAccepted: ["Blue Cross Blue Shield", "Excellus", "Fidelis Care", "Medicaid"],
+    acceptingNewPatients: true,
     isActive: true, isDeleted: false,
     workingHours: [
       wh("Monday", false),
@@ -169,6 +173,8 @@ export const PROVIDERS: Provider[] = [
     visitTypes: ["Initial Consultation", "Follow-Up", "Medication Check"],
     services: ["Child Psychiatry", "Adolescent Psychiatry"],
     telehealthEnabled: true, permissionRole: "Attending Physician",
+    insuranceAccepted: ["Aetna", "Blue Cross Blue Shield", "Cigna", "Horizon NJ Health", "Medicaid"],
+    acceptingNewPatients: false,
     isActive: true, isDeleted: false,
     workingHours: defaultWH,
   },
@@ -185,6 +191,8 @@ export const PROVIDERS: Provider[] = [
     visitTypes: ["Therapy Session", "Group Session"],
     services: ["Individual Therapy", "Group Therapy", "Substance Use Counseling"],
     telehealthEnabled: true, permissionRole: "Licensed Therapist",
+    insuranceAccepted: ["Cigna", "UnitedHealthcare", "Medicaid", "Medicare"],
+    acceptingNewPatients: true,
     isActive: true, isDeleted: false,
     workingHours: [
       wh("Monday", true, "11:00", "19:00", "14:00", "15:00"),
@@ -212,6 +220,30 @@ export const STAFF: StaffMember[] = [
   { id: "s11", kind: "staff", firstName: "Derek", lastName: "Owens", displayName: "Derek Owens", email: "d.owens@shorecounseling.com", phone: "—", staffType: "billing", clinicAccess: ["shore-counseling"], role: "Billing", isActive: true, isDeleted: false },
   { id: "s12", kind: "staff", firstName: "Hannah", lastName: "Reyes", displayName: "Hannah Reyes", email: "h.reyes@penfieldpsych.com", phone: "—", staffType: "ops", clinicAccess: ["penfield-psychiatry", "new-hartford"], role: "Operations", isActive: false, isDeleted: false },
 ];
+
+// ── Insurance network ───────────────────────────────────────────────────────
+const INSURER_ALIASES: Record<string, string> = {
+  "blue cross": "blue cross blue shield",
+  "bluecross blueshield": "blue cross blue shield",
+  "bcbs": "blue cross blue shield",
+  "unitedhealth": "unitedhealthcare",
+  "united healthcare": "unitedhealthcare",
+  "uhc": "unitedhealthcare",
+};
+function normInsurer(s: string) {
+  const k = s.toLowerCase().replace(/\s+/g, " ").trim();
+  return INSURER_ALIASES[k] ?? k;
+}
+
+export type NetworkStatus = "in-network" | "out-of-network" | "unknown";
+
+/** Is `providerId` in-network for a patient carrying `patientInsurer`? */
+export function providerNetworkStatus(providerId: string, patientInsurer?: string | null): NetworkStatus {
+  const p = PROVIDERS.find((x) => x.id === providerId);
+  if (!p || !p.insuranceAccepted || !patientInsurer) return "unknown";
+  const target = normInsurer(patientInsurer);
+  return p.insuranceAccepted.map(normInsurer).includes(target) ? "in-network" : "out-of-network";
+}
 
 export const PROVIDER_TYPES = [
   "Psychiatrist", "Psychologist", "Licensed Clinical Social Worker",

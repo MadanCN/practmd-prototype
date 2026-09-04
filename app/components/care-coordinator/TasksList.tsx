@@ -24,8 +24,8 @@ export default function TasksList() {
   return (
     <div className="p-6">
       <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 rounded-xl bg-teal-100 dark:bg-teal-950/60 flex items-center justify-center shrink-0">
-          <CheckSquare className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+        <div className="w-10 h-10 rounded-xl bg-brand-100 dark:bg-brand-950/60 flex items-center justify-center shrink-0">
+          <CheckSquare className="w-5 h-5 text-brand-600 dark:text-brand-400" />
         </div>
         <div>
           <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">Tasks</h1>
@@ -34,10 +34,10 @@ export default function TasksList() {
       </div>
 
       <div className="flex gap-1.5 mb-4">
-        <button onClick={() => setTab("open")} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", tab === "open" ? "bg-teal-600 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400")}>
+        <button onClick={() => setTab("open")} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", tab === "open" ? "bg-brand-600 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400")}>
           Open {openCount > 0 && `(${openCount})`}
         </button>
-        <button onClick={() => setTab("done")} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", tab === "done" ? "bg-teal-600 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400")}>
+        <button onClick={() => setTab("done")} className={cn("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors", tab === "done" ? "bg-brand-600 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400")}>
           Completed
         </button>
       </div>

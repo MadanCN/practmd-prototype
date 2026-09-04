@@ -64,20 +64,20 @@ export default function NoShowModal({ appointment, patient, provider, onConfirm,
           </div>
 
           {/* Fee section */}
-          <div className="rounded-xl border bg-violet-50 dark:bg-violet-950/20 border-violet-200 dark:border-violet-800 p-4 space-y-3">
+          <div className="rounded-xl border bg-indigo-50 dark:bg-indigo-950/20 border-indigo-200 dark:border-indigo-800 p-4 space-y-3">
             <div className="flex items-center gap-2">
-              <CreditCard className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+              <CreditCard className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
               <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">No-Show Fee</span>
             </div>
             <div className="flex items-center gap-3">
               <label className="text-xs text-slate-600 dark:text-slate-400 shrink-0">Amount (USD)</label>
-              <div className="flex items-center gap-1 border border-violet-200 dark:border-violet-700 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-900">
+              <div className="flex items-center gap-1 border border-indigo-200 dark:border-indigo-700 rounded-lg px-3 py-1.5 bg-white dark:bg-slate-900">
                 <span className="text-sm text-slate-500">$</span>
                 <input type="number" min={0} max={500} step={5} value={feeAmount}
                   onChange={e => setFeeAmount(Number(e.target.value))}
                   className="w-16 text-sm font-semibold text-slate-800 dark:text-slate-200 bg-transparent focus:outline-none" />
               </div>
-              <button onClick={() => setFeeAmount(CLINIC_CONFIG.noShowFee)} className="text-xs text-slate-400 hover:text-teal-600 transition-colors">
+              <button onClick={() => setFeeAmount(CLINIC_CONFIG.noShowFee)} className="text-xs text-slate-400 hover:text-brand-600 transition-colors">
                 Reset to default
               </button>
             </div>
@@ -85,10 +85,10 @@ export default function NoShowModal({ appointment, patient, provider, onConfirm,
               {PAYMENT_METHODS.map(pm => (
                 <label key={pm.value} className={cn("flex items-center gap-2.5 px-3 py-2 rounded-lg border cursor-pointer transition-colors text-sm",
                   paymentMethod === pm.value
-                    ? "bg-white dark:bg-slate-800 border-violet-300 dark:border-violet-700 text-slate-800 dark:text-slate-200"
+                    ? "bg-white dark:bg-slate-800 border-indigo-300 dark:border-indigo-700 text-slate-800 dark:text-slate-200"
                     : "border-transparent text-slate-600 dark:text-slate-400 hover:bg-white/60 dark:hover:bg-slate-800/60")}>
                   <input type="radio" name="paymentMethod" value={pm.value} checked={paymentMethod === pm.value}
-                    onChange={() => setPaymentMethod(pm.value)} className="accent-violet-600 shrink-0" />
+                    onChange={() => setPaymentMethod(pm.value)} className="accent-indigo-600 shrink-0" />
                   {pm.label}
                 </label>
               ))}

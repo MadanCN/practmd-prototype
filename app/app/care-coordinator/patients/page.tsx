@@ -1,10 +1,20 @@
-import CcLayout from "@/components/care-coordinator/layout/CcLayout";
-import ComingSoon from "@/components/ui/ComingSoon";
+"use client";
 
-export default function PatientsPage() {
+import { useMemo } from "react";
+import CcLayout from "@/components/care-coordinator/layout/CcLayout";
+import { PatientsPanel } from "@/components/provider/patients/PatientsPanel";
+import { getAllPatients } from "@/data/provider-patients";
+
+export default function CcPatientsPage() {
+  const patients = useMemo(() => getAllPatients(), []);
   return (
     <CcLayout>
-      <ComingSoon title="Patients" description="Patient management and search coming soon." />
+      <PatientsPanel
+        patients={patients}
+        basePath="/care-coordinator"
+        title="Patients"
+        subtitle={`${patients.length} patients across all providers`}
+      />
     </CcLayout>
   );
 }

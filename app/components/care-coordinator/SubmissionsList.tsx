@@ -93,8 +93,8 @@ export default function SubmissionsList() {
   return (
     <div className="p-6">
       <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 rounded-xl bg-teal-100 dark:bg-teal-950/60 flex items-center justify-center shrink-0">
-          <ClipboardList className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+        <div className="w-10 h-10 rounded-xl bg-brand-100 dark:bg-brand-950/60 flex items-center justify-center shrink-0">
+          <ClipboardList className="w-5 h-5 text-brand-600 dark:text-brand-400" />
         </div>
         <div>
           <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">Submissions</h1>

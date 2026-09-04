@@ -4,9 +4,7 @@ import ListView from "@/components/care-coordinator/appointments/ListView";
 export default function ListPage() {
   return (
     <CcLayout>
-      <div className="h-full">
-        <ListView />
-      </div>
+      <ListView />
     </CcLayout>
   );
 }

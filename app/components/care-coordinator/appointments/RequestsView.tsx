@@ -399,7 +399,7 @@ export default function RequestsView({ onReschedule }: { onReschedule?: () => vo
                         Reschedule
                       </button>
                       <button onClick={() => setPanel(appt.id, "confirming")}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold transition-colors">
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold transition-colors">
                         <Check className="w-3.5 h-3.5" />
                         Confirm
                       </button>

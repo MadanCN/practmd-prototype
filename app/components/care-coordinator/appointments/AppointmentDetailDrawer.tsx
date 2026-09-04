@@ -6,6 +6,7 @@ import { type CcAppointment, getWaitlistMatchesForProvider, getLastVisitForPatie
 import { CC_PATIENTS, type CcPatient } from "@/data/cc-patients";
 import { PROVIDERS, type Provider } from "@/data/providers";
 import { CLINIC_CONFIG } from "@/data/cc-masters";
+import { visitColor } from "@/lib/visit-types";
 import CancelModal from "./CancelModal";
 import CheckInModal from "./CheckInModal";
 import RescheduleModal from "./RescheduleModal";
@@ -15,9 +16,9 @@ import { cn } from "@/lib/utils";
 // ── Status config ────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; dot: string }> = {
-  confirmed:   { label: "Confirmed",  bg: "bg-teal-100 dark:bg-teal-900/40",   text: "text-teal-800 dark:text-teal-300",   dot: "bg-teal-500" },
+  confirmed:   { label: "Confirmed",  bg: "bg-brand-100 dark:bg-brand-900/40",   text: "text-brand-800 dark:text-brand-300",   dot: "bg-brand-500" },
   arrived:     { label: "Arrived",    bg: "bg-blue-100 dark:bg-blue-900/40",   text: "text-blue-800 dark:text-blue-300",   dot: "bg-blue-500" },
-  "in-session":{ label: "In Session", bg: "bg-violet-100 dark:bg-violet-900/40", text: "text-violet-800 dark:text-violet-300", dot: "bg-violet-500" },
+  "in-session":{ label: "In Session", bg: "bg-indigo-100 dark:bg-indigo-900/40", text: "text-indigo-800 dark:text-indigo-300", dot: "bg-indigo-500" },
   completed:   { label: "Completed",  bg: "bg-emerald-100 dark:bg-emerald-900/40", text: "text-emerald-800 dark:text-emerald-300", dot: "bg-emerald-500" },
   cancelled:   { label: "Cancelled",  bg: "bg-red-100 dark:bg-red-900/40",     text: "text-red-800 dark:text-red-300",     dot: "bg-red-500" },
   "no-show":   { label: "No Show",    bg: "bg-slate-100 dark:bg-slate-800",    text: "text-slate-600 dark:text-slate-400", dot: "bg-slate-400" },
@@ -110,11 +111,11 @@ const ACTIVITY_ICON: Record<string, React.ElementType> = {
 };
 
 const ACTIVITY_COLORS: Record<string, string> = {
-  "created":        "bg-teal-100 dark:bg-teal-900/40 text-teal-600 dark:text-teal-400",
+  "created":        "bg-brand-100 dark:bg-brand-900/40 text-brand-600 dark:text-brand-400",
   "status-change":  "bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400",
   "rescheduled":    "bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400",
   "eligibility":    "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400",
-  "fee-charged":    "bg-violet-100 dark:bg-violet-900/40 text-violet-600 dark:text-violet-400",
+  "fee-charged":    "bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400",
   "form-assigned":  "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400",
   "offer-sent":     "bg-sky-100 dark:bg-sky-900/40 text-sky-600 dark:text-sky-400",
   "notification":   "bg-sky-100 dark:bg-sky-900/40 text-sky-600 dark:text-sky-400",
@@ -122,10 +123,10 @@ const ACTIVITY_COLORS: Record<string, string> = {
 };
 
 const ACTOR_BADGE: Record<string, string> = {
-  "Care Coordinator": "bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-400",
+  "Care Coordinator": "bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-400",
   "Patient":          "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400",
   "System":           "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400",
-  "Provider":         "bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400",
+  "Provider":         "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400",
 };
 
 function deriveActivityLog(appt: CcAppointment): { id: string; type: string; timestamp: string; description: string; actor: string; meta?: string }[] {
@@ -189,37 +190,37 @@ function TelehealthSection({ appointment, patient }: { appointment: CcAppointmen
   return (
     <div>
       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Telehealth Session</p>
-      <div className="rounded-xl border border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-950/20 overflow-hidden">
+      <div className="rounded-xl border border-brand-200 dark:border-brand-800 bg-brand-50 dark:bg-brand-950/20 overflow-hidden">
         {/* Link row */}
         <div className="px-4 py-3 flex items-center gap-3">
-          <Video className="w-4 h-4 text-cyan-600 dark:text-cyan-400 shrink-0" />
+          <Video className="w-4 h-4 text-brand-600 dark:text-brand-400 shrink-0" />
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Join Link (Portal)</p>
-            <p className="text-xs text-cyan-700 dark:text-cyan-400 truncate font-mono mt-0.5">{joinLink}</p>
+            <p className="text-xs text-brand-700 dark:text-brand-400 truncate font-mono mt-0.5">{joinLink}</p>
           </div>
           <button onClick={copyLink}
             className={cn("flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors shrink-0",
               linkCopied ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400"
-                : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-cyan-400")}>
+                : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-brand-400")}>
             {linkCopied ? <CheckCircle2 className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
             {linkCopied ? "Copied!" : "Copy"}
           </button>
         </div>
 
         {/* Actions */}
-        <div className="px-4 pb-3 flex gap-2 border-t border-cyan-100 dark:border-cyan-900 pt-3">
+        <div className="px-4 pb-3 flex gap-2 border-t border-brand-100 dark:border-brand-900 pt-3">
           <button onClick={sendLink}
             className={cn("flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all flex-1 justify-center",
               linkSent ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400"
-                : "bg-cyan-600 hover:bg-cyan-700 text-white")}>
+                : "bg-brand-600 hover:bg-brand-700 text-white")}>
             {linkSent ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Send className="w-3.5 h-3.5" />}
             {linkSent ? `Sent to ${patient.firstName}` : "Send Link to Patient"}
           </button>
           <a href={joinLink} target="_blank" rel="noopener noreferrer"
             className={cn("flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all",
               isActive
-                ? "bg-violet-600 hover:bg-violet-700 text-white"
-                : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 hover:border-violet-400")}>
+                ? "bg-indigo-600 hover:bg-indigo-700 text-white"
+                : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 hover:border-indigo-400")}>
             <ExternalLink className="w-3.5 h-3.5" />
             {isActive ? "Join Session" : "Open Portal"}
           </a>
@@ -404,8 +405,9 @@ export default function AppointmentDetailDrawer({ appointment, allAppointments, 
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                     {patient.mrn} · {provider.displayName}
                   </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {fmtDate(appointment.date)} · {fmt12(appointment.startTime)}–{fmt12(appointment.endTime)} ({appointment.duration} min)
+                  <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: visitColor(appointment.visitType) }} />
+                    {appointment.visitType}
                   </p>
                 </div>
                 <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 shrink-0">
@@ -416,6 +418,19 @@ export default function AppointmentDetailDrawer({ appointment, allAppointments, 
 
             {/* ── Body ── */}
             <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+
+              {/* Date & time hero */}
+              <div className="rounded-xl practmd-gradient-vivid text-white p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-white/70">Appointment</p>
+                <p className="mt-1 text-lg font-bold">{fmtDate(appointment.date)}</p>
+                <p className="text-sm text-white/85">
+                  {fmt12(appointment.startTime)} – {fmt12(appointment.endTime)} · {appointment.duration} min ·{" "}
+                  <span className="capitalize">{appointment.mode}</span>
+                </p>
+                {appointment.rescheduledFrom && (
+                  <p className="text-xs text-white/70 mt-1">Rescheduled from {fmtDateShort(appointment.rescheduledFrom.date)} at {fmt12(appointment.rescheduledFrom.startTime)}</p>
+                )}
+              </div>
 
               {/* ── Quick Actions ── */}
               <div>
@@ -428,7 +443,7 @@ export default function AppointmentDetailDrawer({ appointment, allAppointments, 
                       elig.status === "eligible" ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400"
                       : elig.status === "issue" ? "bg-amber-50 dark:bg-amber-950/20 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400"
                       : elig.status === "expired" ? "bg-red-50 dark:bg-red-950/20 border-red-300 dark:border-red-700 text-red-700 dark:text-red-400"
-                      : "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/20")}>
+                      : "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/20")}>
                     {elig.status === "running" ? <Loader2 className="w-4 h-4 animate-spin shrink-0" />
                       : elig.status === "eligible" ? <ShieldCheck className="w-4 h-4 shrink-0" />
                       : elig.status === "issue" || elig.status === "expired" ? <ShieldAlert className="w-4 h-4 shrink-0" />
@@ -446,7 +461,7 @@ export default function AppointmentDetailDrawer({ appointment, allAppointments, 
                       disabled={!canCheckIn}
                       className={cn("w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all",
                         canCheckIn
-                          ? "bg-teal-600 border-teal-600 text-white hover:bg-teal-700"
+                          ? "bg-brand-600 border-brand-600 text-white hover:bg-brand-700"
                           : "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-400 cursor-not-allowed",
                         appointment.status === "arrived" && "bg-blue-50 dark:bg-blue-950/20 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-400 cursor-default"
                       )}>
@@ -464,7 +479,7 @@ export default function AppointmentDetailDrawer({ appointment, allAppointments, 
                   <button onClick={() => setRescheduleOpen(true)} disabled={!canReschedule}
                     className={cn("flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all",
                       canReschedule
-                        ? "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/20"
+                        ? "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/20"
                         : "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-400 cursor-not-allowed")}>
                     <Calendar className="w-4 h-4 shrink-0" />
                     Reschedule
@@ -618,18 +633,18 @@ export default function AppointmentDetailDrawer({ appointment, allAppointments, 
                           <div key={stage.id} className="flex items-center flex-1">
                             <div className="flex flex-col items-center flex-1">
                               <div className={cn("w-7 h-7 rounded-full flex items-center justify-center border-2 transition-all",
-                                done ? "bg-teal-500 border-teal-500 text-white"
-                                : active ? "bg-white dark:bg-slate-900 border-teal-500 text-teal-600 dark:text-teal-400"
+                                done ? "bg-brand-500 border-brand-500 text-white"
+                                : active ? "bg-white dark:bg-slate-900 border-brand-500 text-brand-600 dark:text-brand-400"
                                 : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-300")}>
                                 {done ? <CheckCircle2 className="w-3.5 h-3.5" /> : <span className="text-[10px] font-bold">{i + 1}</span>}
                               </div>
                               <p className={cn("text-[10px] mt-1.5 font-medium text-center leading-tight max-w-[56px]",
-                                active ? "text-teal-600 dark:text-teal-400" : done ? "text-slate-600 dark:text-slate-400" : "text-slate-400 dark:text-slate-600")}>
+                                active ? "text-brand-600 dark:text-brand-400" : done ? "text-slate-600 dark:text-slate-400" : "text-slate-400 dark:text-slate-600")}>
                                 {stage.label}
                               </p>
                             </div>
                             {i < ENCOUNTER_STAGES.length - 1 && (
-                              <div className={cn("h-0.5 flex-1 mx-1 -mt-5", done || (i === stageIdx - 1) ? "bg-teal-400" : "bg-slate-200 dark:bg-slate-700")} />
+                              <div className={cn("h-0.5 flex-1 mx-1 -mt-5", done || (i === stageIdx - 1) ? "bg-brand-400" : "bg-slate-200 dark:bg-slate-700")} />
                             )}
                           </div>
                         );
@@ -642,12 +657,12 @@ export default function AppointmentDetailDrawer({ appointment, allAppointments, 
                       {appointment.status === "arrived" && (
                         <div className="flex items-center justify-between">
                           <span className="text-blue-600 dark:text-blue-400">Patient arrived — provider notified. Waiting room.</span>
-                          <button onClick={handleAdvanceStatus} className="text-violet-600 dark:text-violet-400 font-medium hover:underline">Start Session →</button>
+                          <button onClick={handleAdvanceStatus} className="text-indigo-600 dark:text-indigo-400 font-medium hover:underline">Start Session →</button>
                         </div>
                       )}
                       {appointment.status === "in-session" && (
                         <div className="flex items-center justify-between">
-                          <span className="text-violet-600 dark:text-violet-400">Session in progress — encounter open.</span>
+                          <span className="text-indigo-600 dark:text-indigo-400">Session in progress — encounter open.</span>
                           <button onClick={handleAdvanceStatus} className="text-emerald-600 dark:text-emerald-400 font-medium hover:underline">Complete →</button>
                         </div>
                       )}

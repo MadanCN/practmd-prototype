@@ -255,6 +255,11 @@ export function getMyPatients(): PatientProfile[] {
   return MY_PATIENT_IDS.map((id) => PATIENT_PROFILES[id]).filter(Boolean);
 }
 
+/** Every patient — for the Care Coordinator patient panel (not provider-scoped). */
+export function getAllPatients(): PatientProfile[] {
+  return Object.values(PATIENT_PROFILES);
+}
+
 // ── Visit helpers ───────────────────────────────────────────────────────────
 const PAST_STATUSES = ["completed", "no-show"];
 const UPCOMING_STATUSES = ["confirmed", "arrived", "in-session"];
@@ -271,18 +276,19 @@ function toVisitRef(a: (typeof CC_APPOINTMENTS)[number]): VisitRef {
   return { id: a.id, date: a.date, startTime: a.startTime, visitType: a.visitType, mode: a.mode };
 }
 
-export function getLastVisit(patientId: string, providerId = CURRENT_PROVIDER_ID): VisitRef | null {
+/** providerId "*" = any provider (Care Coordinator view). */
+export function getLastVisit(patientId: string, providerId: string = CURRENT_PROVIDER_ID): VisitRef | null {
   const today = new Date().toISOString().split("T")[0];
   const past = CC_APPOINTMENTS
-    .filter((a) => a.patientId === patientId && a.providerId === providerId && a.date <= today && PAST_STATUSES.includes(a.status))
+    .filter((a) => a.patientId === patientId && (providerId === "*" || a.providerId === providerId) && a.date <= today && PAST_STATUSES.includes(a.status))
     .sort((a, b) => (b.date + b.startTime).localeCompare(a.date + a.startTime));
   return past[0] ? toVisitRef(past[0]) : null;
 }
 
-export function getNextVisit(patientId: string, providerId = CURRENT_PROVIDER_ID): VisitRef | null {
+export function getNextVisit(patientId: string, providerId: string = CURRENT_PROVIDER_ID): VisitRef | null {
   const today = new Date().toISOString().split("T")[0];
   const upcoming = CC_APPOINTMENTS
-    .filter((a) => a.patientId === patientId && a.providerId === providerId && a.date >= today && UPCOMING_STATUSES.includes(a.status))
+    .filter((a) => a.patientId === patientId && (providerId === "*" || a.providerId === providerId) && a.date >= today && UPCOMING_STATUSES.includes(a.status))
     .sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime));
   return upcoming[0] ? toVisitRef(upcoming[0]) : null;
 }

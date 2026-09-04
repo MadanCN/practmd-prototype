@@ -100,15 +100,15 @@ function buildWaitingRoom(): WrEntry[] {
 
 const MODE_CFG = {
   "in-person": { icon: MapPin, label: "In Person", cls: "text-blue-600 bg-blue-50 dark:bg-blue-950/30 dark:text-blue-400" },
-  telehealth:  { icon: Video,  label: "Telehealth", cls: "text-violet-600 bg-violet-50 dark:bg-violet-950/30 dark:text-violet-400" },
-  phone:       { icon: Phone,  label: "Phone", cls: "text-teal-600 bg-teal-50 dark:bg-teal-950/30 dark:text-teal-400" },
+  telehealth:  { icon: Video,  label: "Telehealth", cls: "text-indigo-600 bg-indigo-50 dark:bg-indigo-950/30 dark:text-indigo-400" },
+  phone:       { icon: Phone,  label: "Phone", cls: "text-brand-600 bg-brand-50 dark:bg-brand-950/30 dark:text-brand-400" },
 };
 
 const STATUS_CFG: Record<WrStatus, { label: string; cls: string; dot: string }> = {
   waiting:             { label: "Waiting",          cls: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400", dot: "bg-amber-400 animate-pulse" },
   called:              { label: "Called In",         cls: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400",   dot: "bg-blue-500" },
   "with-provider":     { label: "With Provider",     cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400", dot: "bg-emerald-500" },
-  "telehealth-waiting":{ label: "In Virtual Lobby", cls: "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400", dot: "bg-violet-500 animate-pulse" },
+  "telehealth-waiting":{ label: "In Virtual Lobby", cls: "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400", dot: "bg-indigo-500 animate-pulse" },
 };
 
 function fmt12(t: string): string {
@@ -198,7 +198,7 @@ export default function CcWaitingRoomPage() {
                     key={opt.id}
                     onClick={() => { setProviderFilter(opt.id); setProviderDropdownOpen(false); }}
                     className={cn("w-full text-left px-4 py-2.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors",
-                      providerFilter === opt.id ? "text-teal-600 font-semibold" : "text-slate-700 dark:text-slate-300")}
+                      providerFilter === opt.id ? "text-brand-600 font-semibold" : "text-slate-700 dark:text-slate-300")}
                   >
                     {opt.name}
                   </button>
@@ -235,9 +235,9 @@ export default function CcWaitingRoomPage() {
         ].map(tab => (
           <button key={tab.id} onClick={() => setActiveMode(tab.id)}
             className={cn("flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors",
-              activeMode === tab.id ? "border-teal-600 text-teal-600 dark:text-teal-400" : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300")}>
+              activeMode === tab.id ? "border-brand-600 text-brand-600 dark:text-brand-400" : "border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300")}>
             {tab.label}
-            {tab.count > 0 && <span className={cn("text-xs px-1.5 py-0.5 rounded-full font-semibold", activeMode === tab.id ? "bg-teal-100 dark:bg-teal-950/40 text-teal-700 dark:text-teal-400" : "bg-slate-100 dark:bg-slate-800 text-slate-500")}>{tab.count}</span>}
+            {tab.count > 0 && <span className={cn("text-xs px-1.5 py-0.5 rounded-full font-semibold", activeMode === tab.id ? "bg-brand-100 dark:bg-brand-950/40 text-brand-700 dark:text-brand-400" : "bg-slate-100 dark:bg-slate-800 text-slate-500")}>{tab.count}</span>}
           </button>
         ))}
       </div>
@@ -287,7 +287,7 @@ function PatientCard({ entry, onCall, calling, onJoin, showProvider }: {
     <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/40 p-5">
       <div className="flex items-start gap-4">
         {/* Avatar */}
-        <div className="w-11 h-11 rounded-full bg-teal-600 flex items-center justify-center text-white text-sm font-bold shrink-0">
+        <div className="w-11 h-11 rounded-full bg-brand-600 flex items-center justify-center text-white text-sm font-bold shrink-0">
           {entry.patientName.split(" ").map(n => n[0]).join("").slice(0, 2)}
         </div>
 
@@ -338,17 +338,17 @@ function PatientCard({ entry, onCall, calling, onJoin, showProvider }: {
           </button>
           {isTelehealth ? (
             <button onClick={onJoin}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold transition-colors">
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold transition-colors">
               <Video className="w-3.5 h-3.5" /> Join Call
             </button>
           ) : isPhone ? (
-            <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold transition-colors">
+            <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold transition-colors">
               <Phone className="w-3.5 h-3.5" /> Call Patient
             </button>
           ) : (
             entry.status === "waiting" && (
               <button onClick={onCall} disabled={calling}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 disabled:opacity-70 text-white text-xs font-semibold transition-colors">
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-70 text-white text-xs font-semibold transition-colors">
                 {calling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserCheck className="w-3.5 h-3.5" />}
                 Call In
               </button>

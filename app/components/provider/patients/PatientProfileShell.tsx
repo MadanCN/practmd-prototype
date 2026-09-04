@@ -11,6 +11,7 @@ import {
   getPatientProfile, calcAge, getLastVisit, getNextVisit,
   type PatientProfile,
 } from "@/data/provider-patients";
+import { useChartBase } from "./chart-base";
 import { SECTIONS, getSection, DEFAULT_SECTION } from "./sections/registry";
 import { OverviewSection } from "./sections/OverviewSection";
 import { PlaceholderSection } from "./sections/PlaceholderSection";
@@ -43,6 +44,7 @@ function fmtVisit(v: { date: string; startTime: string; visitType: string } | nu
 
 export function PatientProfileShell({ id }: { id: string }) {
   const router = useRouter();
+  const chartBase = useChartBase();
   const seed = getPatientProfile(id);
 
   const [profile, setProfile] = useState<PatientProfile | undefined>(seed);
@@ -60,8 +62,8 @@ export function PatientProfileShell({ id }: { id: string }) {
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
         <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">Patient not found</h1>
         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">No patient matches <code className="font-mono">{id}</code>.</p>
-        <Link href="/provider/patients" className="mt-5 text-sm font-semibold text-brand-700 dark:text-brand-400 hover:underline">
-          ← Back to My Patients
+        <Link href={`${chartBase}/patients`} className="mt-5 text-sm font-semibold text-brand-700 dark:text-brand-400 hover:underline">
+          ← Back to patients
         </Link>
       </div>
     );
@@ -116,7 +118,7 @@ export function PatientProfileShell({ id }: { id: string }) {
           </div>
 
           <div className="flex items-center gap-1.5 ml-auto">
-            <BarButton onClick={() => router.push("/provider/patients")} icon={ChevronLeft} label="Back" />
+            <BarButton onClick={() => router.push(`${chartBase}/patients`)} icon={ChevronLeft} label="Back" />
             <BarButton onClick={() => { selectSection("overview"); setEditing(true); }} icon={Pencil} label="Edit" />
             <BarButton onClick={() => setConfirm("deactivate")} icon={Ban} label="Deactivate" disabled={p.status === "inactive"} />
             <BarButton onClick={() => setConfirm("reset")} icon={KeyRound} label="Send password reset email" compact />

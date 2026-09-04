@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Check, X, ArrowUpRight, UserPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useChartBase } from "../chart-base";
 import {
   type PatientProfile, calcAge, getPatientProfile, getCareCoordinator,
 } from "@/data/provider-patients";
@@ -35,6 +36,7 @@ export function OverviewSection({
     setDraft((d) => ({ ...d, preferences: { ...d.preferences, [key]: value } }));
   }
 
+  const chartBase = useChartBase();
   const linked = p.linkedPatientId ? getPatientProfile(p.linkedPatientId) : undefined;
   const caregiverLinked = p.caregiver?.linkedPatientId ? getPatientProfile(p.caregiver.linkedPatientId) : undefined;
   const coordinator = getCareCoordinator(p.careCoordinatorId);
@@ -77,7 +79,7 @@ export function OverviewSection({
           <Field label="Patient type">{p.patientType}</Field>
           <Field label="Linked patient">
             {linked ? (
-              <Link href={`/provider/patients/${linked.id}`} className="inline-flex items-center gap-1 text-brand-700 dark:text-brand-400 hover:underline">
+              <Link href={`${chartBase}/patients/${linked.id}`} className="inline-flex items-center gap-1 text-brand-700 dark:text-brand-400 hover:underline">
                 {linked.displayName} <ArrowUpRight className="w-3.5 h-3.5" />
               </Link>
             ) : "None"}
@@ -116,7 +118,7 @@ export function OverviewSection({
               <Field label="Relationship">{p.caregiver.relationship}</Field>
               <Field label="Name">
                 {caregiverLinked ? (
-                  <Link href={`/provider/patients/${caregiverLinked.id}`} className="inline-flex items-center gap-1 text-brand-700 dark:text-brand-400 hover:underline">
+                  <Link href={`${chartBase}/patients/${caregiverLinked.id}`} className="inline-flex items-center gap-1 text-brand-700 dark:text-brand-400 hover:underline">
                     {p.caregiver.name} <ArrowUpRight className="w-3.5 h-3.5" />
                   </Link>
                 ) : p.caregiver.name}

@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { X, Search, UserPlus, Check, X as XIcon, ChevronDown, ChevronRight, AlertCircle, Phone, Mail, Shield, Clock, AlertTriangle } from "lucide-react";
+import { X, Search, UserPlus, Check, X as XIcon, ChevronRight, AlertCircle, Phone, Mail, Shield, ShieldCheck, ShieldAlert, Clock, Hourglass } from "lucide-react";
 import { CC_PATIENTS, type CcPatient } from "@/data/cc-patients";
-import { PROVIDERS, type Provider } from "@/data/providers";
+import { PROVIDERS, type Provider, providerNetworkStatus } from "@/data/providers";
 import { getBookedSlots, getLastVisitForPatient, type CcAppointment, type AppointmentMode, type RecurrenceType, type ScheduleType, type AppointmentType } from "@/data/cc-appointments";
+import { VISIT_TYPE_LABELS } from "@/lib/visit-types";
 import { DAYS } from "@/data/clinics";
 import { cn } from "@/lib/utils";
 
@@ -50,7 +51,7 @@ interface FormState {
   notes: string;
 }
 
-const VISIT_TYPES = ["Initial Consultation", "Follow-Up", "Medication Check", "Therapy Session", "Group Session", "Telehealth Consultation"];
+const VISIT_TYPES = VISIT_TYPE_LABELS;
 const FORMS_LIBRARY = ["PHQ-9", "GAD-7", "New Patient Intake", "Medication Review", "ADHD Screening", "PTSD Checklist", "Session Notes", "Consent Form"];
 const SLOT_INTERVAL = 30;
 
@@ -97,7 +98,7 @@ function generateSlots(provider: Provider | undefined, date: string): string[] {
   return slots;
 }
 
-const INPUT = "w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500";
+const INPUT = "w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500";
 const LABEL = "block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5";
 
 const defaultRecurrence: RecurrenceConfig = { type: "none", every: 1, daysOfWeek: [], endDate: "", occurrences: 8, endMode: "occurrences" };
@@ -143,30 +144,28 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
   const allSlots = useMemo(() => generateSlots(provider, form.date), [provider, form.date]);
   const bookedSlots = useMemo(() => (form.providerId && form.date ? getBookedSlots(form.providerId, form.date) : []), [form.providerId, form.date]);
 
-  const maxSelect = form.appointmentType === "reserved" ? 3 : 1;
+  const isWaitlist = form.scheduleType === "waitlist";
+  const maxSelect = isWaitlist ? Infinity : form.appointmentType === "reserved" ? 3 : 1;
 
   function toggleSlot(slot: string) {
-    if (bookedSlots.includes(slot)) return;
+    // On the waitlist every slot is selectable — even ones already booked —
+    // because a waitlist entry is a *preference*, not a hold.
+    if (!isWaitlist && bookedSlots.includes(slot)) return;
     if (form.selectedSlots.includes(slot)) {
       set("selectedSlots", form.selectedSlots.filter(s => s !== slot));
+    } else if (form.selectedSlots.length >= maxSelect) {
+      if (form.appointmentType === "fixed" && !isWaitlist) set("selectedSlots", [slot]);
     } else {
-      if (form.selectedSlots.length >= maxSelect) {
-        // For fixed: replace selection; for reserved: ignore if at max
-        if (form.appointmentType === "fixed") {
-          set("selectedSlots", [slot]);
-        }
-        // reserved: at max, do nothing
-      } else {
-        set("selectedSlots", [...form.selectedSlots, slot]);
-      }
+      set("selectedSlots", [...form.selectedSlots, slot]);
     }
   }
 
   // Step validation
   const canStep1 = !!form.patient;
   const canStep2 = !!(form.visitType && form.providerId);
-  const canStep3 = !!(form.date && form.selectedSlots.length >= 1 && (
-    form.scheduleType === "waitlist" ||
+  const canStep3 = !!(form.date && (
+    // waitlist: preferred slots are optional (0 = "any time works")
+    isWaitlist ||
     (form.appointmentType === "fixed" && form.selectedSlots.length === 1) ||
     (form.appointmentType === "reserved" && form.selectedSlots.length >= 1 && form.selectedSlots.length <= 3)
   ));
@@ -176,9 +175,11 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
   const canProceed = step === 1 ? canStep1 : step === 2 ? canStep2 : step === 3 ? canStep3 : true;
 
   function handleConfirmAppointment() {
-    if (!form.patient || !form.providerId || !form.date || form.selectedSlots.length === 0) return;
+    if (!form.patient || !form.providerId || !form.date) return;
+    if (!isWaitlist && form.selectedSlots.length === 0) return;
     if (onNewAppointment) {
-      const slot = form.selectedSlots[0];
+      // Waitlist entries with no preferred time get a nominal slot for display.
+      const slot = form.selectedSlots[0] ?? (allSlots[0] ?? "09:00");
       const duration = 60; // default duration
       const newAppt: CcAppointment = {
         id: `new-${Date.now()}`,
@@ -239,8 +240,8 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
           <div className="flex gap-1.5">
             {STEP_LABELS.map((label, i) => (
               <div key={label} className="flex-1">
-                <div className={cn("h-1 rounded-full", i + 1 <= step ? "bg-teal-500" : "bg-slate-200 dark:bg-slate-700")} />
-                <p className={cn("text-[10px] mt-1 font-medium", i + 1 === step ? "text-teal-600 dark:text-teal-400" : "text-slate-400")}>{label}</p>
+                <div className={cn("h-1 rounded-full", i + 1 <= step ? "bg-brand-500" : "bg-slate-200 dark:bg-slate-700")} />
+                <p className={cn("text-[10px] mt-1 font-medium", i + 1 === step ? "text-brand-600 dark:text-brand-400" : "text-slate-400")}>{label}</p>
               </div>
             ))}
           </div>
@@ -263,10 +264,10 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
 
               {/* Selected patient — rich card */}
               {form.patient && (
-                <div className="rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50/60 dark:bg-teal-950/20 overflow-hidden">
+                <div className="rounded-xl border border-brand-200 dark:border-brand-800 bg-brand-50/60 dark:bg-brand-950/20 overflow-hidden">
                   {/* Name row */}
                   <div className="flex items-start gap-3 px-4 pt-4 pb-3">
-                    <div className="w-10 h-10 rounded-full bg-teal-600 flex items-center justify-center text-sm font-bold text-white shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-brand-600 flex items-center justify-center text-sm font-bold text-white shrink-0">
                       {form.patient.firstName[0]}{form.patient.lastName[0]}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -281,7 +282,7 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
                   </div>
 
                   {/* Details grid */}
-                  <div className="border-t border-teal-100 dark:border-teal-900 divide-y divide-teal-100 dark:divide-teal-900">
+                  <div className="border-t border-brand-100 dark:border-brand-900 divide-y divide-brand-100 dark:divide-brand-900">
                     {/* Insurance */}
                     <div className="flex items-center gap-3 px-4 py-2.5">
                       <Shield className="w-3.5 h-3.5 text-slate-400 shrink-0" />
@@ -343,7 +344,7 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
                   {patientResults.map(p => (
                     <button key={p.id} onClick={() => { set("patient", p); set("patientSearch", ""); }}
                       className="w-full flex items-start gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 text-left transition-colors">
-                      <div className="w-8 h-8 rounded-full bg-teal-100 dark:bg-teal-900 flex items-center justify-center text-xs font-bold text-teal-700 dark:text-teal-300 shrink-0">
+                      <div className="w-8 h-8 rounded-full bg-brand-100 dark:bg-brand-900 flex items-center justify-center text-xs font-bold text-brand-700 dark:text-brand-300 shrink-0">
                         {p.firstName[0]}{p.lastName[0]}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -361,7 +362,7 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
               )}
 
               {/* Register new */}
-              <button className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 text-sm text-slate-500 hover:border-teal-400 hover:text-teal-600 transition-colors">
+              <button className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 text-sm text-slate-500 hover:border-brand-400 hover:text-brand-600 transition-colors">
                 <UserPlus className="w-4 h-4" />
                 Register a new patient
               </button>
@@ -385,6 +386,28 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
                   <option value="">Select provider</option>
                   {PROVIDERS.map(p => <option key={p.id} value={p.id}>{p.displayName} · {p.providerType}</option>)}
                 </select>
+                {form.providerId && form.patient && (() => {
+                  const net = providerNetworkStatus(form.providerId, form.patient.insuranceProvider);
+                  const insurer = form.patient.insuranceProvider ?? "self-pay";
+                  if (net === "in-network") return (
+                    <div className="mt-2 flex items-start gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-400">
+                      <ShieldCheck className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                      <span><strong>In-network</strong> for {form.patient.displayName.split(" ")[0]}&apos;s {insurer} plan — standard copay applies.</span>
+                    </div>
+                  );
+                  if (net === "out-of-network") return (
+                    <div className="mt-2 flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+                      <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                      <span><strong>Out-of-network</strong> for {insurer}. The patient may face higher out-of-pocket costs or need an out-of-network authorization — confirm before booking.</span>
+                    </div>
+                  );
+                  return (
+                    <div className="mt-2 flex items-start gap-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs text-slate-500 dark:text-slate-400">
+                      <Shield className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                      <span>Network status unknown for this plan — verify eligibility before booking.</span>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div>
@@ -393,7 +416,7 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
                   {(["in-person", "telehealth", "phone"] as AppointmentMode[]).map(m => (
                     <button key={m} onClick={() => set("mode", m)}
                       className={cn("flex-1 py-2 rounded-lg border text-xs font-medium transition-colors capitalize",
-                        form.mode === m ? "bg-teal-600 border-teal-600 text-white" : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-teal-400")}>
+                        form.mode === m ? "bg-brand-600 border-brand-600 text-white" : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-brand-400")}>
                       {m === "in-person" ? "In-Person" : m === "telehealth" ? "Telehealth" : "Phone"}
                     </button>
                   ))}
@@ -406,7 +429,7 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
                   {(["none", "daily", "weekly", "monthly"] as RecurrenceType[]).map(r => (
                     <button key={r} onClick={() => set("recurrence", { ...form.recurrence, type: r })}
                       className={cn("px-3 py-1.5 rounded-lg border text-xs font-medium capitalize transition-colors",
-                        form.recurrence.type === r ? "bg-teal-600 border-teal-600 text-white" : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-teal-400")}>
+                        form.recurrence.type === r ? "bg-brand-600 border-brand-600 text-white" : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-brand-400")}>
                       {r === "none" ? "No Repeat" : r}
                     </button>
                   ))}
@@ -432,7 +455,7 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
                                 : [...form.recurrence.daysOfWeek, day];
                               set("recurrence", { ...form.recurrence, daysOfWeek: days });
                             }} className={cn("w-10 h-8 rounded-lg text-xs font-medium transition-colors",
-                              form.recurrence.daysOfWeek.includes(day) ? "bg-teal-600 text-white" : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400")}>
+                              form.recurrence.daysOfWeek.includes(day) ? "bg-brand-600 text-white" : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400")}>
                               {day}
                             </button>
                           ))}
@@ -443,7 +466,7 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
                     <div>
                       <div className="flex gap-3 text-sm">
                         <label className="flex items-center gap-2 cursor-pointer">
-                          <input type="radio" checked={form.recurrence.endMode === "occurrences"} onChange={() => set("recurrence", { ...form.recurrence, endMode: "occurrences" })} className="accent-teal-600" />
+                          <input type="radio" checked={form.recurrence.endMode === "occurrences"} onChange={() => set("recurrence", { ...form.recurrence, endMode: "occurrences" })} className="accent-brand-600" />
                           <span className="text-slate-700 dark:text-slate-300">After</span>
                           <input type="number" min={1} max={52} className="w-16 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-center bg-white dark:bg-slate-900"
                             value={form.recurrence.occurrences} onChange={e => set("recurrence", { ...form.recurrence, occurrences: parseInt(e.target.value) || 1 })} />
@@ -452,7 +475,7 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
                       </div>
                       <div className="flex gap-2 items-center mt-2 text-sm">
                         <label className="flex items-center gap-2 cursor-pointer">
-                          <input type="radio" checked={form.recurrence.endMode === "date"} onChange={() => set("recurrence", { ...form.recurrence, endMode: "date" })} className="accent-teal-600" />
+                          <input type="radio" checked={form.recurrence.endMode === "date"} onChange={() => set("recurrence", { ...form.recurrence, endMode: "date" })} className="accent-brand-600" />
                           <span className="text-slate-700 dark:text-slate-300">Until</span>
                           <input type="date" className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
                             value={form.recurrence.endDate} onChange={e => set("recurrence", { ...form.recurrence, endDate: e.target.value })} />
@@ -478,15 +501,32 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
                       if (t === "waitlist") set("appointmentType", "fixed");
                     }}
                       className={cn("flex-1 py-2 rounded-lg border text-sm font-medium capitalize transition-colors",
-                        form.scheduleType === t ? "bg-teal-600 border-teal-600 text-white" : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-teal-400")}>
+                        form.scheduleType === t ? "bg-brand-600 border-brand-600 text-white" : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-brand-400")}>
                       {t === "appointment" ? "Appointment" : "Waitlist"}
                     </button>
                   ))}
                 </div>
               </div>
 
+              {/* How the waitlist works */}
+              {isWaitlist && (
+                <div className="rounded-xl border border-brand-200 dark:border-brand-900 bg-brand-50/60 dark:bg-brand-950/20 p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Hourglass className="w-4 h-4 text-brand-600 dark:text-brand-400" />
+                    <p className="text-sm font-semibold text-brand-800 dark:text-brand-300">How the waitlist works</p>
+                  </div>
+                  <ol className="space-y-1.5 text-xs text-brand-800/90 dark:text-brand-300/90 list-decimal list-inside">
+                    <li>The patient joins {(provider?.displayName ?? "the provider")}&apos;s queue for a <strong>{form.visitType || "visit"}</strong> — no slot is held.</li>
+                    <li>Pick any <strong>preferred</strong> times below (optional). Booked slots are fine to pick — you&apos;re saying &quot;take this if it opens up.&quot;</li>
+                    <li>When a matching slot frees up (a cancellation or a schedule change), the coordinator offers it to the top of the queue.</li>
+                    <li>Queue order is <strong>Crisis → Urgent → Routine</strong>, then position within each tier.</li>
+                    <li>The patient has 24 hours to accept an offered slot before it passes to the next person.</li>
+                  </ol>
+                </div>
+              )}
+
               {/* Waitlist priority (only for waitlist schedule type) */}
-              {form.scheduleType === "waitlist" && (
+              {isWaitlist && (
                 <div>
                   <label className={LABEL}>Waitlist Priority <span className="text-red-500">*</span></label>
                   <div className="flex gap-2">
@@ -506,10 +546,6 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
                       </button>
                     ))}
                   </div>
-                  <div className="mt-2 flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
-                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                    Waitlist entries are ranked Crisis → Urgent → Routine, then by position within each tier.
-                  </div>
                 </div>
               )}
 
@@ -521,7 +557,7 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
                     {(["fixed", "reserved"] as AppointmentType[]).map(t => (
                       <button key={t} onClick={() => { set("appointmentType", t); set("selectedSlots", []); }}
                         className={cn("flex-1 py-2 rounded-lg border text-sm font-medium transition-colors",
-                          form.appointmentType === t ? "bg-teal-600 border-teal-600 text-white" : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-teal-400")}>
+                          form.appointmentType === t ? "bg-brand-600 border-brand-600 text-white" : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-brand-400")}>
                         {t === "fixed" ? "Fixed" : "Reserved"}
                       </button>
                     ))}
@@ -543,26 +579,21 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
               {form.date && form.providerId && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className={cn(LABEL, "mb-0")}>Select Time Slot{form.appointmentType === "reserved" ? "s" : ""}</label>
+                    <label className={cn(LABEL, "mb-0")}>
+                      {isWaitlist ? "Preferred times (optional)" : `Select Time Slot${form.appointmentType === "reserved" ? "s" : ""}`}
+                    </label>
                     <div className="flex items-center gap-3 text-xs text-slate-500">
-                      <span className="flex items-center gap-1.5">
-                        <span className="w-3 h-3 rounded border border-slate-300 bg-white dark:bg-slate-800 inline-block" />
-                        Available
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <span className="w-3 h-3 rounded bg-teal-500 inline-block" />
-                        Selected
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <span className="w-3 h-3 rounded bg-slate-200 dark:bg-slate-700 inline-block opacity-50" />
-                        Booked
-                      </span>
+                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border border-slate-300 bg-white dark:bg-slate-800 inline-block" />Available</span>
+                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-brand-500 inline-block" />{isWaitlist ? "Preferred" : "Selected"}</span>
+                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-slate-200 dark:bg-slate-700 inline-block opacity-50" />Booked</span>
                     </div>
                   </div>
                   <p className="text-xs text-slate-500 mb-3">
-                    {form.appointmentType === "fixed"
-                      ? "Click a slot to select it (only one can be selected)."
-                      : "Click to select up to 3 slots for the patient to choose from."}
+                    {isWaitlist
+                      ? "Pick any times that work — including booked ones. Leave blank if the patient is flexible on timing."
+                      : form.appointmentType === "fixed"
+                        ? "Click a slot to select it (only one can be selected)."
+                        : "Click to select up to 3 slots for the patient to choose from."}
                   </p>
 
                   {allSlots.length === 0 ? (
@@ -572,21 +603,31 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
                       {allSlots.map(slot => {
                         const isBooked = bookedSlots.includes(slot);
                         const isSelected = form.selectedSlots.includes(slot);
+                        const disabled = isBooked && !isWaitlist;
                         return (
-                          <button key={slot} disabled={isBooked}
+                          <button key={slot} disabled={disabled}
                             onClick={() => toggleSlot(slot)}
                             className={cn(
                               "py-2 px-1 rounded-lg text-xs font-medium transition-all border",
-                              isBooked && "bg-slate-100 dark:bg-slate-800 text-slate-400 border-transparent cursor-not-allowed opacity-50",
-                              isSelected && "bg-teal-500 border-teal-500 text-white shadow-sm",
-                              !isBooked && !isSelected && "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/30"
+                              disabled && "bg-slate-100 dark:bg-slate-800 text-slate-400 border-transparent cursor-not-allowed opacity-50",
+                              isSelected && "bg-brand-500 border-brand-500 text-white shadow-sm",
+                              !disabled && !isSelected && isBooked && "bg-slate-50 dark:bg-slate-800/40 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 hover:border-brand-400",
+                              !disabled && !isSelected && !isBooked && "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/30"
                             )}>
                             {fmt12(slot)}
-                            {isBooked && <span className="block text-[10px] font-normal">Booked</span>}
-                            {isSelected && <span className="block text-[10px] font-normal opacity-80">Selected</span>}
+                            {isBooked && !isSelected && <span className="block text-[10px] font-normal">{isWaitlist ? "booked" : "Booked"}</span>}
+                            {isSelected && <span className="block text-[10px] font-normal opacity-80">{isWaitlist ? "preferred" : "Selected"}</span>}
                           </button>
                         );
                       })}
+                    </div>
+                  )}
+                  {isWaitlist && (
+                    <div className="mt-3 flex items-center gap-2 text-xs text-brand-600 dark:text-brand-400">
+                      <Check className="w-3.5 h-3.5" />
+                      {form.selectedSlots.length === 0
+                        ? "No preferred times — patient is flexible."
+                        : `${form.selectedSlots.length} preferred time${form.selectedSlots.length > 1 ? "s" : ""} noted.`}
                     </div>
                   )}
 
@@ -604,7 +645,7 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
                     </div>
                   )}
                   {form.scheduleType === "appointment" && form.appointmentType === "reserved" && form.selectedSlots.length > 0 && (
-                    <div className="mt-3 flex items-center gap-2 text-xs text-teal-600 dark:text-teal-400">
+                    <div className="mt-3 flex items-center gap-2 text-xs text-brand-600 dark:text-brand-400">
                       <Check className="w-3.5 h-3.5" />
                       {form.selectedSlots.length} slot{form.selectedSlots.length > 1 ? "s" : ""} selected
                       {form.selectedSlots.length < 3 ? ` (up to ${3 - form.selectedSlots.length} more)` : " (maximum reached)"}
@@ -649,13 +690,13 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
                 </div>
                 <div className="relative mb-2">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                  <input className="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  <input className="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
                     placeholder="Search forms…" value={formSearch} onChange={e => setFormSearch(e.target.value)} />
                 </div>
                 <div className="space-y-1.5 max-h-36 overflow-y-auto">
                   {FORMS_LIBRARY.filter(f => f.toLowerCase().includes(formSearch.toLowerCase())).map(f => (
                     <label key={f} className="flex items-center gap-3 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
-                      <input type="checkbox" className="accent-teal-600 w-4 h-4"
+                      <input type="checkbox" className="accent-brand-600 w-4 h-4"
                         checked={form.forms.includes(f)} onChange={() => set("forms", form.forms.includes(f) ? form.forms.filter(x => x !== f) : [...form.forms, f])} />
                       <span className="text-sm text-slate-700 dark:text-slate-300">{f}</span>
                     </label>
@@ -684,12 +725,12 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
 
             {step < 4 ? (
               <button onClick={nextStep} disabled={!canProceed}
-                className="flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
+                className="flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
                 Continue →
               </button>
             ) : (
               <button onClick={handleConfirmAppointment}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold transition-colors">
+                className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors">
                 <Check className="w-4 h-4" />
                 Confirm Appointment
               </button>
