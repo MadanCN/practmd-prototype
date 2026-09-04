@@ -1,0 +1,241 @@
+Issue Type,Summary,Description,Epic Name,Epic Link,Priority,Labels
+"Epic","Patient Onboarding Flow","A six-step, mobile-first, self-service flow taking a new patient or their guardian from account setup through insurance submission and intake forms, per the approved onboarding designs.
+
+Why we're working on this: today's intake process is manual and staff-mediated for information the patient/guardian could provide themselves, and there is no single guided flow that collects account holder identity, patient identity, care intent, insurance, and required forms in one pass.
+
+Why it's important: a disjointed intake experience delays care and increases staff workload re-collecting information; a guided flow also gives us defined trigger points to automate staff handoff (see Care Coordinator Assignment and Revenue Management epics).
+
+Business impact: reduces front-desk/coordinator time spent on manual data entry, shortens time-to-first-appointment, and improves the new-patient experience with a modern self-service flow.","Patient Onboarding Flow","","Highest","onboarding"
+"Story","Step 1 - Who is this account for","As a new user starting onboarding, I want to declare whether I'm seeking care for myself or acting as a guardian/caregiver for someone else, so that the rest of the flow can be framed correctly for my situation.
+
+Why we're working on this: the guardian/self distinction changes what Step 2 and Step 3 need to collect (a second, distinct patient identity vs. one combined identity).
+
+Why it's important: getting this wrong forces a guardian to awkwardly self-describe as the patient, or an adult patient to go through unnecessary guardian-specific fields.
+
+Business impact: reduces confusion and abandonment at the very first step of onboarding, where drop-off is costliest.
+
+Acceptance criteria:
+- Two choices are presented: self, or guardian/caregiver
+- Selection persists and correctly conditions Steps 2-3 copy and fields","","Patient Onboarding Flow","High","onboarding"
+"Story","Step 2 - Your information (account holder)","As the responsible adult on the account, I want to provide my name, relationship to the patient, and mobile number, so that the account has a verified point of contact for consent and appointment communication.
+
+Why we're working on this: every account needs a responsible adult of record for consent and communication purposes, whether that's the patient themselves or a guardian.
+
+Why it's important: mobile number captured here is the channel used for appointment reminders and secure-message alerts going forward - getting it right at step 2 avoids downstream communication failures.
+
+Business impact: this step is also the trigger for Care Coordinator assignment (see the Care Coordinator Assignment Automation epic) - completing it promptly gets a coordinator engaged as early as possible in the patient's journey.
+
+Acceptance criteria:
+- Captures first name, last name (required), relationship to patient (when guardian), and mobile number
+- Submitting this step fires the Care Coordinator assignment/notification/task trigger
+- A note informs the user that signed consent/POA can be uploaded later under Records/Documents, so this step is not blocked on that upload","","Patient Onboarding Flow","Highest","onboarding"
+"Story","Step 3 - About the patient","As the account holder, I want to enter the patient's legal identity exactly as it appears on a government-issued ID, so that the clinical record matches legal identity for billing and compliance purposes.
+
+Why we're working on this: clinical and billing records require legally accurate patient identity (legal name, DOB) distinct from a preferred name or the account holder's own identity.
+
+Why it's important: a mismatch between legal identity and what's on file causes claim and record-matching problems later.
+
+Business impact: reduces downstream billing/claims friction caused by inaccurate legal-identity capture at intake.
+
+Acceptance criteria:
+- Captures first/last name (required), preferred name (optional), DOB (required), sex at birth, and pronouns (optional)
+- When Step 1 was 'myself', this step is pre-filled/confirmed from Step 2 rather than re-asking from scratch","","Patient Onboarding Flow","High","onboarding"
+"Story","Step 4 - What brings you here (care intent)","As a patient/guardian, I want to optionally select the type(s) of care I'm interested in and a preferred location, so that my care team has context before the first visit without me being forced to decide upfront.
+
+Why we're working on this: knowing the type of care sought and location preference helps Care Coordinators match the patient to the right provider/location when booking.
+
+Why it's important: this is explicitly a soft-ask - forcing it as required risks drop-off from patients who aren't sure yet what they need.
+
+Business impact: improves provider/location matching quality for the eventual booking without adding friction to the onboarding funnel.
+
+Acceptance criteria:
+- Multiple care-type pills are multi-selectable; a location can be chosen from Telehealth or a specific clinic
+- This step can be skipped entirely and edited later without blocking progress to Step 5","","Patient Onboarding Flow","Medium","onboarding"
+"Story","Step 5 - Insurance selection and card capture","As a patient/guardian, I want to select my insurance payer and submit my insurance card details, so that coverage can be verified before my first visit.
+
+Why we're working on this: insurance information needs to reach Revenue Management as early as possible so eligibility verification isn't the bottleneck right before a visit.
+
+Why it's important: this step is the trigger for the entire eligibility-verification workflow (see the Revenue Management epic) - the sooner it's submitted, the more lead time RCM has to verify coverage before a visit is booked.
+
+Business impact: earlier insurance submission shortens the time between account creation and a coverage-confirmed, bookable patient, directly reducing claim-denial risk from booking before eligibility is known.
+
+Acceptance criteria:
+- Payer is selectable via search from a payer list
+- Card front/back upload, cardholder relationship, cardholder name/DOB, and member ID are captured
+- Submitting this step creates a Revenue Management worklist item in Pending status carrying the captured insurance data","","Patient Onboarding Flow","Highest","onboarding,billing"
+"Story","Step 6 - Required and optional intake forms","As a patient/guardian, I want to complete the required Patient Health Information form (and optionally other forms) to finish onboarding, so that the provider has what they need ahead of the first visit.
+
+Why we're working on this: certain intake information (services of interest, primary care provider, pharmacy) needs to be collected before the first visit regardless of insurance/booking status.
+
+Why it's important: only one form is mandatory - the rest (Modified Mini Screen, HIPAA Consent, Current Medical List, Mental Health History, Co-pay Agreement) are explicitly optional and resumable, so onboarding completion isn't gated on all of them.
+
+Business impact: keeps the onboarding funnel from stalling on paperwork while still guaranteeing the minimum clinical information needed exists before the first visit.
+
+Acceptance criteria:
+- Only the Patient Health Information form is required to consider onboarding 'complete'
+- Optional forms can be saved and resumed after onboarding completion
+- Completing the required form ends the onboarding flow with a confirmation state","","Patient Onboarding Flow","High","onboarding"
+"Epic","Care Coordinator Assignment Automation","Automatically assigns and notifies a Care Coordinator as soon as an onboarding account holder is identified (end of Step 2), and later prompts that same coordinator to book the first appointment once insurance eligibility is resolved.
+
+Why we're working on this: today, nothing automatically tells a Care Coordinator that a new patient has started onboarding, and nothing tells them when it's actually appropriate to book (i.e. once coverage is confirmed) - both handoffs are currently manual or missing.
+
+Why it's important: the existing Care Coordinator portal already has Tasks and Submissions surfaces intended for exactly this kind of work queue; this epic is what actually populates them for the onboarding use case.
+
+Business impact: reduces the time between a patient starting onboarding and a staff member actively working their case, and eliminates the risk of booking a visit before coverage is confirmed.","Care Coordinator Assignment Automation","","Highest","onboarding,care-coordinator"
+"Story","Auto-assign and notify Care Coordinator on account-holder capture","As the platform, when a Step 2 (account holder) submission completes, I want to assign a Care Coordinator (round robin or team default), notify them, and create a task in their queue, so that a coordinator is engaged with the case as early as possible.
+
+Why we're working on this: account-holder contact info alone is enough for a coordinator to begin useful work (confirming location fit, following up on a guardian relationship) well before insurance or forms are finished.
+
+Why it's important: waiting for full onboarding completion before notifying staff delays awareness of a new patient unnecessarily.
+
+Business impact: shortens the time-to-first-contact between staff and a new patient in progress, improving conversion and patient experience.
+
+Acceptance criteria:
+- A Care Coordinator is assigned within the same request/transaction as Step 2 submission
+- The assigned coordinator receives a notification and a task titled to identify the patient and the 'new onboarding' context
+- Assignment logic (round robin vs. team default) is configurable","","Care Coordinator Assignment Automation","Highest","onboarding,care-coordinator"
+"Story","Build the Care Coordinator Tasks queue","As a Care Coordinator, I want a Tasks view listing everything assigned to me - including onboarding-triggered tasks - with the ability to see task type, linked patient, and status, so that I have one place to work my queue instead of relying on notifications alone.
+
+Why we're working on this: the Care Coordinator navigation already has a Tasks entry point with no real implementation behind it; this is the first real use case that needs it.
+
+Why it's important: without a persistent queue view, a coordinator has no way to track outstanding onboarding-related work beyond the initial notification.
+
+Business impact: gives coordinators a reliable, auditable worklist rather than relying on transient notifications, reducing dropped follow-ups.
+
+Acceptance criteria:
+- Lists tasks with type, linked patient/submission, assignee, status, and created-at
+- Supports marking a task complete
+- Distinguishes 'new onboarding - prep' tasks from 'eligibility resolved - book appointment' tasks (see the Insurance Eligibility State Machine epic)","","Care Coordinator Assignment Automation","High","onboarding,care-coordinator"
+"Story","Notify Care Coordinator to book once eligibility is resolved","As a Care Coordinator, I want to receive a distinct task once a patient's insurance eligibility case reaches a resolved outcome, so that I know it's appropriate to book their first appointment.
+
+Why we're working on this: today, nothing tells a coordinator that billing has finished verifying coverage - this is the missing loop-closing signal described in the PRD.
+
+Why it's important: booking before eligibility is known risks a visit that isn't actually covered as expected, creating billing surprises for the patient and claim risk for the practice.
+
+Business impact: directly reduces claim-denial and billing-surprise risk by gating the 'ready to book' signal on a confirmed eligibility outcome rather than staff guesswork.
+
+Acceptance criteria:
+- A task is created for the original assigned coordinator when the linked eligibility worklist item reaches Verified-Active, Verified-Inactive, Verified-Not-Covered, or Self-Pay-Confirmed
+- The task clearly surfaces the resolved eligibility outcome so the coordinator knows what to communicate to the patient when booking","","Care Coordinator Assignment Automation","Highest","onboarding,care-coordinator,billing"
+"Epic","Revenue Management Role and Worklist","Introduces a new Revenue Management role, distinct from Admin, Care Coordinator, Provider, and Patient, scoped to owning the insurance-eligibility worklist created when a patient submits insurance during onboarding.
+
+Why we're working on this: eligibility verification is billing/revenue-cycle work that shouldn't sit in the Care Coordinator's queue or require an existing role to absorb it informally.
+
+Why it's important: without a dedicated role and queue, insurance verification work has no clear owner and no consistent process, which is exactly the gap the PRD identifies.
+
+Business impact: creates clear ownership and accountability for insurance verification, which directly protects revenue by catching inactive/excluded coverage before a visit happens rather than after a claim is denied.","Revenue Management Role and Worklist","","Highest","billing,rbac"
+"Story","Define and provision the Revenue Management role","As a platform administrator, I want to create a Revenue Management role - separate from Care Coordinator, Provider, Admin, and Patient - scoped to the eligibility worklist, so that RCM staff have exactly the access they need and no more.
+
+Why we're working on this: this role doesn't exist yet in the platform's role model, and the eligibility worklist needs an owner role to be assigned to and gated behind.
+
+Why it's important: without a distinct role, either access is over-granted (e.g. via an existing role) or under-specified (no one can be assigned worklist items at all).
+
+Business impact: keeps the principle of least privilege intact as the platform adds a new operational function, and sets up a role that can extend to broader revenue-cycle work (claims, denials, payment posting) in future phases.
+
+Acceptance criteria:
+- A Revenue Management role is selectable/available alongside the existing roles
+- Only users with this role (or Admin) can view/action the eligibility worklist","","Revenue Management Role and Worklist","Highest","billing,rbac"
+"Story","Build the Revenue Management eligibility worklist queue","As a Revenue Management staff member, I want a worklist view of all submitted insurance cases awaiting or undergoing eligibility verification, so that I can pick up and work cases in a structured queue rather than an ad hoc list.
+
+Why we're working on this: Step 5 (insurance submission) needs a real destination queue for Revenue Management to work from - this is that destination.
+
+Why it's important: without a structured queue, submitted insurance information has nowhere to go and eligibility verification can't actually happen.
+
+Business impact: makes insurance verification a trackable, manageable operational process instead of relying on someone remembering to check.
+
+Acceptance criteria:
+- Lists worklist items grouped/filterable by current state (see the Insurance Eligibility State Machine epic)
+- Supports self-pick and shows current assignee once picked
+- Surfaces the underlying submitted insurance data (payer, member ID, card images, cardholder info) needed to actually perform verification","","Revenue Management Role and Worklist","Highest","billing"
+"Story","Surface carve-out redirect guidance on a worklist item","As a Revenue Management staff member, I want the worklist item to flag when a payer's behavioral-health benefits are carved out to a separate vendor (e.g. Optum Behavioral Health behind United Healthcare), so that I verify against the correct network, payer ID, and authorization rules instead of the medical payer on the card.
+
+Why we're working on this: carve-out arrangements are a known, recurring real-world complication in behavioral-health insurance verification that isn't obvious from the insurance card alone.
+
+Why it's important: verifying against the wrong payer/network wastes RCM time and can produce an incorrect eligibility outcome.
+
+Business impact: reduces incorrect eligibility determinations and rework caused by verifying against the wrong entity for carve-out plans.
+
+Acceptance criteria:
+- A worklist item supports flagging/recording carve-out vendor details (vendor name, payer ID, notes)
+- This is presented as contextual guidance on the item, not modeled as a separate workflow state","","Revenue Management Role and Worklist","Medium","billing"
+"Epic","Insurance Eligibility State Machine","Implements the defined eligibility-verification state machine (Pending, In-Progress, On-Hold, Verified-Active, Verified-Inactive, Verified-Not-Covered, Unable-to-Verify, Self-Pay-Confirmed, Expired) that every submitted insurance case moves through, per the approved state diagram.
+
+Why we're working on this: eligibility verification needs a defined, consistent set of states and transitions rather than an unstructured 'someone checks it eventually' process.
+
+Why it's important: this state machine is what makes the outcome of verification auditable and is the basis for both the patient-facing status and the Care Coordinator booking prompt.
+
+Business impact: gives the business a consistent, measurable eligibility-verification process (e.g. time-in-state reporting becomes possible), and is the mechanism that actually prevents booking against unconfirmed coverage.","Insurance Eligibility State Machine","","Highest","billing"
+"Story","Implement Pending -> In-Progress task pickup","As a Revenue Management staff member, I want to pick up a Pending worklist item (self-pick or round robin) and move it to In-Progress, so that it's clear who is actively working a case.
+
+Why we're working on this: this is the entry transition into active verification work and needs to record who picked it up and when.
+
+Why it's important: without a clear pickup transition, multiple staff could duplicate work on the same case, or a case could sit unclaimed indefinitely.
+
+Business impact: prevents duplicated verification effort and gives visibility into unclaimed (Pending) work for staffing/capacity decisions.
+
+Acceptance criteria:
+- Picking up a Pending item requires either explicit self-pick or an automated round-robin assignment
+- The item records assignee and pickup timestamp","","Insurance Eligibility State Machine","High","billing"
+"Story","Implement verification outcome transitions from In-Progress","As a Revenue Management staff member, having verified coverage via portal, phone, or clearinghouse, I want to record the outcome as Verified-Active, Verified-Inactive, or Verified-Not-Covered, so that the case reaches a clear, actionable resolution.
+
+Why we're working on this: these are the three core 'we successfully checked and here's what we found' outcomes in the state diagram.
+
+Why it's important: each outcome implies different next steps for the patient and the Care Coordinator (e.g. Verified-Not-Covered likely leads to a self-pay conversation, distinct from a straightforward Verified-Active).
+
+Business impact: is the core mechanism protecting the practice from booking/billing against coverage that turns out to be inactive or excludes the requested service.
+
+Acceptance criteria:
+- RCM can record which verification channel was used (portal/phone/clearinghouse)
+- Each of the three outcomes is individually selectable and timestamped
+- Reaching any of these three outcomes fires the 'eligibility resolved' trigger (see Care Coordinator Assignment Automation epic)","","Insurance Eligibility State Machine","Highest","billing"
+"Story","Implement On-Hold / info-missing loop","As a Revenue Management staff member, I want to place a case On-Hold when more information is needed from the patient, and return it to In-Progress once that information is received, so that incomplete cases don't block the queue or get resolved incorrectly.
+
+Why we're working on this: verification sometimes can't proceed without more information from the patient/guardian (e.g. a missing member ID digit).
+
+Why it's important: without an explicit On-Hold state, staff would either guess, stall, or incorrectly mark the case as Unable-to-Verify.
+
+Business impact: keeps eligibility outcomes accurate by giving staff a correct place to park a case pending more information rather than forcing a premature outcome.
+
+Acceptance criteria:
+- On-Hold captures what information is missing
+- Receiving the information transitions the case back to In-Progress, not to a fresh Pending state","","Insurance Eligibility State Machine","Medium","billing"
+"Story","Implement Unable-to-Verify -> patient self-pay conversion","As a Revenue Management staff member, when a payer is unreachable or information conflicts and verification genuinely can't be completed, I want to record Unable-to-Verify and offer the patient a self-pay path, so that the case still reaches a resolvable outcome instead of stalling indefinitely.
+
+Why we're working on this: not every case can be verified (unreachable payer, irreconcilable conflicting dates) - the state machine needs a defined exit path rather than leaving these cases open forever.
+
+Why it's important: an indefinitely stuck case blocks the Care Coordinator's booking prompt from ever firing.
+
+Business impact: ensures every onboarding case reaches a bookable resolution one way or another, protecting the patient's time-to-first-visit.
+
+Acceptance criteria:
+- Unable-to-Verify requires a reason (payer unreachable / conflicting information / other)
+- Patient opting for self-pay moves the case to Self-Pay-Confirmed, which also fires the 'eligibility resolved' trigger","","Insurance Eligibility State Machine","High","billing"
+"Story","Implement Expired and re-verification transitions","As a Revenue Management staff member, I want Verified-Active cases to automatically move to Expired once their coverage termination date passes, and want both Expired and Verified-Inactive cases to be resubmittable for re-verification back into In-Progress, so that coverage status stays current over time rather than being a one-time check.
+
+Why we're working on this: insurance coverage isn't static - a policy verified as active at intake can lapse, and a policy initially inactive might become active later.
+
+Why it's important: without this, a patient's eligibility status on file could silently go stale and no longer reflect their actual coverage.
+
+Business impact: keeps coverage status accurate over the life of the patient relationship, not just at the moment of onboarding, reducing the chance of a claim being filed against lapsed coverage.
+
+Acceptance criteria:
+- Expiration is system-triggered based on the recorded termination date, not manually flagged
+- Re-verification is manually triggerable from both Expired and Verified-Inactive, and returns the case to In-Progress","","Insurance Eligibility State Machine","Medium","billing"
+"Epic","Patient-Facing Eligibility Visibility","Ensures the patient's own insurance/coverage view reflects the current eligibility-verification outcome without requiring any staff action to communicate it to them.
+
+Why we're working on this: the existing Patient Portal insurance page already models an eligibility status concept (active/inactive/pending/unknown) - it needs to reflect the outcome of the new Revenue Management workflow rather than a static/manual value.
+
+Why it's important: patients otherwise have no way to know whether their coverage was actually confirmed before their visit, which is exactly the transparency gap this feature is meant to close.
+
+Business impact: reduces inbound patient questions/support volume about insurance status and builds trust by proactively surfacing coverage information as soon as it's known.","Patient-Facing Eligibility Visibility","","High","onboarding,billing"
+"Story","Reflect live eligibility outcome on the patient Insurance page","As a patient, I want to see my insurance's real eligibility status (Pending while under review, then Active, Inactive, Not Covered, or Self-Pay Confirmed once resolved), so that I know where things stand without having to call in.
+
+Why we're working on this: the insurance submitted during onboarding needs to show up on the same patient-facing Insurance page used post-onboarding, with a status that updates as Revenue Management works the case.
+
+Why it's important: today this status is static seed data: it needs to be driven by the actual worklist state described in the Insurance Eligibility State Machine epic.
+
+Business impact: gives patients real-time transparency into their coverage status, reducing anxiety and support inquiries ahead of a first visit.
+
+Acceptance criteria:
+- The insurance submitted at onboarding appears on the patient's Insurance page immediately, in a Pending-equivalent state
+- The displayed status updates as the linked worklist item transitions through the state machine, without requiring a manual patient-side refresh trigger beyond a normal page load","","Patient-Facing Eligibility Visibility","High","onboarding,billing"

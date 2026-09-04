@@ -1,0 +1,399 @@
+Issue Type,Summary,Description,Epic Name,Epic Link,Priority,Labels
+"Epic","Global Masters Platform Foundation","Cross-cutting governance layer underpinning every individual Global Master in PractMD: multi-tenant scope enforcement across Ops / Hub / Clinic levels, permission-aware editing, audit logging of master-data changes, and data-integrity safeguards.
+
+Why we're working on this: Global Masters are the single source of truth referenced by scheduling, billing, patient records, and staff workflows across every clinic and hub on the platform. As the number of masters and tenants grows, we need one consistent governance pattern instead of re-solving scope, permissions, and auditability separately for each master screen.
+
+Why it's important: Without a shared foundation, masters risk inconsistent access control (who may edit a Hub-level vs. Clinic-level value), untracked changes to business-critical configuration, and data-integrity breaks when an in-use master value is edited or deactivated.
+
+Business impact: Reduces compliance and audit exposure for a platform handling regulated healthcare data, prevents configuration drift across the Hub/Clinic structure, and lowers engineering cost by giving every future master a ready-made scope, permission, and audit pattern instead of bespoke work each time.","Global Masters Platform Foundation","","Highest","global-masters,platform"
+"Task","Define multi-tenant scope model for Global Masters (Ops / Hub / Clinic / Global)","Establish and document which scope levels apply to each Global Master, extending the App (clinic/hub/ops) and Scope (organization/hub/clinic/global) model already used by Administration Role to the rest of the masters.
+
+Why we're working on this: not every master should be editable or visible at every tenant level - some (e.g. Time Zone) are naturally platform-global, while others (e.g. Provider Color Code) are clinic-specific, and Roles already demonstrate a hub/clinic/ops split that the rest of the masters don't yet follow consistently.
+
+Why it's important: without an explicit scope model, a master risks being edited at the wrong level - e.g. a single clinic changing a value that silently affects every clinic in its Hub.
+
+Business impact: prevents cross-tenant configuration errors that could affect scheduling or billing accuracy across multiple clinics, and clarifies ownership between Operator, Hub, and Clinic administrators.","","Global Masters Platform Foundation","High","global-masters,platform,rbac"
+"Task","Implement audit logging for master data changes","Every create, update, deactivate, and delete action on any Global Master should be recorded with who changed it, when, and the before/after values, surfaced through the existing Audit Log module already present in the PractMD admin console.
+
+Why we're working on this: Global Masters directly drive clinical, scheduling, and billing behavior; unexplained changes to them are difficult to investigate without a change history.
+
+Why it's important: healthcare software is subject to compliance scrutiny, and the platform already has an Audit Log surface in the main navigation - master-data changes should feed into it consistently rather than remaining a gap.
+
+Business impact: reduces investigation time when something breaks after a configuration change, supports audit/compliance readiness, and builds customer trust that administrative changes are traceable.","","Global Masters Platform Foundation","High","global-masters,platform,audit"
+"Task","Master data integrity guardrails (duplicate prevention and safe deactivation)","Add validation to prevent duplicate or near-duplicate master entries, and prevent deleting a master value that is actively referenced elsewhere (e.g. a Provider Type already assigned to providers), replacing hard delete with a safe deactivate-and-warn flow where appropriate.
+
+Why we're working on this: master lists are edited by many different clinic/hub admins over time and are prone to drift, accidental duplication, and unsafe deletion.
+
+Why it's important: a deleted or duplicated master value that is already referenced by a provider, patient, or claim can silently break scheduling, reporting, or billing for records created before the change.
+
+Business impact: protects data quality platform-wide, avoids silent breakage of downstream records, and reduces support escalations caused by inconsistent master data.","","Global Masters Platform Foundation","High","global-masters,platform,data-quality"
+"Task","RBAC enforcement for Global Masters administration","Ensure editing rights on each Global Master are gated by the requesting user's Role permissions (App + Scope + Permissions, as already modeled on the Administration Role screen), rather than being open to anyone who can reach the Global Masters section.
+
+Why we're working on this: the platform already models fine-grained App/Scope/Permission-based roles (Clinic Admin, Hub Admin, Hub Super Admin, Ops roles, etc); Global Masters editing needs to respect those same boundaries consistently across every master screen.
+
+Why it's important: some masters should likely be editable only at Hub or Ops level while others are Clinic-editable - without enforcement, a lower-privilege role could alter organization-wide configuration.
+
+Business impact: reduces risk of unauthorized or accidental changes to shared configuration and supports proper separation of duties between Operator, Hub, and Clinic staff.","","Global Masters Platform Foundation","Highest","global-masters,platform,rbac"
+"Epic","Specialization Master","Define medical specializations and taxonomical codes used to describe each provider's clinical focus areas.
+
+Why we're working on this: specializations are referenced on every provider profile across Hub and Clinic tenants and support future provider search/matching for patients.
+
+Why it's important: a standardized, coded specialization list keeps provider profiles, scheduling, and reporting consistent across every clinic in a Hub, instead of each clinic inventing its own labels.
+
+Business impact: improves patient-to-provider matching accuracy, supports clean cross-clinic reporting on clinical mix, and avoids fragmented specialization data as the platform adds tenants.","Specialization Master","","Medium","global-masters,clinical"
+"Story","Manage medical specializations","As a Hub or Ops administrator, I want to create, edit, activate/deactivate, and code medical specializations, so that provider profiles and clinical reporting use one governed specialization list across all clinics in the tenant.
+
+Why we're working on this: providers need a consistent, searchable way to declare their clinical focus, and reporting needs the same list to roll up cleanly across clinics.
+
+Why it's important: inconsistent specialization naming between clinics makes it impossible to compare or aggregate clinical-mix data at the Hub level.
+
+Business impact: enables accurate provider-specialty reporting and reliable provider-matching for patients booking care.
+
+Acceptance criteria:
+- Specializations support a name and a taxonomical code
+- Records can be activated/deactivated without deleting history
+- Duplicate names/codes are prevented","","Specialization Master","Medium","global-masters,clinical"
+"Epic","Role Masters","Define user roles and access levels within the system, spanning Administration Roles and Staff Roles, each scoped to an App (Clinic / Hub / Ops) and a Scope (Organization / Hub / Clinic / Global) with a granular permission set.
+
+Why we're working on this: PractMD is a multi-tenant platform (Operator, Hub, Clinic) and already ships seeded roles such as Clinic Admin, Hub Admin, Hub Super Admin, and several Ops roles (CRM Manager, CRM Staff, Front Office, Provider, RCM, Supervisor) - this is the control point for who can do what, at which level of the organization.
+
+Why it's important: roles are the single mechanism enforcing least-privilege access across every other module in the platform, including every other Global Master.
+
+Business impact: correct, well-governed roles are foundational to data security, regulatory compliance, and safe delegation of administrative work across Operator/Hub/Clinic staff.","Role Masters","","Highest","global-masters,rbac"
+"Story","Manage Administration Roles","As an Ops/Hub administrator, I want to create and edit Administration Roles - each with a Name, Description, Is Active flag, App scope (clinic/hub/ops), organizational Scope (organization/hub/clinic/global), and a per-app permission set - so that elevated administrative access is granted precisely and auditable.
+
+Why we're working on this: administrative roles (Clinic Admin, Hub Admin, Hub Super Admin, and the Ops-tier roles) already exist in production and need to remain fully manageable, including permission edits, as the platform's modules grow.
+
+Why it's important: administrative roles carry elevated permissions; incorrect scoping (e.g. a Clinic-level admin able to act at Hub scope) is a direct security and compliance risk.
+
+Business impact: protects the platform's most sensitive access tier, and lets the business onboard new administrative role types (e.g. a new Ops function) without engineering work.
+
+Acceptance criteria:
+- Role edits capture Name, Description, Is Active, App, Scope, and Permissions
+- Permission changes are captured by the audit logging task
+- Only sufficiently privileged users can edit Administration Roles","","Role Masters","Highest","global-masters,rbac"
+"Story","Manage Staff Roles","As a Clinic/Hub administrator, I want to create and edit Staff Roles with their own permission set, separate from Administration Roles, so that front-line staff (front desk, clinical support, etc) get exactly the access their job requires and nothing more.
+
+Why we're working on this: staff roles are lower-privilege and higher-volume than administrative roles, and are typically managed by different people at a different cadence, so they need to stay independently editable.
+
+Why it's important: over-permissioned staff accounts are a common source of accidental data exposure or modification in healthcare settings.
+
+Business impact: enables least-privilege staffing at scale across many clinics without creating a new Administration Role for every operational job function.
+
+Acceptance criteria:
+- Staff Role edits capture the same field set as Administration Roles
+- Staff Roles are clearly distinguished from Administration Roles in listings and permission checks","","Role Masters","High","global-masters,rbac"
+"Task","Define standard role templates per App and Scope","Publish a standard, documented set of default role templates (mirroring the already-seeded Clinic Admin, Hub Admin, Hub Super Admin, Ops CRM Manager, Ops CRM Staff, Ops Front Office, Ops Provider, Ops RCM, Ops Supervisor, etc) that new tenants start from, instead of every Hub/Clinic re-deriving permission sets from scratch.
+
+Why we're working on this: the existing seeded roles suggest an intended standard set, but there is no documented, versioned template a new tenant onboarding can rely on.
+
+Why it's important: inconsistent starting permission sets across tenants make support, security review, and future permission-model changes much harder to reason about.
+
+Business impact: speeds up new-tenant onboarding and reduces the chance of a misconfigured role being created ad hoc for a new clinic.","","Role Masters","Medium","global-masters,rbac"
+"Epic","Gender Master","Manage gender options and preferences available for patient and contact records.
+
+Why we're working on this: patient demographic accuracy and inclusivity are both a care-quality and a compliance concern.
+
+Why it's important: an org-controlled, inclusive option set (rather than a hardcoded binary or free text) is required for accurate patient records and respectful care.
+
+Business impact: reduces patient-experience complaints tied to demographic accuracy and keeps the platform aligned with evolving regulatory/EHR-interoperability expectations around demographic data.","Gender Master","","Medium","global-masters,patient"
+"Story","Manage gender options","As an Ops/Hub administrator, I want to maintain the list of gender options offered on patient and contact records, so that the platform reflects the terminology the organization has chosen and can be updated without engineering involvement.
+
+Why we're working on this: gender terminology and organizational policy evolve, and clinics need to update this list themselves rather than waiting on a release.
+
+Why it's important: an outdated or incomplete option list can force patients into inaccurate self-identification at intake.
+
+Business impact: improves patient trust and data accuracy at the first touchpoint of care - registration.
+
+Acceptance criteria:
+- Options can be added, reordered, and activated/deactivated
+- Deactivating an option in use does not remove it from existing patient records","","Gender Master","Medium","global-masters,patient"
+"Epic","Escalation Time Master","Configure time intervals used for task escalation across the operations workflow.
+
+Why we're working on this: staff tasks (patient messages, urgent follow-ups, billing issues) need a defined SLA so nothing time-sensitive is silently missed by Clinic or Ops staff.
+
+Why it's important: escalation timing is what turns a task queue into an accountable workflow rather than a best-effort list.
+
+Business impact: reduces missed follow-ups on time-sensitive patient and operational issues, which directly affects both patient safety perception and operational efficiency.","Escalation Time Master","","High","global-masters,operations"
+"Story","Configure escalation time intervals","As an Ops administrator, I want to define escalation tiers (e.g. Critical, High, Medium, Low) each with a time interval, so that overdue tasks automatically escalate according to organizational policy.
+
+Why we're working on this: different task types carry different urgency, and a single fixed SLA doesn't fit every workflow.
+
+Why it's important: without configurable tiers, escalation timing is either hardcoded (inflexible) or manual (unreliable).
+
+Business impact: ensures urgent operational and clinical follow-ups get timely attention, reducing risk of a critical item going unaddressed.
+
+Acceptance criteria:
+- Each tier has a label, a numeric value, and a time unit
+- Tiers are orderable by priority
+- The stored value is actually consumed by the task/queue escalation logic, not just recorded","","Escalation Time Master","High","global-masters,operations"
+"Epic","Provider Configuration Masters","Manage provider details, color codes, and configurations used to categorize and visually distinguish healthcare providers across the platform, covering Provider Type and Provider Color Code.
+
+Why we're working on this: providers need a consistent way to be categorized (Provider Type) and visually distinguished on schedules and calendars (Provider Color Code) across every clinic in a Hub.
+
+Why it's important: inconsistent provider categorization and coloring across clinics makes cross-clinic scheduling views and reporting harder to read and compare.
+
+Business impact: improves scheduling usability for staff working across multiple providers/clinics and keeps provider-mix reporting consistent at the Hub level.","Provider Configuration Masters","","Medium","global-masters,provider"
+"Story","Manage Provider Types","As a Hub/Ops administrator, I want to define categories of healthcare providers (e.g. Psychiatrist, Therapist, Nurse Practitioner), so that provider profiles, scheduling, and reporting use a consistent classification.
+
+Why we're working on this: provider type underlies scheduling rules, reporting, and potentially licensure-related logic, and needs to be centrally governed rather than free text.
+
+Why it's important: inconsistent provider-type labeling across clinics breaks any reporting or scheduling rule that depends on it.
+
+Business impact: enables reliable provider-mix reporting and supports future type-specific scheduling or compliance rules.
+
+Acceptance criteria:
+- Provider Types support name, description, display order, active flag
+- Existing provider assignments are preserved when a type is deactivated","","Provider Configuration Masters","Medium","global-masters,provider"
+"Story","Manage Provider Color Codes","As a Clinic/Hub administrator, I want to assign and manage color codes for providers, so that calendars and scheduling views visually distinguish providers at a glance.
+
+Why we're working on this: staff scheduling multiple providers on a shared calendar rely heavily on color to scan availability quickly.
+
+Why it's important: without centrally managed, non-clashing color assignment, clinics risk visually confusing calendars, especially as provider counts grow.
+
+Business impact: reduces scheduling errors caused by visual misidentification of providers on a busy calendar.
+
+Acceptance criteria:
+- Each provider can be assigned a color from a managed palette
+- The system prevents/warns on assigning the same color to two active providers within a clinic","","Provider Configuration Masters","Low","global-masters,provider"
+"Epic","Patient Configuration Masters","View and manage patient-related configuration inside the Ops App: Pronouns, Contact Method, Marital Status, Relation to Patient, and Patient Type.
+
+Why we're working on this: these are the controlled vocabularies used throughout patient registration, intake, and record-keeping - they need to be centrally governed rather than hardcoded per clinic.
+
+Why it's important: patient-facing demographic and classification accuracy affects both care quality and downstream reporting/billing correctness.
+
+Business impact: keeps patient records consistent and comparable across every clinic in the organization, and lets policy (e.g. new contact channels, new patient categories) evolve without engineering changes.","Patient Configuration Masters","","Medium","global-masters,patient"
+"Story","Manage Pronouns","As an Ops/Hub administrator, I want to define the list of preferred pronouns available on patient and contact profiles, so that patient records and correspondence reflect a patient's stated preference accurately.
+
+Why we're working on this: correct pronoun usage in patient-facing and clinical documentation is a care-quality and respect-for-patient concern.
+
+Why it's important: a fixed or incomplete pronoun list forces patients into inaccurate self-identification.
+
+Business impact: improves patient experience and correctness of patient-facing correspondence generated by the platform.
+
+Acceptance criteria:
+- Pronoun options are addable, reorderable, and can be activated/deactivated without losing existing patient selections","","Patient Configuration Masters","Medium","global-masters,patient"
+"Story","Manage Contact Methods","As an Ops/Hub administrator, I want to define which communication channels are available for contacts (e.g. mobile, email, portal, SMS), so that patient communication preferences can be captured accurately and consistently.
+
+Why we're working on this: a patient's stated contact-method preference should determine which channel the platform actually uses to reach them for reminders, recalls, and notifications.
+
+Why it's important: an incomplete or inconsistent contact-method list leads to patients being contacted through a channel they didn't consent to or don't use.
+
+Business impact: improves communication effectiveness (reduced no-shows, better response rates) and supports channel-consent compliance.
+
+Acceptance criteria:
+- Contact methods can be added, reordered, and (de)activated
+- Deactivating a method in use on existing patient records does not remove the existing selection","","Patient Configuration Masters","Medium","global-masters,patient"
+"Story","Manage Marital Status options","As an Ops/Hub administrator, I want to manage the marital status option list, so that intake and insurance-related forms capture this standard demographic field consistently.
+
+Why we're working on this: marital status is a standard field required by many intake and insurance workflows and needs a governed, consistent option set.
+
+Why it's important: inconsistent values across clinics complicate insurance-form generation and reporting.
+
+Business impact: reduces friction and rework in insurance/billing workflows that depend on this field being populated with a recognized value.
+
+Acceptance criteria:
+- Marital status options are addable, reorderable, and (de)activatable","","Patient Configuration Masters","Low","global-masters,patient"
+"Story","Manage Relation to Patient types","As an Ops/Hub administrator, I want to define relationship types linked to a patient (e.g. Spouse, Parent, Guardian, Emergency Contact), so that emergency contacts, guarantors, and guardians can be recorded with a standard vocabulary.
+
+Why we're working on this: several workflows (emergency contact, billing-responsible-party, guardian-of-minor) need a controlled relationship vocabulary rather than free text.
+
+Why it's important: inconsistent relationship labeling makes it harder to reliably identify a patient's guardian or emergency contact in time-sensitive situations.
+
+Business impact: improves reliability of emergency-contact and guardian workflows, which carries direct patient-safety weight for a behavioral-health platform.
+
+Acceptance criteria:
+- Relationship types are addable, reorderable, and (de)activatable","","Patient Configuration Masters","Medium","global-masters,patient"
+"Story","Manage Patient Types","As an Ops/Hub administrator, I want to configure patient category types (e.g. New Patient, Established Patient, Self-Pay), so that intake, billing, and scheduling paths can differ appropriately by patient type.
+
+Why we're working on this: different patient types often follow different intake, billing, or scheduling paths, and this master is the classification driving that.
+
+Why it's important: without a governed patient-type list, downstream workflows (or reporting segmentation) that key off patient type become unreliable.
+
+Business impact: supports accurate patient-segmentation reporting and enables patient-type-specific workflow rules (e.g. different required intake fields for New vs. Established patients).
+
+Acceptance criteria:
+- Patient types are addable, reorderable, and (de)activatable","","Patient Configuration Masters","Medium","global-masters,patient"
+"Epic","Business Hour Master","Set and manage clinic operating hours.
+
+Why we're working on this: scheduling availability, self-scheduling windows, and after-hours call routing all need to know when a clinic is actually open.
+
+Why it's important: incorrect business hours directly cause incorrect scheduling availability shown to patients and staff.
+
+Business impact: prevents patients from being offered appointment slots outside actual clinic operating hours, and ensures after-hours workflows (e.g. call forwarding) trigger at the right time.","Business Hour Master","","High","global-masters,operations"
+"Story","Configure clinic business hours","As a Clinic administrator, I want to set operating hours per clinic (and exceptions for specific days), so that scheduling only offers appointment availability during actual open hours.
+
+Why we're working on this: business hours are the base calendar constraint every other scheduling rule builds on top of.
+
+Why it's important: without accurate business hours, self-scheduling and staff scheduling views can both show incorrect availability.
+
+Business impact: reduces booking errors and the operational cost of manually correcting mis-scheduled appointments.
+
+Acceptance criteria:
+- Hours are configurable per day of week, per clinic
+- Hours interact correctly with the Holiday/exception calendar if one exists
+- Scheduling availability actually reads from this configuration","","Business Hour Master","High","global-masters,operations"
+"Epic","Time Zone Master","Configure supported time zones for clinics and operations.
+
+Why we're working on this: a multi-clinic, multi-region platform must display and calculate appointment times correctly regardless of where a clinic, provider, or patient is physically located.
+
+Why it's important: time zone errors in a healthcare scheduling platform lead directly to missed or double-booked appointments.
+
+Business impact: prevents scheduling errors and patient/provider confusion as the platform expands into new regions.","Time Zone Master","","High","global-masters,operations"
+"Story","Configure supported time zones","As an Ops administrator, I want to manage the list of supported time zones and assign a time zone per clinic, so that appointment times are calculated and displayed correctly for every participant regardless of location.
+
+Why we're working on this: every scheduling, reminder, and calendar-sync feature depends on a correct time zone being set per clinic.
+
+Why it's important: a missing or incorrect clinic time zone silently shifts every appointment time shown to patients and providers.
+
+Business impact: avoids missed appointments and provider double-bookings caused by time zone miscalculation, which is a direct patient-trust and operational-cost issue.
+
+Acceptance criteria:
+- Time zones are selectable from a standard (IANA) list
+- Each clinic has exactly one assigned time zone
+- Changing a clinic's time zone does not retroactively shift already-booked appointment times incorrectly","","Time Zone Master","High","global-masters,operations"
+"Epic","Document Masters","Manage clinical or administrative document settings, covering Document Type and Document.
+
+Why we're working on this: every uploaded or generated patient document needs a controlled category for filing, search, and retention policy.
+
+Why it's important: inconsistent document categorization makes it harder for staff to find the right document quickly, which matters in time-sensitive clinical situations.
+
+Business impact: improves clinical documentation retrieval speed and supports retention-policy compliance.","Document Masters","","Medium","global-masters,document"
+"Story","Manage Document Types","As an Ops/Hub administrator, I want to define document categories for classification (e.g. Intake Form, Progress Note, Discharge Summary), so that every uploaded or generated document can be filed and searched consistently.
+
+Why we're working on this: document categorization is foundational to a usable document search/filing experience in the patient chart.
+
+Why it's important: without a governed category list, staff will invent inconsistent ad hoc labels over time.
+
+Business impact: reduces time staff spend locating documents in a patient's chart, which matters most in time-sensitive clinical situations.
+
+Acceptance criteria:
+- Document types are addable, reorderable, and (de)activatable","","Document Masters","Medium","global-masters,document"
+"Story","Manage Document settings","As an Ops/Hub administrator, I want to manage clinical or administrative document configuration (retention, visibility, or other document-level settings distinct from categorization), so that document handling policy is centrally governed.
+
+Why we're working on this: this nav entry exists separately from Document Type in the current product and needs its actual distinct scope defined and implemented (see the related naming-clarification task).
+
+Why it's important: until its scope is clarified, this master risks being either redundant with Document Type or under-specified for admins trying to use it.
+
+Business impact: once scoped correctly, centralizes document-handling policy (e.g. retention) that currently has no clear home.
+
+Acceptance criteria:
+- Scope of this master is explicitly defined and differentiated from Document Type before implementation begins","","Document Masters","Medium","global-masters,document"
+"Task","Clarify Document vs Document Type naming and scope","The current admin navigation lists both 'Document Type' ('Define document categories for classification') and 'Document' ('Manage clinical or administrative document settings') as separate masters under the Document group, with the second entry's description appearing to duplicate the group-level description rather than describing a distinct capability.
+
+Why we're working on this: admins configuring the platform need to know what each screen is actually for, and duplicate/overlapping naming is a common source of confusion.
+
+Why it's important: unclear or duplicated navigation entries increase support burden and the risk of an admin configuring the wrong screen.
+
+Business impact: cleaning this up reduces onboarding time for new clinic/hub admins and prevents misconfiguration of document-related settings.","","Document Masters","Medium","global-masters,document,cleanup"
+"Epic","Location Masters","Manage clinic locations: cities, states, and countries.
+
+Why we're working on this: every address field across the platform (patient, clinic, insurer) needs a controlled, hierarchical location vocabulary rather than free text.
+
+Why it's important: inconsistent or non-hierarchical location data breaks address validation, reporting by region, and any future geo-based features (e.g. finding the nearest clinic).
+
+Business impact: improves address data quality platform-wide and is prerequisite infrastructure for any regional expansion or reporting.","Location Masters","","Medium","global-masters,location"
+"Story","Manage Countries","As an Ops administrator, I want to add and manage country details, so that every address field in the platform draws from a single controlled country list.
+
+Why we're working on this: country is the top of the address hierarchy and needs to be correct before State and City can be meaningfully scoped underneath it.
+
+Why it's important: an uncontrolled country list breaks downstream State/City scoping and any country-specific business logic (e.g. phone formatting, regulatory rules).
+
+Business impact: is foundational to accurate address capture and to any future multi-country expansion.
+
+Acceptance criteria:
+- Countries carry a standard ISO code
+- Exactly one country can be marked default per tenant, enforced server-side","","Location Masters","Medium","global-masters,location"
+"Story","Manage States / Provinces","As an Ops administrator, I want to add and manage state/province details scoped to a country, so that address entry cascades correctly from Country.
+
+Why we're working on this: State is the second tier of the address hierarchy, needed for accurate clinic and patient addresses.
+
+Why it's important: if State isn't actually linked to Country in the data model, address entry and reporting by country/state will be unreliable.
+
+Business impact: enables accurate regional reporting and correct address capture across every clinic.
+
+Acceptance criteria:
+- Every State record is linked to a valid Country record
+- The State picker filters live from the linked Country, not a hardcoded list","","Location Masters","Medium","global-masters,location"
+"Story","Manage Cities","As an Ops administrator, I want to add and manage city details scoped to a state, so that address entry cascades correctly from State.
+
+Why we're working on this: City is the third tier of the address hierarchy, completing the Country > State > City chain.
+
+Why it's important: if City isn't actually linked to State in the data model, the address hierarchy breaks down the same way it would for State/Country.
+
+Business impact: completes accurate, structured address capture for every clinic and patient record.
+
+Acceptance criteria:
+- Every City record is linked to a valid State record
+- The City picker filters live from the linked State, not a hardcoded list","","Location Masters","Medium","global-masters,location"
+"Task","Seed standard reference data for Country, State, and City","Pre-populate the Location masters with a standard, recognized reference dataset (e.g. ISO country/subdivision data) rather than requiring every new tenant to manually enter this from scratch.
+
+Why we're working on this: location data is a well-known, standardizable reference set - there's no reason to make every Hub/Clinic re-enter it.
+
+Why it's important: manual entry of location reference data is time-consuming and error-prone, and inconsistent entry across tenants undermines the point of having a shared master.
+
+Business impact: significantly speeds up new-tenant onboarding and ensures location data is consistent and standards-compliant from day one.","","Location Masters","Medium","global-masters,location"
+"Epic","Resource Type Masters","Manage types of resources and equipment used in the clinic, covering Room Type and Equipment Type.
+
+Why we're working on this: scheduling and facilities need a shared vocabulary for what kind of physical space or equipment a visit requires and whether it's available.
+
+Why it's important: without governed resource types, room/equipment assignment during scheduling is either manual or inconsistent across clinics.
+
+Business impact: reduces double-booking of limited physical resources (rooms, equipment) and supports facility-utilization reporting.","Resource Type Masters","","Medium","global-masters,resource"
+"Story","Manage Room Types","As a Clinic/Hub administrator, I want to manage classifications of clinic rooms (e.g. Consultation Room, Group Therapy Room, Telehealth Station), so that scheduling can assign the right physical space to each appointment.
+
+Why we're working on this: clinics have physically distinct spaces with different valid uses and capacity; scheduling needs a shared vocabulary for this.
+
+Why it's important: without room typing, scheduling can't reliably prevent assigning an appointment to an unsuitable or over-capacity room.
+
+Business impact: reduces scheduling conflicts and improves utilization of limited physical clinic space.
+
+Acceptance criteria:
+- Room types support name, description, capacity, display order, active flag
+- Inactive room types drop out of scheduling pickers without breaking historical appointment records","","Resource Type Masters","Medium","global-masters,resource"
+"Story","Manage Equipment Types","As a Clinic/Hub administrator, I want to define categories of medical equipment, so that visit types requiring specific equipment can be matched to rooms/times where it's available.
+
+Why we're working on this: some visit types require specific equipment (e.g. EEG, biofeedback devices), and scheduling needs to know this to avoid conflicts.
+
+Why it's important: without equipment typing, a visit requiring specialized equipment could be booked into a room/time where that equipment isn't available.
+
+Business impact: prevents appointment conflicts caused by equipment unavailability, improving both patient experience and clinical efficiency.
+
+Acceptance criteria:
+- Equipment types support name, description, display order, active flag","","Resource Type Masters","Low","global-masters,resource"
+"Epic","Service Master","Define and manage clinic services offered.
+
+Why we're working on this: every billable/clinical service needs a governed definition tying it to the billing code and duration that scheduling and billing depend on.
+
+Why it's important: inconsistent service definitions across clinics break both scheduling defaults and billing accuracy.
+
+Business impact: is foundational to correct appointment durations, correct billing codes on claims, and consistent service-offering reporting across the organization.","Service Master","","High","global-masters,billing,clinical"
+"Story","Manage clinic services","As a Clinic/Hub administrator, I want to define and manage the services a clinic offers - including their billing code and default duration - so that scheduling and billing both use a single, correct source of truth per service.
+
+Why we're working on this: services tie together clinical offering, scheduling duration, and billing code in one place, and today's screen already exists but must be complete and reliable as the source of truth these downstream workflows depend on.
+
+Why it's important: an incorrect or missing billing code on a service leads directly to claim denials or incorrect patient charges.
+
+Business impact: reduces billing errors and claim rework, and ensures scheduling defaults (appointment duration) are accurate for every service offered.
+
+Acceptance criteria:
+- Services capture name, billing code, default duration, and active flag
+- Deactivating a service does not affect historical appointments/claims already using it","","Service Master","High","global-masters,billing,clinical"
+"Epic","Insurer Master","Manage insurance providers and payer information.
+
+Why we're working on this: claims and patient insurance selection need a controlled, billing-system-recognized payer list rather than free-text payer names.
+
+Why it's important: an incorrect or inconsistent payer list is a direct cause of claim rejections and delayed reimbursement.
+
+Business impact: directly affects revenue cycle performance - correct payer data is prerequisite to clean claims and timely reimbursement.","Insurer Master","","High","global-masters,billing"
+"Story","Manage Insurers and payer information","As a Billing/Ops administrator, I want to manage the list of accepted insurance payers - including payer ID and plan type - so that patient insurance selection and claims submission use accurate, billing-system-recognized payer data.
+
+Why we're working on this: every patient's insurance selection and every claim needs to resolve to a correct, recognized payer record.
+
+Why it's important: an incorrect payer ID or missing payer record is one of the most common causes of claim rejection in healthcare billing.
+
+Business impact: directly protects revenue cycle performance by reducing claim rejections and reimbursement delays tied to payer data errors.
+
+Acceptance criteria:
+- Insurer records capture name, payer ID, plan type, and active flag
+- Payer ID format is validated against the expected clearinghouse/payer format where applicable","","Insurer Master","High","global-masters,billing"
