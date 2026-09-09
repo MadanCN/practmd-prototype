@@ -158,6 +158,23 @@ export function addFollowUpTask(input: { patientId: string; patientName: string;
   return task;
 }
 
+/** Generic task the provider raises for someone else (e.g. a credentialing
+ *  change request from Settings / Profile). */
+export function addRequestTask(input: { kind: ProviderTaskKind; title: string; detail: string; lane?: "mine" | "queue" }) {
+  const task: ProviderTaskItem = {
+    id: `tk_${Math.random().toString(36).slice(2, 9)}`,
+    kind: input.kind,
+    title: input.title,
+    detail: input.detail,
+    dueAt: hoursFromNow(72),
+    createdAt: new Date().toISOString(),
+    status: "open",
+    lane: input.lane ?? "queue",
+  };
+  store.set((s) => ({ tasks: [task, ...s.tasks] }));
+  return task;
+}
+
 /** "3h left" / "overdue by 2h" — time remaining, never elapsed. */
 export function slaRemaining(dueAt: string): { label: string; overdue: boolean } {
   const diffMs = new Date(dueAt).getTime() - Date.now();

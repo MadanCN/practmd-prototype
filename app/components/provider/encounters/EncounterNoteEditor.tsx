@@ -306,7 +306,12 @@ function Editor({ doc, session }: { doc: EncounterNoteDoc; session: ReturnType<t
                 <select value={coSignPick} onChange={(e) => setCoSignPick(e.target.value)} className="px-2 py-1 rounded-lg text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
                   {CO_SIGNERS.map((p) => <option key={p.id}>{p.displayName}</option>)}
                 </select>
-                <button onClick={() => { signNote(doc.id, { requestCoSign: true, coSignerName: coSignPick, signerName: session.provider.displayName }); setAskCoSign(false); flash(`Signed — co-signature requested from ${coSignPick}. Note is locked until they act.`); }}
+                <button onClick={() => {
+                  signNote(doc.id, { requestCoSign: true, coSignerName: coSignPick, signerName: session.provider.displayName });
+                  pushNotification({ kind: "generic", message: `Co-signature requested from ${coSignPick} — ${doc.patientName} · ${doc.visitType}`, href: `/provider/encounters/${doc.id}` });
+                  setAskCoSign(false);
+                  flash(`Signed — co-signature requested from ${coSignPick}. Note is locked until they act.`);
+                }}
                   className="px-3 py-1.5 rounded-lg text-xs font-semibold practmd-gradient text-white">Sign &amp; send request</button>
                 <button onClick={() => setAskCoSign(false)} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-500">Cancel</button>
               </div>
@@ -609,7 +614,11 @@ function CoSignPanel({ doc, me, onDone, afterSign }: {
           <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} placeholder="What needs to change? (required)"
             className="w-full px-3 py-2 rounded-lg text-sm border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none" />
           <div className="mt-2 flex gap-2">
-            <button disabled={!comment.trim()} onClick={() => { returnForRevision(doc.id, me, comment.trim()); onDone("Returned to the author with your comment."); }}
+            <button disabled={!comment.trim()} onClick={() => {
+              returnForRevision(doc.id, me, comment.trim());
+              pushNotification({ kind: "generic", message: `Note returned for revision — ${doc.patientName} · ${doc.visitType}. “${comment.trim()}”`, href: `/provider/encounters/${doc.id}` });
+              onDone("Returned to the author with your comment.");
+            }}
               className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-600 text-white disabled:opacity-40">Send back</button>
             <button onClick={() => setReturning(false)} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-500">Cancel</button>
           </div>
