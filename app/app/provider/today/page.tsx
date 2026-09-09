@@ -6,7 +6,8 @@ import { WeekBars, SignedDonut } from "@/components/provider/today/TodayCharts";
 import { CC_APPOINTMENTS } from "@/data/cc-appointments";
 import { CC_PATIENTS } from "@/data/cc-patients";
 import { PROVIDERS } from "@/data/providers";
-import { PROVIDER_TASKS, PROVIDER_MESSAGE_THREADS, PROVIDER_RESULTS, PROVIDER_REFILLS } from "@/data/provider-today";
+import { PROVIDER_MESSAGE_THREADS, PROVIDER_RESULTS, PROVIDER_REFILLS } from "@/data/provider-today";
+import { useProviderTasks, getTasks, slaRemaining } from "@/lib/provider-tasks-store";
 import { useEncounterStore, getEffectiveAppointment, checkInPatient } from "@/lib/encounter-store";
 import { useEncounterNotes, getAllNotes } from "@/lib/encounter-notes-store";
 import { useChargeStore } from "@/lib/charge-store";
@@ -68,6 +69,7 @@ export default function ProviderTodayPage() {
   useEncounterStore();
   useEncounterNotes();
   useChargeStore();
+  useProviderTasks();
 
   const provider = PROVIDERS.find((p) => p.id === CURRENT_PROVIDER_ID)!;
   const todayIso = new Date().toISOString().split("T")[0];
@@ -88,7 +90,7 @@ export default function ProviderTodayPage() {
   const wr = buildWaitingRoom(CURRENT_PROVIDER_ID);
   const waiting = wr.filter((e) => e.status === "waiting" || e.status === "telehealth-waiting");
 
-  const openTasks = PROVIDER_TASKS.filter((t) => t.status === "open").sort((a, b) => (a.overdue ? -1 : 0) - (b.overdue ? -1 : 0));
+  const openTasks = getTasks().filter((t) => t.status === "open").sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime());
   const unreadMessages = PROVIDER_MESSAGE_THREADS.filter((m) => m.unread).sort((a, b) => (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0));
   const unreviewedResults = PROVIDER_RESULTS.filter((r) => !r.reviewed);
   const pendingRefills = PROVIDER_REFILLS.filter((r) => r.status === "pending");
@@ -111,7 +113,7 @@ export default function ProviderTodayPage() {
     { label: "Unsigned notes", value: unsigned.length, sub: `$${revenueAtRisk.toLocaleString()} unbilled`, icon: NotebookPen, href: "/provider/encounter-notes", tone: "amber" as const, big: true },
     { label: "Today's appointments", value: todayAppts.length, sub: `${todayAppts.filter((a) => a.status === "completed").length} done`, icon: CalendarDays, href: "/provider/appointments/list", tone: "brand" as const },
     { label: "In waiting room", value: waiting.length, sub: `${wr.length} checked in`, icon: DoorOpen, href: "/provider/waiting-room", tone: "blue" as const },
-    { label: "Open tasks", value: openTasks.length, sub: `${openTasks.filter((t) => t.overdue).length} overdue`, icon: CheckSquare, href: "/provider/tasks", tone: "slate" as const },
+    { label: "Open tasks", value: openTasks.length, sub: `${openTasks.filter((t) => slaRemaining(t.dueAt).overdue).length} overdue`, icon: CheckSquare, href: "/provider/tasks", tone: "slate" as const },
   ];
   const toneCls: Record<string, string> = {
     amber: "bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800",
@@ -265,13 +267,16 @@ export default function ProviderTodayPage() {
         {/* Secondary grid */}
         <div className="grid lg:grid-cols-2 gap-5" data-tour="today-secondary">
           <SectionCard icon={CheckSquare} iconCls="bg-brand-100 dark:bg-brand-950/40 text-brand-600 dark:text-brand-400" title="Tasks" count={openTasks.length} viewAllHref="/provider/tasks" emptyLabel="No open tasks.">
-            {openTasks.slice(0, 4).map((t) => (
-              <Row key={t.id} href={`/provider/tasks?task=${t.id}`}>
-                <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", t.overdue ? "bg-red-500" : t.priority === "high" ? "bg-amber-500" : "bg-slate-300")} />
-                <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">{t.title}</span>
-                <span className={cn("text-xs shrink-0", t.overdue ? "text-red-500 font-medium" : "text-slate-400")}>{t.dueLabel}</span>
-              </Row>
-            ))}
+            {openTasks.slice(0, 4).map((t) => {
+              const sla = slaRemaining(t.dueAt);
+              return (
+                <Row key={t.id} href={`/provider/tasks?task=${t.id}`}>
+                  <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", sla.overdue ? "bg-red-500" : "bg-slate-300")} />
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">{t.title}</span>
+                  <span className={cn("text-xs shrink-0", sla.overdue ? "text-red-500 font-medium" : "text-slate-400")}>{sla.label}</span>
+                </Row>
+              );
+            })}
           </SectionCard>
 
           <SectionCard icon={MessageSquare} iconCls="bg-sky-100 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400" title="Unread messages" count={unreadMessages.length} viewAllHref="/provider/messages/patients" emptyLabel="No unread messages.">

@@ -18,6 +18,7 @@ import { visitTypeDef } from "@/lib/visit-types";
 import { useProviderSession } from "@/lib/provider-session";
 import { signaturePaths, signatureBlockers } from "@/lib/provider-permissions";
 import { useNoteTemplates, pickableTemplates, getTemplate, activeVersion, templateLabel } from "@/lib/note-templates";
+import { closeTasksForNote } from "@/lib/provider-tasks-store";
 import {
   useEncounterNotes, getNote, getNotesForPatient, getAllNotes, setField,
   toggleDiagnosis, reorderDiagnoses, addProcedure, updateProcedure, removeProcedure,
@@ -152,6 +153,7 @@ function Editor({ doc, session }: { doc: EncounterNoteDoc; session: ReturnType<t
     const signed = getNote(doc.id);
     if (!signed || signed.status !== "signed") return;
     completeEncounterForNote(signed.appointmentId);
+    closeTasksForNote(signed.id);
     const charge = createChargeFromNote(signed);
     pushNotification({
       kind: "charge-created",

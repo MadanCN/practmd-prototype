@@ -13,6 +13,7 @@ import { buildWaitingRoom } from "@/lib/provider-schedule";
 import { useEncounterStore } from "@/lib/encounter-store";
 import { useEncounterNotes, getAllNotes, getNotesToCoSign } from "@/lib/encounter-notes-store";
 import { useProviderAvailabilityStore, availabilitySelfServiceEnabled } from "@/lib/provider-availability-store";
+import { useProviderTasks, openTaskCount } from "@/lib/provider-tasks-store";
 import { useProviderSession } from "@/lib/provider-session";
 import { visibleNav, portalLevel, type NavItem } from "@/lib/provider-nav";
 import { PROVIDER_MESSAGE_THREADS } from "@/data/provider-today";
@@ -22,13 +23,14 @@ const BASE = "/provider";
 function useBadges(providerId: string, providerName: string) {
   useEncounterStore();
   useEncounterNotes();
+  useProviderTasks();
   const waiting = buildWaitingRoom(providerId).filter(
     (e) => e.status === "waiting" || e.status === "called" || e.status === "telehealth-waiting",
   ).length;
   const notes = getAllNotes().filter((n) => n.providerId === providerId && n.status !== "signed").length;
   const cosign = getNotesToCoSign(providerName).length;
   const messages = PROVIDER_MESSAGE_THREADS.filter((m) => m.unread).length;
-  return { waiting, notes, cosign, messages, tasks: 0 };
+  return { waiting, notes, cosign, messages, tasks: openTaskCount() };
 }
 
 export default function ProviderSidebar() {

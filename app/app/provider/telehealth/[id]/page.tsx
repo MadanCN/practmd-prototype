@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import {
   Mic, MicOff, Video, VideoOff, PhoneOff, MessageSquare, X,
   Send, Clock, ChevronDown, ChevronUp, CheckCircle2, Save,
-  FileText, Stethoscope, ClipboardList,
+  FileText, Stethoscope, ClipboardList, ShieldAlert, LifeBuoy, Flag,
+  UserPlus, AlertTriangle, ArrowLeft, WifiOff,
 } from "lucide-react";
 import { CC_APPOINTMENTS } from "@/data/cc-appointments";
 import { CC_PATIENTS } from "@/data/cc-patients";
@@ -17,6 +18,9 @@ import {
 import NoteTemplatePicker from "@/components/provider/NoteTemplatePicker";
 import { cn } from "@/lib/utils";
 import { ExternalLink } from "lucide-react";
+import { useProviderSession } from "@/lib/provider-session";
+import { telehealthGate } from "@/lib/provider-permissions";
+import { getPatientTelehealth } from "@/lib/patient-telehealth";
 
 const PATIENT_MAP = Object.fromEntries(CC_PATIENTS.map(p => [p.id, p]));
 
@@ -38,17 +42,33 @@ export default function ProviderTelehealthPage({ params }: { params: Promise<{ i
   const { id } = use(params);
   const router = useRouter();
   const store = useEncounterStore();
+  const session = useProviderSession();
   const appt = CC_APPOINTMENTS.find(a => a.id === id);
   const patient = appt ? PATIENT_MAP[appt.patientId] : null;
 
-  // Ensure the encounter exists as soon as the call is joined — idempotent,
-  // so it doesn't matter how the provider got here (Waiting Room, a deep
-  // link, Today's dashboard).
+  const th = appt ? getPatientTelehealth(appt.patientId) : null;
+  const gate = th
+    ? telehealthGate({
+        hasTelehealthConsent: th.hasConsent,
+        patientState: th.confirmedState,
+        licensedStates: session.profile.licensedStates,
+        canTelehealth: session.capabilities.can_telehealth,
+      })
+    : { ok: false as const };
+
+  const [joined, setJoined] = useState(false);
+
+  // The encounter only opens once the provider clears pre-flight and joins.
   useEffect(() => {
-    if (appt) startSession(appt);
-  }, [appt]);
+    if (appt && joined && gate.ok) startSession(appt);
+  }, [appt, joined, gate.ok]);
 
   const [muted, setMuted] = useState(false);
+  const [concernFlagged, setConcernFlagged] = useState(false);
+  const [participants, setParticipants] = useState<string[]>([]);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [confirmEnd, setConfirmEnd] = useState(false);
+  const [disconnected, setDisconnected] = useState<number | null>(null);
   const [camOff, setCamOff] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(true);
@@ -72,6 +92,12 @@ export default function ProviderTelehealthPage({ params }: { params: Promise<{ i
     chatEnd.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMsgs]);
 
+  useEffect(() => {
+    if (disconnected == null) return;
+    const t = setInterval(() => setDisconnected((d) => (d == null ? null : d + 1)), 1000);
+    return () => clearInterval(t);
+  }, [disconnected]);
+
   function sendChat() {
     if (!chatMsg.trim()) return;
     setChatMsgs(prev => [...prev, { id: crypto.randomUUID(), from: "provider", text: chatMsg, ts: new Date().toISOString() }]);
@@ -86,16 +112,42 @@ export default function ProviderTelehealthPage({ params }: { params: Promise<{ i
     setTimeout(() => setNotesSaved(false), 3000);
   }
 
-  function endCall() {
+  function requestEnd() {
+    const missing = !note || note.diagnosisCodes.length === 0 || !note.procedureCode;
+    if (missing) { setConfirmEnd(true); return; }
+    doEnd();
+  }
+  function doEnd() {
     if (appt) checkOutPatient(appt.id);
+    setConfirmEnd(false);
     setEnded(true);
+  }
+  function invite(kind: string) {
+    setParticipants((p) => [...p, kind]);
+    setChatMsgs((prev) => [...prev, { id: crypto.randomUUID(), from: "system", text: `${kind} was invited to the call — all participants have been notified.`, ts: new Date().toISOString() }]);
+    setInviteOpen(false);
   }
 
   function toggleSection(k: string) { setNoteSectionOpen(p => ({ ...p, [k]: !p[k] })); }
 
-  if (!appt || !patient || !note) {
-    return null;
+  if (!appt || !patient) return null;
+
+  // ── Pre-flight — the two hard telehealth gates ────────────────────────
+  if (!joined) {
+    return (
+      <PreflightScreen
+        patientName={patient.displayName}
+        visitType={appt.visitType}
+        gate={gate}
+        state={th?.confirmedState ?? "—"}
+        consent={!!th?.hasConsent}
+        onJoin={() => setJoined(true)}
+        onBack={() => router.push("/provider/today")}
+      />
+    );
   }
+
+  if (!note) return null;
 
   if (ended) {
     const noteId = getNoteIdForAppointment(appt.id);
@@ -123,11 +175,32 @@ export default function ProviderTelehealthPage({ params }: { params: Promise<{ i
           {appt && <span className="text-slate-500 text-xs">· {appt.visitType}</span>}
         </div>
         <div className="flex items-center gap-3">
+          {participants.length > 0 && <span className="text-[11px] text-slate-400">+{participants.length} participant{participants.length > 1 ? "s" : ""}</span>}
           <div className="flex items-center gap-1.5 text-slate-400 text-sm">
             <Clock className="w-3.5 h-3.5" /> {duration}
           </div>
         </div>
       </div>
+
+      {/* Safety bar — always visible, pinned in both layouts */}
+      <div className={cn("flex items-center gap-3 px-5 py-2 border-b shrink-0 text-xs",
+        concernFlagged ? "bg-red-950/60 border-red-800 text-red-200" : "bg-slate-900 border-slate-800 text-slate-400")}>
+        <LifeBuoy className="w-4 h-4 shrink-0 text-red-400" />
+        <span className="font-medium text-slate-300">988 Suicide &amp; Crisis Lifeline</span>
+        <span className="hidden sm:inline">· Local ED · Mobile Crisis 1-844-863-9314</span>
+        <button onClick={() => setConcernFlagged((f) => !f)}
+          className={cn("ml-auto flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-semibold transition-colors",
+            concernFlagged ? "bg-red-600 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700")}>
+          <Flag className="w-3.5 h-3.5" /> {concernFlagged ? "Concern flagged" : "Flag concern"}
+        </button>
+      </div>
+
+      {disconnected != null && (
+        <div className="flex items-center gap-2 px-5 py-2 bg-amber-950/60 border-b border-amber-800 text-amber-200 text-xs shrink-0">
+          <WifiOff className="w-4 h-4" /> Patient disconnected — rejoin grace window {Math.max(0, 120 - disconnected)}s. The note stays open and untouched.
+          <button onClick={() => setDisconnected(null)} className="ml-auto font-semibold underline">They rejoined</button>
+        </div>
+      )}
 
       {/* Main area */}
       <div className="flex flex-1 min-h-0">
@@ -173,7 +246,15 @@ export default function ProviderTelehealthPage({ params }: { params: Promise<{ i
               className={cn("w-12 h-12 rounded-full flex items-center justify-center transition-colors", notesOpen ? "bg-brand-600" : "bg-slate-700 hover:bg-slate-600")}>
               <ClipboardList className="w-5 h-5 text-white" />
             </button>
-            <button onClick={endCall}
+            <button onClick={() => setInviteOpen(true)} title="Invite a participant"
+              className="w-12 h-12 rounded-full bg-slate-700 hover:bg-slate-600 flex items-center justify-center transition-colors">
+              <UserPlus className="w-5 h-5 text-white" />
+            </button>
+            <button onClick={() => setDisconnected(0)} title="Simulate a dropped connection"
+              className="w-12 h-12 rounded-full bg-slate-700 hover:bg-slate-600 flex items-center justify-center transition-colors">
+              <WifiOff className="w-5 h-5 text-white" />
+            </button>
+            <button onClick={requestEnd}
               className="w-14 h-12 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center transition-colors">
               <PhoneOff className="w-5 h-5 text-white" />
             </button>
@@ -210,9 +291,9 @@ export default function ProviderTelehealthPage({ params }: { params: Promise<{ i
           </div>
         )}
 
-        {/* Encounter notes panel */}
+        {/* Encounter notes panel — half the screen by default (PRD split-screen) */}
         {notesOpen && (
-          <div className="w-96 flex flex-col bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800">
+          <div className="w-full sm:w-[400px] lg:w-[46%] xl:w-[48%] flex flex-col bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800">
             <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-800 shrink-0">
               <div className="flex items-center gap-2">
                 <FileText className="w-4 h-4 text-brand-600" />
@@ -329,6 +410,91 @@ export default function ProviderTelehealthPage({ params }: { params: Promise<{ i
           </div>
         )}
       </div>
+
+      {inviteOpen && (
+        <Modal onClose={() => setInviteOpen(false)} title="Invite a participant">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">Everyone on the call is announced — no one joins silently.</p>
+          <div className="space-y-2">
+            {["Guardian / family member", "Interpreter", "Supervising provider"].map((k) => (
+              <button key={k} onClick={() => invite(k)} className="w-full text-left px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-slate-700 dark:text-slate-200 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/20">
+                {k}
+              </button>
+            ))}
+          </div>
+        </Modal>
+      )}
+
+      {confirmEnd && (
+        <Modal onClose={() => setConfirmEnd(false)} title="End the call?">
+          <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2.5 text-xs text-amber-700 dark:text-amber-400">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-px" />
+            This note has no diagnosis or procedure yet — that will block signing later. Now is when you still remember the visit.
+          </div>
+          <div className="mt-4 flex justify-end gap-2">
+            <button onClick={() => setConfirmEnd(false)} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-500">Keep the call open</button>
+            <button onClick={doEnd} className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600 text-white">End call anyway</button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative w-full max-w-sm bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl p-5">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{title}</p>
+          <button onClick={onClose} className="text-slate-400"><X className="w-4 h-4" /></button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function PreflightScreen({ patientName, visitType, gate, state, consent, onJoin, onBack }: {
+  patientName: string; visitType: string; gate: { ok: boolean; reason?: string }; state: string; consent: boolean; onJoin: () => void; onBack: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-950 flex items-center justify-center p-6">
+      <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden">
+        <div className="p-6 border-b border-slate-200 dark:border-slate-800">
+          <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">Pre-flight check</h2>
+          <p className="text-sm text-slate-500 mt-0.5">{patientName} · {visitType}</p>
+        </div>
+        <div className="p-6 space-y-3">
+          <Check label="Telehealth consent on record" ok={consent} />
+          <Check label={`Patient located in ${state} — within your licensed states`} ok={gate.ok || consent} okOverride={gate.ok} />
+          {!gate.ok && (
+            <div className="flex items-start gap-2 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 px-3 py-2.5 text-xs text-red-700 dark:text-red-400">
+              <ShieldAlert className="w-4 h-4 shrink-0 mt-px" />
+              {gate.reason ?? "This visit cannot proceed by video."}
+            </div>
+          )}
+          <button disabled={!gate.ok} onClick={onJoin}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl practmd-gradient text-white text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed">
+            <Video className="w-4 h-4" /> Join the call
+          </button>
+          <button onClick={onBack} className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-400">
+            <ArrowLeft className="w-4 h-4" /> Back to Today
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Check({ label, ok, okOverride }: { label: string; ok: boolean; okOverride?: boolean }) {
+  const good = okOverride ?? ok;
+  return (
+    <div className="flex items-center gap-2.5 text-sm">
+      {good
+        ? <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+        : <ShieldAlert className="w-5 h-5 text-red-400 shrink-0" />}
+      <span className={good ? "text-slate-700 dark:text-slate-300" : "text-red-600 dark:text-red-400"}>{label}</span>
     </div>
   );
 }
