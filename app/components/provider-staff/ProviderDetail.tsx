@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Pencil, Mail, Phone, MapPin, Globe, CheckCircle2, Clock, Circle } from "lucide-react";
+import { ArrowLeft, Pencil, Mail, Phone, MapPin, Globe, CheckCircle2, Clock, Circle, Send } from "lucide-react";
 import { PROVIDERS } from "@/data/providers";
 import { CLINICS } from "@/data/clinics";
 import {
@@ -42,6 +42,8 @@ function Chip({ label, color = "default" }: { label: string; color?: "blue" | "e
 export default function ProviderDetailScreen({ id }: { id: string }) {
   const provider = PROVIDERS.find(p => p.id === id);
   const [activeTab, setActiveTab] = useState<TabId>("overview");
+  const [invited, setInvited] = useState(false);
+  const clinical = provider ? buildClinicalProfile(id) : null;
 
   if (!provider) {
     return (
@@ -77,10 +79,11 @@ export default function ProviderDetailScreen({ id }: { id: string }) {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{provider.displayName}</h1>
-              <span className={cn("px-2 py-0.5 rounded-full text-xs font-semibold",
-                provider.isActive ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800" : "bg-slate-100 dark:bg-slate-800 text-slate-500")}>
-                {provider.isActive ? "Active" : "Inactive"}
-              </span>
+              {clinical && (
+                <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                  {STATUS_META[clinical.clinicalStatus].label}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-3 mt-1 text-sm text-slate-500 dark:text-slate-400">
               <span>{provider.providerType}</span>
@@ -92,11 +95,23 @@ export default function ProviderDetailScreen({ id }: { id: string }) {
           <Link href="/provider-staff" className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800">
             <ArrowLeft className="w-4 h-4" /> Back to List
           </Link>
+          {clinical && ["invited", "account-setup"].includes(clinical.clinicalStatus) && (
+            <button onClick={() => setInvited(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-brand-300 dark:border-brand-800 text-brand-700 dark:text-brand-400 text-sm font-medium hover:bg-brand-50 dark:hover:bg-brand-950/30">
+              <Send className="w-4 h-4" /> {invited ? "Invitation resent" : "Resend invitation"}
+            </button>
+          )}
           <Link href={`/provider-staff/${id}?edit=true`} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium">
             <Pencil className="w-4 h-4" /> Edit
           </Link>
         </div>
       </div>
+
+      {invited && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg bg-brand-50 dark:bg-brand-950/30 border border-brand-200 dark:border-brand-900 px-3 py-2 text-xs text-brand-700 dark:text-brand-400">
+          <CheckCircle2 className="w-4 h-4" /> A practice-branded invitation was sent to {provider.email}. The single-use link expires in 7 days; the previous link is now invalid.
+        </div>
+      )}
 
       {/* Quick info bar */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 mb-5">
