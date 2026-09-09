@@ -6,12 +6,32 @@
 // shared across every note surface (Patients → Encounters, /provider/encounter-notes).
 
 import { useSyncExternalStore } from "react";
+import { createPersistedStore } from "@/lib/persist";
 import { PROVIDER_ENCOUNTER_NOTES } from "@/data/provider-today";
 import { CC_PATIENTS } from "@/data/cc-patients";
 import { PROVIDERS } from "@/data/providers";
 
 export type NoteType = "SOAP" | "BIRP" | "DAP" | "Narrative";
-export type NoteStatus = "draft" | "pending-cosign" | "signed";
+export type NoteStatus = "draft" | "pending-cosign" | "returned" | "signed";
+
+export interface Addendum {
+  id: string;
+  authorName: string;
+  createdAt: string;
+  reason: string;
+  body: string;
+  /** set when the addendum changed diagnosis / procedure coding → RCM task */
+  affectsCoding?: boolean;
+}
+
+export interface NoteAuditEvent {
+  id: string;
+  at: string;
+  actor: string;
+  kind: "created" | "template-selected" | "signed" | "cosign-requested" | "cosigned"
+    | "returned" | "addendum" | "copy-forward";
+  detail?: string;
+}
 
 export const NOTE_TYPES: NoteType[] = ["SOAP", "BIRP", "DAP", "Narrative"];
 export const ENCOUNTER_MODES = ["in-person", "telehealth", "phone"] as const;
@@ -52,6 +72,18 @@ export interface EncounterNoteDoc {
   fields: Record<string, string>;
   diagnoses: string[];
   procedures: ProcedureRow[];
+  /** clinic-admin template this note is bound to + the version in force when
+   *  it was created (versions are immutable once notes reference them) */
+  templateId?: string;
+  templateVersion?: number;
+  /** fields the provider explicitly carried forward from an earlier note */
+  carriedForwardFields?: string[];
+  carriedForwardFrom?: string;
+  addenda: Addendum[];
+  audit: NoteAuditEvent[];
+  /** co-signer's comment when a note is returned for revision */
+  returnedComment?: string;
+  returnedBy?: string;
 }
 
 /* ── Field definitions ─────────────────────────────────────────────────── */
@@ -288,21 +320,38 @@ function makeSeed(): Record<string, EncounterNoteDoc> {
       fields: signed ? { ...SIGNED_SAMPLE } : {},
       diagnoses: signed ? ["F33.1"] : [],
       procedures: signed ? seedProcedure() : [],
+      templateId: signed ? "med-management" : undefined,
+      templateVersion: signed ? 3 : undefined,
+      addenda: [],
+      audit: [
+        { id: `au_${n.id}_c`, at: n.visitDate, actor: "Dr. Sarah Mitchell", kind: "created" },
+        ...(signed && n.signedAt ? [{ id: `au_${n.id}_s`, at: n.signedAt, actor: "Dr. Sarah Mitchell", kind: "signed" as const }] : []),
+      ],
     };
   }
   return out;
 }
 
-let state: StoreState = { notes: makeSeed() };
-let listeners: (() => void)[] = [];
+const store = createPersistedStore<StoreState>({
+  key: "encounter-notes",
+  initial: { notes: makeSeed() },
+  revive: (raw, initial) => {
+    const persisted = ((raw as StoreState)?.notes) ?? {};
+    // seed rows the code knows about but the saved blob predates still show;
+    // any note the provider has since touched wins.
+    const merged: Record<string, EncounterNoteDoc> = { ...initial.notes };
+    for (const [k, v] of Object.entries(persisted)) {
+      merged[k] = { ...v, addenda: v.addenda ?? [], audit: v.audit ?? [] } as EncounterNoteDoc;
+    }
+    return { notes: merged };
+  },
+});
 
-function emit() { for (const l of listeners) l(); }
-function subscribe(l: () => void) { listeners = [...listeners, l]; return () => { listeners = listeners.filter((x) => x !== l); }; }
-function getSnapshot() { return state; }
-function set(updater: (s: StoreState) => StoreState) { state = updater(state); emit(); }
+const state = new Proxy({} as StoreState, { get: (_t, p) => (store.get() as unknown as Record<string, unknown>)[p as string] });
+function set(updater: (s: StoreState) => StoreState) { store.set(updater); }
 
 export function useEncounterNotes() {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getServerSnapshot);
 }
 
 export function getNote(id: string): EncounterNoteDoc | undefined {
@@ -331,14 +380,17 @@ export function createNote(input: {
   mode: (typeof ENCOUNTER_MODES)[number];
   noteType: NoteType;
   appointmentId?: string;
+  templateId?: string;
+  templateVersion?: number;
 }): string {
   const id = `enc_${Math.random().toString(36).slice(2, 9)}`;
+  const author = providerName(input.providerId);
   const doc: EncounterNoteDoc = {
     id,
     patientId: input.patientId,
     patientName: patientName(input.patientId),
     providerId: input.providerId,
-    providerName: providerName(input.providerId),
+    providerName: author,
     appointmentId: input.appointmentId,
     date: input.date,
     visitType: input.visitType,
@@ -352,6 +404,10 @@ export function createNote(input: {
     fields: {},
     diagnoses: [],
     procedures: [],
+    templateId: input.templateId,
+    templateVersion: input.templateVersion,
+    addenda: [],
+    audit: [{ id: `au_${id}_c`, at: now(), actor: author, kind: "created" }],
   };
   set((s) => ({ notes: { ...s.notes, [id]: doc } }));
   return id;
@@ -364,10 +420,20 @@ export function noteForAppointment(appointmentId: string, seed: { patientId: str
   return createNote({ ...seed, noteType: "SOAP", appointmentId });
 }
 
+/** A note is content-editable by its author while it is a draft or has been
+ *  returned for revision. Signed / awaiting-co-signature notes are frozen. */
+export function isEditable(n: EncounterNoteDoc | undefined): boolean {
+  return !!n && (n.status === "draft" || n.status === "returned");
+}
+
+function audit(n: EncounterNoteDoc, kind: NoteAuditEvent["kind"], actor: string, detail?: string): NoteAuditEvent[] {
+  return [...n.audit, { id: `au_${Math.random().toString(36).slice(2, 8)}`, at: now(), actor, kind, detail }];
+}
+
 export function setField(id: string, key: string, value: string) {
   set((s) => {
     const n = s.notes[id];
-    if (!n || n.status !== "draft") return s;
+    if (!isEditable(n)) return s;
     return { notes: { ...s.notes, [id]: { ...n, fields: { ...n.fields, [key]: value }, updatedAt: now() } } };
   });
 }
@@ -375,15 +441,68 @@ export function setField(id: string, key: string, value: string) {
 export function setMeta(id: string, patch: Partial<Pick<EncounterNoteDoc, "visitType" | "mode" | "noteType" | "date" | "resource" | "providerId" | "providerName">>) {
   set((s) => {
     const n = s.notes[id];
-    if (!n || n.status !== "draft") return s;
-    return { notes: { ...s.notes, [id]: { ...n, ...patch, updatedAt: now() } } };
+    if (!isEditable(n)) return s;
+    // place of service follows the mode automatically (11 in-person / 10 telehealth)
+    let procedures = n.procedures;
+    if (patch.mode && patch.mode !== n.mode) {
+      const pos = patch.mode === "telehealth" ? "10" : "11";
+      procedures = n.procedures.map((r) => ({ ...r, pos }));
+    }
+    return { notes: { ...s.notes, [id]: { ...n, ...patch, procedures, updatedAt: now() } } };
+  });
+}
+
+export function selectTemplateForNote(id: string, templateId: string, version: number, noteType: NoteType) {
+  set((s) => {
+    const n = s.notes[id];
+    if (!isEditable(n)) return s;
+    return {
+      notes: {
+        ...s.notes,
+        [id]: { ...n, templateId, templateVersion: version, noteType, updatedAt: now(), audit: audit(n, "template-selected", n.providerName, `${templateId} v${version}`) },
+      },
+    };
+  });
+}
+
+export function copyForwardInto(id: string, sourceNoteId: string, fieldKeys: string[]) {
+  set((s) => {
+    const n = s.notes[id];
+    const src = s.notes[sourceNoteId];
+    if (!isEditable(n) || !src) return s;
+    const carried: Record<string, string> = {};
+    for (const k of fieldKeys) if (src.fields[k] != null) carried[k] = src.fields[k];
+    return {
+      notes: {
+        ...s.notes,
+        [id]: {
+          ...n,
+          fields: { ...n.fields, ...carried },
+          carriedForwardFields: Array.from(new Set([...(n.carriedForwardFields ?? []), ...Object.keys(carried)])),
+          carriedForwardFrom: sourceNoteId,
+          updatedAt: now(),
+          audit: audit(n, "copy-forward", n.providerName, `${Object.keys(carried).length} fields from ${src.date}`),
+        },
+      },
+    };
+  });
+}
+
+export function reorderDiagnoses(id: string, from: number, to: number) {
+  set((s) => {
+    const n = s.notes[id];
+    if (!isEditable(n)) return s;
+    const dx = [...n.diagnoses];
+    const [m] = dx.splice(from, 1);
+    dx.splice(to, 0, m);
+    return { notes: { ...s.notes, [id]: { ...n, diagnoses: dx, updatedAt: now() } } };
   });
 }
 
 export function toggleDiagnosis(id: string, code: string) {
   set((s) => {
     const n = s.notes[id];
-    if (!n || n.status !== "draft") return s;
+    if (!isEditable(n)) return s;
     const has = n.diagnoses.includes(code);
     return { notes: { ...s.notes, [id]: { ...n, diagnoses: has ? n.diagnoses.filter((c) => c !== code) : [...n.diagnoses, code], updatedAt: now() } } };
   });
@@ -392,8 +511,8 @@ export function toggleDiagnosis(id: string, code: string) {
 export function addProcedure(id: string) {
   set((s) => {
     const n = s.notes[id];
-    if (!n || n.status !== "draft") return s;
-    const row: ProcedureRow = { id: `pc_${Math.random().toString(36).slice(2, 7)}`, description: "", code: "", quantity: "1", charge: "", dxPointers: "", modifiers: "", pos: "11" };
+    if (!isEditable(n)) return s;
+    const row: ProcedureRow = { id: `pc_${Math.random().toString(36).slice(2, 7)}`, description: "", code: "", quantity: "1", charge: "", dxPointers: "1", modifiers: "", pos: n.mode === "telehealth" ? "10" : "11" };
     return { notes: { ...s.notes, [id]: { ...n, procedures: [...n.procedures, row], updatedAt: now() } } };
   });
 }
@@ -401,7 +520,7 @@ export function addProcedure(id: string) {
 export function updateProcedure(id: string, rowId: string, patch: Partial<ProcedureRow>) {
   set((s) => {
     const n = s.notes[id];
-    if (!n || n.status !== "draft") return s;
+    if (!isEditable(n)) return s;
     return { notes: { ...s.notes, [id]: { ...n, procedures: n.procedures.map((r) => (r.id === rowId ? { ...r, ...patch } : r)), updatedAt: now() } } };
   });
 }
@@ -409,15 +528,16 @@ export function updateProcedure(id: string, rowId: string, patch: Partial<Proced
 export function removeProcedure(id: string, rowId: string) {
   set((s) => {
     const n = s.notes[id];
-    if (!n) return s;
+    if (!isEditable(n)) return s;
     return { notes: { ...s.notes, [id]: { ...n, procedures: n.procedures.filter((r) => r.id !== rowId), updatedAt: now() } } };
   });
 }
 
-export function signNote(id: string, opts: { requestCoSign: boolean; coSignerName?: string }) {
+export function signNote(id: string, opts: { requestCoSign: boolean; coSignerName?: string; signerName?: string }) {
   set((s) => {
     const n = s.notes[id];
     if (!n) return s;
+    const signer = opts.signerName ?? n.providerName;
     return {
       notes: {
         ...s.notes,
@@ -425,9 +545,12 @@ export function signNote(id: string, opts: { requestCoSign: boolean; coSignerNam
           ...n,
           status: opts.requestCoSign ? "pending-cosign" : "signed",
           signedAt: now(),
-          signedBy: [n.providerName],
+          signedBy: [signer],
           coSignerName: opts.requestCoSign ? opts.coSignerName : undefined,
+          returnedComment: undefined,
+          returnedBy: undefined,
           updatedAt: now(),
+          audit: audit(n, opts.requestCoSign ? "cosign-requested" : "signed", signer, opts.coSignerName),
         },
       },
     };
@@ -437,7 +560,38 @@ export function signNote(id: string, opts: { requestCoSign: boolean; coSignerNam
 export function addCoSign(id: string, coSignerName: string) {
   set((s) => {
     const n = s.notes[id];
-    if (!n) return s;
-    return { notes: { ...s.notes, [id]: { ...n, status: "signed", signedBy: [...n.signedBy, coSignerName], coSignerName, updatedAt: now() } } };
+    if (!n || n.status !== "pending-cosign") return s;
+    return { notes: { ...s.notes, [id]: { ...n, status: "signed", signedBy: [...n.signedBy, coSignerName], coSignerName, updatedAt: now(), audit: audit(n, "cosigned", coSignerName) } } };
   });
+}
+
+/** Co-signer sends a note back — status returns to editable with the comment attached. */
+export function returnForRevision(id: string, coSignerName: string, comment: string) {
+  set((s) => {
+    const n = s.notes[id];
+    if (!n || n.status !== "pending-cosign") return s;
+    return {
+      notes: {
+        ...s.notes,
+        [id]: { ...n, status: "returned", signedAt: undefined, signedBy: [], returnedComment: comment, returnedBy: coSignerName, updatedAt: now(), audit: audit(n, "returned", coSignerName, comment) },
+      },
+    };
+  });
+}
+
+/** Append an addendum to a signed note. The original text is never touched. */
+export function addAddendum(id: string, input: { authorName: string; reason: string; body: string; affectsCoding?: boolean }) {
+  set((s) => {
+    const n = s.notes[id];
+    if (!n || n.status !== "signed") return s;
+    const add: Addendum = { id: `ad_${Math.random().toString(36).slice(2, 8)}`, createdAt: now(), ...input };
+    return { notes: { ...s.notes, [id]: { ...n, addenda: [...n.addenda, add], updatedAt: now(), audit: audit(n, "addendum", input.authorName, input.reason) } } };
+  });
+}
+
+/** Notes a designated co-signer must action (their supervisees, awaiting co-sign). */
+export function getNotesToCoSign(coSignerName: string): EncounterNoteDoc[] {
+  return Object.values(state.notes)
+    .filter((n) => n.status === "pending-cosign" && n.coSignerName === coSignerName)
+    .sort((a, b) => a.date.localeCompare(b.date));
 }

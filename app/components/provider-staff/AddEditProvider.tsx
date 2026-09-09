@@ -2,14 +2,20 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CheckCircle2, ChevronRight, Upload, AlertCircle, Plus, X } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ChevronRight, Upload, AlertCircle, X, Send, Plus } from "lucide-react";
 import {
   PROVIDER_TYPES, SPECIALIZATIONS_LIST, VISIT_TYPES_LIST, SERVICES_LIST,
-  PERMISSION_ROLES, PROVIDER_COLORS, PROVIDERS, type Provider,
+  PERMISSION_ROLES, PROVIDER_COLORS, PROVIDERS,
 } from "@/data/providers";
 import { CLINICS } from "@/data/clinics";
+import {
+  providerTypeKey, defaultCapabilities, CAPABILITY_KEYS, CAPABILITY_META,
+  type ProviderCapabilities,
+} from "@/data/provider-credentialing";
 import Toggle from "@/components/ui/Toggle";
 import { cn } from "@/lib/utils";
+
+const US_STATES = ["New York", "New Jersey", "Connecticut", "Pennsylvania", "Massachusetts", "Florida", "California", "Texas"];
 
 type TabId = "overview" | "professional" | "access" | "bio";
 
@@ -104,6 +110,8 @@ interface FormState {
   workingHours: WorkingHours;
   visitTypes: string[]; services: string[]; permissionRole: string; telehealthEnabled: boolean;
   displayName: string; credentials: string; bio: string; languages: string[];
+  pronouns: string; licensedStates: string[];
+  capabilities: ProviderCapabilities; capabilityOverrides: (keyof ProviderCapabilities)[];
 }
 
 const INITIAL: FormState = {
@@ -112,6 +120,8 @@ const INITIAL: FormState = {
   workingHours: defaultWorkingHours(),
   visitTypes: [], services: [], permissionRole: "", telehealthEnabled: false,
   displayName: "", credentials: "", bio: "", languages: [],
+  pronouns: "", licensedStates: [],
+  capabilities: defaultCapabilities("therapist"), capabilityOverrides: [],
 };
 
 const INPUT = "w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500";
@@ -134,9 +144,13 @@ export default function AddEditProviderScreen({ providerId }: Props) {
     visitTypes: existing.visitTypes, services: existing.services,
     permissionRole: existing.permissionRole, telehealthEnabled: existing.telehealthEnabled,
     displayName: existing.displayName, credentials: existing.credentials, bio: existing.bio, languages: existing.languages,
+    pronouns: "", licensedStates: [existing.licenseState].filter(Boolean),
+    capabilities: defaultCapabilities(existing.providerType.toLowerCase().includes("psychiatr") ? "md-do" : "therapist"),
+    capabilityOverrides: [],
   } : INITIAL);
 
   const [activeTab, setActiveTab] = useState<TabId>("overview");
+  const [invited, setInvited] = useState(false);
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm(f => ({ ...f, [key]: value }));
@@ -145,9 +159,22 @@ export default function AddEditProviderScreen({ providerId }: Props) {
       const ln = key === "lastName" ? value as string : form.lastName;
       setForm(f => ({ ...f, [key]: value, displayName: [fn, ln].filter(Boolean).join(" ") }));
     }
+    if (key === "providerType") {
+      const caps = defaultCapabilities(providerTypeKey(value as string));
+      setForm(f => ({ ...f, providerType: value as string, capabilities: caps, capabilityOverrides: [] }));
+    }
   }
 
-  function toggleArr<K extends "specializations" | "clinicAccess" | "visitTypes" | "services" | "languages">(key: K, val: string) {
+  function toggleCapability(k: keyof ProviderCapabilities) {
+    setForm(f => {
+      const next = { ...f.capabilities, [k]: !f.capabilities[k] };
+      const seeded = defaultCapabilities(providerTypeKey(f.providerType || "therapist"));
+      const overrides = CAPABILITY_KEYS.filter(x => next[x] !== seeded[x]);
+      return { ...f, capabilities: next, capabilityOverrides: overrides };
+    });
+  }
+
+  function toggleArr<K extends "specializations" | "clinicAccess" | "visitTypes" | "services" | "languages" | "licensedStates">(key: K, val: string) {
     setForm(f => ({
       ...f,
       [key]: (f[key] as string[]).includes(val) ? (f[key] as string[]).filter(x => x !== val) : [...(f[key] as string[]), val],
@@ -155,18 +182,21 @@ export default function AddEditProviderScreen({ providerId }: Props) {
   }
 
   function tabDot(tab: TabId) {
-    const required = tab === "overview" ? !!(form.firstName && form.lastName && form.email)
-      : tab === "professional" ? !!(form.providerType && form.clinicAccess.length > 0) : null;
+    const required = tab === "overview" ? !!(form.firstName && form.lastName && form.email && form.phone && form.credentials && form.providerType)
+      : tab === "professional" ? !!(form.clinicAccess.length > 0) : null;
     if (required === null) return null;
     return required ? "bg-emerald-500" : "bg-rose-500";
   }
 
   const missingFields: string[] = [];
-  if (!form.firstName) missingFields.push("First Name");
-  if (!form.lastName) missingFields.push("Last Name");
-  if (!form.email) missingFields.push("Email");
-  if (!form.providerType) missingFields.push("Provider Type");
-  if (!form.clinicAccess.length) missingFields.push("Clinic Access");
+  if (!form.firstName) missingFields.push("Legal first name");
+  if (!form.lastName) missingFields.push("Legal last name");
+  if (!form.email) missingFields.push("Work email");
+  if (!form.phone) missingFields.push("Mobile");
+  if (!form.credentials) missingFields.push("Credentials suffix");
+  if (!form.providerType) missingFields.push("Provider type");
+  if (!form.clinicAccess.length) missingFields.push("Clinic access");
+  if (form.telehealthEnabled && form.licensedStates.length === 0) missingFields.push("Licensed states");
 
   const providerColor = PROVIDER_COLORS.find(c => c.value === form.color);
   const avatarInitials = `${form.firstName[0] ?? "?"}${form.lastName[0] ?? ""}`.toUpperCase();
@@ -231,6 +261,16 @@ export default function AddEditProviderScreen({ providerId }: Props) {
             </div>
           )}
 
+          {/* Invite — available as soon as Tab 1 (identity) validates */}
+          {!isEdit && (
+            <button
+              disabled={!(form.firstName && form.lastName && form.email && form.phone && form.credentials && form.providerType)}
+              onClick={() => setInvited(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-brand-300 dark:border-brand-800 text-brand-700 dark:text-brand-400 text-sm font-semibold hover:bg-brand-50 dark:hover:bg-brand-950/30 disabled:opacity-40 flex-shrink-0 transition-colors">
+              <Send className="w-4 h-4" /> {invited ? "Invitation sent" : "Send Invitation"}
+            </button>
+          )}
+
           {/* Save button */}
           <button
             disabled={missingFields.length > 0}
@@ -240,6 +280,11 @@ export default function AddEditProviderScreen({ providerId }: Props) {
             {isEdit ? "Save Changes" : "Add Provider"}
           </button>
         </div>
+        {invited && (
+          <p className="mt-2 text-xs text-brand-700 dark:text-brand-400 flex items-center gap-1.5">
+            <CheckCircle2 className="w-3.5 h-3.5" /> Practice-branded invitation sent to {form.email}. Single-use link, expires in 7 days. Record status: Invited.
+          </p>
+        )}
       </div>
 
       {/* ── Page header ── */}
@@ -307,9 +352,29 @@ export default function AddEditProviderScreen({ providerId }: Props) {
               <label className={LABEL}>Email <span className="text-rose-500">*</span></label>
               <input type="email" className={INPUT} value={form.email} onChange={e => set("email", e.target.value)} placeholder="provider@clinic.com" />
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className={LABEL}>Mobile number</label>
+                <input className={INPUT} value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="+1 (234) 567-8900" />
+              </div>
+              <div>
+                <label className={LABEL}>Pronouns</label>
+                <select className={INPUT} value={form.pronouns} onChange={e => set("pronouns", e.target.value)}>
+                  <option value="">Select</option>
+                  {["She / Her", "He / Him", "They / Them", "Prefer not to say"].map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+            </div>
             <div>
-              <label className={LABEL}>Phone</label>
-              <input className={INPUT} value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="+1 (234) 567-8900" />
+              <label className={LABEL}>Credentials suffix <span className="text-rose-500">*</span></label>
+              <input className={INPUT} value={form.credentials} onChange={e => set("credentials", e.target.value)} placeholder="e.g. MD, PsyD, LCSW, PMHNP-BC" />
+            </div>
+            <div>
+              <label className={LABEL}>Provider type <span className="text-rose-500">*</span></label>
+              <select className={INPUT} value={form.providerType} onChange={e => set("providerType", e.target.value)}>
+                <option value="">Select — drives every capability default</option>
+                {PROVIDER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
             </div>
             <div>
               <label className={LABEL}>Provider Color</label>
@@ -444,9 +509,48 @@ export default function AddEditProviderScreen({ providerId }: Props) {
             <div className="flex items-center justify-between py-3.5 px-4 rounded-xl border border-slate-200 dark:border-slate-800">
               <div>
                 <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Telehealth Enabled</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Allow this provider to conduct telehealth visits</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Whether they can be booked for video. Depends on telehealth licences purchased.</p>
               </div>
               <Toggle checked={form.telehealthEnabled} onChange={v => set("telehealthEnabled", v)} />
+            </div>
+
+            {form.telehealthEnabled && (
+              <div>
+                <label className={LABEL}>Licensed states <span className="text-rose-500">*</span></label>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">A hard gate — a video visit can&apos;t be delivered to a patient physically located in a state the provider isn&apos;t licensed in.</p>
+                <div className="flex flex-wrap gap-2">
+                  {US_STATES.map(s => (
+                    <button key={s} type="button" onClick={() => toggleArr("licensedStates", s)}
+                      className={cn("px-3 py-1 rounded-full border text-xs font-medium transition-colors",
+                        form.licensedStates.includes(s) ? "bg-blue-600 border-blue-600 text-white" : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-blue-400")}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1 pt-3">Capabilities</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                Pre-filled from the provider-type{form.providerType ? ` (${form.providerType})` : ""}. Each is individually overridable.
+              </p>
+              <div className="grid sm:grid-cols-2 gap-2">
+                {CAPABILITY_KEYS.map(k => (
+                  <label key={k} className="flex items-start gap-2.5 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
+                    <input type="checkbox" className="accent-blue-600 w-4 h-4 mt-0.5"
+                      checked={form.capabilities[k]} onChange={() => toggleCapability(k)} />
+                    <span className="min-w-0">
+                      <span className="flex items-center gap-1.5">
+                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{CAPABILITY_META[k].label}</span>
+                        {CAPABILITY_META[k].soon && <span className="text-[9px] font-bold text-slate-400">SOON</span>}
+                        {form.capabilityOverrides.includes(k) && <span className="text-[9px] font-bold text-amber-500 uppercase">override</span>}
+                      </span>
+                      <span className="block text-[11px] text-slate-400 font-mono">{k}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
             </div>
           </>
         )}

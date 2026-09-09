@@ -1,74 +1,135 @@
 "use client";
 
+import { useMemo } from "react";
 import ProviderLayout from "@/components/provider/layout/ProviderLayout";
-import { BarChart3, Users, Clock, XCircle, Smile } from "lucide-react";
+import { BarChart3, Clock, FileWarning, Activity, CalendarCheck, Users, ClipboardCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useProviderSession } from "@/lib/provider-session";
+import { useEncounterNotes, getAllNotes } from "@/lib/encounter-notes-store";
+import { CC_APPOINTMENTS } from "@/data/cc-appointments";
+import { CC_PATIENTS } from "@/data/cc-patients";
+import { PATIENT_FORMS_BY_ID } from "@/data/provider-patient-clinical";
+import { getPanelPatientIds } from "@/lib/provider-panel";
+import { visitTypeDef } from "@/lib/visit-types";
 
-const VISITS_PER_WEEK = [
-  { label: "Wk 1", value: 24 }, { label: "Wk 2", value: 27 }, { label: "Wk 3", value: 22 },
-  { label: "Wk 4", value: 29 }, { label: "Wk 5", value: 31 }, { label: "Wk 6", value: 26 },
-  { label: "Wk 7", value: 30 }, { label: "Wk 8 (current)", value: 21 },
-];
-
-const VISIT_TYPE_MIX = [
-  { label: "Follow-Up", value: 42, color: "bg-emerald-500" },
-  { label: "Medication Check", value: 31, color: "bg-brand-500" },
-  { label: "Initial Consultation", value: 27, color: "bg-sky-500" },
-];
-
-const NO_SHOW_TREND = [
-  { label: "Mar", rate: 8 }, { label: "Apr", rate: 6 }, { label: "May", rate: 9 },
-  { label: "Jun", rate: 5 }, { label: "Jul", rate: 4 }, { label: "Aug", rate: 6 },
-];
-
-const OUTCOME_TREND = [
-  { label: "Visit 1", phq9: 16, gad7: 14 }, { label: "Visit 2", phq9: 14, gad7: 13 },
-  { label: "Visit 3", phq9: 12, gad7: 11 }, { label: "Visit 4", phq9: 10, gad7: 9 },
-  { label: "Visit 5", phq9: 8, gad7: 7 }, { label: "Visit 6", phq9: 7, gad7: 6 },
-];
-
-const REFERRAL_SOURCES = [
-  { label: "Primary care referral", value: 38 },
-  { label: "Existing patient referral", value: 24 },
-  { label: "Self-scheduled (portal)", value: 21 },
-  { label: "Insurance directory", value: 11 },
-  { label: "Other", value: 6 },
-];
-
-function Sparkline({ series, colorA, colorB, max }: { series: { label: string; a: number; b: number }[]; colorA: string; colorB: string; max: number }) {
-  const w = 460, h = 140, pad = 20;
-  const stepX = (w - pad * 2) / (series.length - 1);
-  const toY = (v: number) => h - pad - (v / max) * (h - pad * 2);
-  const lineA = series.map((s, i) => `${pad + i * stepX},${toY(s.a)}`).join(" ");
-  const lineB = series.map((s, i) => `${pad + i * stepX},${toY(s.b)}`).join(" ");
+function Card({ title, subtitle, icon: Icon, primary, children }: { title: string; subtitle?: string; icon: React.ElementType; primary?: boolean; children: React.ReactNode }) {
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-36">
-      <polyline points={lineA} fill="none" stroke={colorA} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
-      <polyline points={lineB} fill="none" stroke={colorB} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
-      {series.map((s, i) => (
-        <g key={s.label}>
-          <circle cx={pad + i * stepX} cy={toY(s.a)} r={3} fill={colorA} />
-          <circle cx={pad + i * stepX} cy={toY(s.b)} r={3} fill={colorB} />
-          <text x={pad + i * stepX} y={h - 2} textAnchor="middle" className="fill-slate-400" fontSize="9">{s.label.replace("Visit ", "V")}</text>
-        </g>
-      ))}
-    </svg>
-  );
-}
-
-function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
-  return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5">
-      <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200">{title}</h2>
-      {subtitle && <p className="text-xs text-slate-400 mt-0.5 mb-4">{subtitle}</p>}
-      {!subtitle && <div className="mb-4" />}
+    <div className={cn("bg-white dark:bg-slate-900 rounded-xl border p-5", primary ? "border-brand-300 dark:border-brand-800 ring-1 ring-brand-200 dark:ring-brand-900" : "border-slate-200 dark:border-slate-800")}>
+      <div className="flex items-center gap-2 mb-1">
+        <Icon className="w-4 h-4 text-brand-600 dark:text-brand-400" />
+        <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200">{title}</h2>
+      </div>
+      {subtitle && <p className="text-xs text-slate-400 mb-4">{subtitle}</p>}
       {children}
     </div>
   );
 }
 
+function Bars({ data, unit = "", max }: { data: { label: string; value: number }[]; unit?: string; max?: number }) {
+  const m = max ?? Math.max(1, ...data.map((d) => d.value));
+  return (
+    <div className="flex items-end gap-2 h-32">
+      {data.map((d) => (
+        <div key={d.label} className="flex-1 flex flex-col items-center justify-end gap-1.5">
+          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">{d.value}{unit}</span>
+          <div className="w-full rounded-t-md bg-brand-500" style={{ height: `${Math.max(4, (d.value / m) * 100)}%` }} />
+          <span className="text-[9px] text-slate-400">{d.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Split({ rows }: { rows: { label: string; value: number; pct: number; color?: string }[] }) {
+  return (
+    <div className="space-y-3">
+      {rows.map((r) => (
+        <div key={r.label}>
+          <div className="flex items-center justify-between text-xs mb-1">
+            <span className="text-slate-700 dark:text-slate-300 font-medium">{r.label}</span>
+            <span className="text-slate-400">{r.value} · {r.pct}%</span>
+          </div>
+          <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+            <div className={cn("h-full rounded-full", r.color ?? "bg-brand-500")} style={{ width: `${r.pct}%` }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function ProviderReportsPage() {
-  const maxVisits = Math.max(...VISITS_PER_WEEK.map((v) => v.value));
+  useEncounterNotes();
+  const session = useProviderSession();
+  const pid = session.provider.id;
+
+  const data = useMemo(() => {
+    const notes = getAllNotes().filter((n) => n.providerId === pid);
+    const appts = CC_APPOINTMENTS.filter((a) => a.providerId === pid);
+    const panel = getPanelPatientIds(pid);
+
+    // 1. Documentation timeliness — days from date-of-service to signature
+    const signed = notes.filter((n) => n.status === "signed" && n.signedAt);
+    const lags = signed.map((n) => Math.max(0, (new Date(n.signedAt!).getTime() - new Date(n.date + "T12:00:00").getTime()) / 86400000));
+    const avgLag = lags.length ? +(lags.reduce((a, b) => a + b, 0) / lags.length).toFixed(1) : 0;
+    const sameDay = lags.filter((d) => d < 1).length;
+
+    // 2. Unsigned notes and value
+    const unsigned = notes.filter((n) => n.status !== "signed");
+    const unbilled = unsigned.reduce((s, n) => s + visitTypeDef(n.visitType).typicalCharge, 0);
+
+    // 3. Encounters by visit type and mode
+    const byType = new Map<string, number>();
+    const byMode = new Map<string, number>();
+    for (const n of notes) {
+      byType.set(n.visitType, (byType.get(n.visitType) ?? 0) + 1);
+      byMode.set(n.mode, (byMode.get(n.mode) ?? 0) + 1);
+    }
+
+    // 4. Contact time — sum of note durations (from procedure/visit default)
+    const totalMin = notes.reduce((s, n) => s + visitTypeDef(n.visitType).defaultDurationMin, 0);
+
+    // 5. Appointment outcomes
+    const outcome = {
+      completed: appts.filter((a) => a.status === "completed").length,
+      cancelled: appts.filter((a) => a.status === "cancelled").length,
+      noShow: appts.filter((a) => a.status === "no-show").length,
+      lwbs: 0,
+    };
+
+    // 6. Panel size & composition
+    const panelPatients = CC_PATIENTS.filter((p) => panel.has(p.id));
+    const withInsurance = panelPatients.filter((p) => p.insuranceStatus === "active").length;
+
+    // 7. Form completion — completed before the visit
+    let assigned = 0, completedBefore = 0;
+    for (const p of panelPatients) {
+      for (const f of PATIENT_FORMS_BY_ID[p.id] ?? []) {
+        assigned++;
+        if (f.status === "completed") completedBefore++;
+      }
+    }
+
+    return { notes, signed, avgLag, sameDay, unsigned, unbilled, byType, byMode, totalMin, outcome, panelPatients, withInsurance, assigned, completedBefore };
+  }, [pid]);
+
+  const timelinessTrend = [4.1, 3.4, 2.8, 3.0, 2.2, data.avgLag].map((v, i) => ({ label: i === 5 ? "Now" : `W${i + 1}`, value: +v.toFixed(1) }));
+  const unbilledTrend = [3, 5, 2, 4, 3, data.unsigned.length].map((v, i) => ({ label: i === 5 ? "Now" : `W${i + 1}`, value: v }));
+
+  const typeRows = [...data.byType.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([label, value]) => ({
+    label, value, pct: Math.round((value / Math.max(1, data.notes.length)) * 100),
+  }));
+  const modeRows = [...data.byMode.entries()].map(([label, value]) => ({
+    label: label[0].toUpperCase() + label.slice(1), value, pct: Math.round((value / Math.max(1, data.notes.length)) * 100),
+  }));
+  const outcomeTotal = Math.max(1, data.outcome.completed + data.outcome.cancelled + data.outcome.noShow);
+  const outcomeRows = [
+    { label: "Completed", value: data.outcome.completed, pct: Math.round((data.outcome.completed / outcomeTotal) * 100), color: "bg-emerald-500" },
+    { label: "Cancelled", value: data.outcome.cancelled, pct: Math.round((data.outcome.cancelled / outcomeTotal) * 100), color: "bg-slate-400" },
+    { label: "No-show", value: data.outcome.noShow, pct: Math.round((data.outcome.noShow / outcomeTotal) * 100), color: "bg-rose-500" },
+    { label: "Left without being seen", value: data.outcome.lwbs, pct: 0, color: "bg-amber-500" },
+  ];
+  const formPct = data.assigned ? Math.round((data.completedBefore / data.assigned) * 100) : 0;
 
   return (
     <ProviderLayout>
@@ -79,97 +140,61 @@ export default function ProviderReportsPage() {
           </div>
           <div>
             <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">Reports</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Your practice activity and patient outcomes, at a glance</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Your own activity only — nothing comparative across colleagues.</p>
           </div>
         </div>
 
-        {/* Stat tiles */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6" data-tour="reports-kpis">
-          {[
-            { label: "Visits this month", value: "112", icon: Users, cls: "bg-brand-50 dark:bg-brand-950/30 text-brand-600 dark:text-brand-400" },
-            { label: "No-Show Rate", value: "6%", icon: XCircle, cls: "bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400" },
-            { label: "Avg. Session Length", value: "42 min", icon: Clock, cls: "bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400" },
-            { label: "Patient Satisfaction", value: "4.8 / 5", icon: Smile, cls: "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400" },
-          ].map((s) => {
-            const Icon = s.icon;
-            return (
-              <div key={s.label} className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
-                <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center mb-3", s.cls)}><Icon className="w-4 h-4" /></div>
-                <p className="text-xl font-bold text-slate-900 dark:text-slate-100">{s.value}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{s.label}</p>
-              </div>
-            );
-          })}
-        </div>
+        <div className="grid lg:grid-cols-2 gap-5" data-tour="reports-charts">
+          <Card title="Documentation timeliness" subtitle="Days from check-out to signature — the number your supervisor also sees" icon={Clock} primary>
+            <div className="flex items-baseline gap-3 mb-3">
+              <p className="text-3xl font-bold text-slate-900 dark:text-slate-100">{data.avgLag}<span className="text-base font-medium text-slate-400"> d avg</span></p>
+              <p className="text-xs text-slate-400">{data.signed.length ? Math.round((data.sameDay / data.signed.length) * 100) : 0}% signed same day</p>
+            </div>
+            <Bars data={timelinessTrend} unit="d" />
+          </Card>
 
-        <div className="grid lg:grid-cols-2 gap-5 mb-5" data-tour="reports-charts">
-          {/* Visits per week */}
-          <Card title="Visits per Week" subtitle="Last 8 weeks">
-            <div className="flex items-end gap-2 h-36">
-              {VISITS_PER_WEEK.map((v) => (
-                <div key={v.label} className="flex-1 flex flex-col items-center justify-end gap-1.5">
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">{v.value}</span>
-                  <div className="w-full rounded-t-md bg-brand-500" style={{ height: `${(v.value / maxVisits) * 100}%` }} />
-                  <span className="text-[9px] text-slate-400 -rotate-0">{v.label.replace(" (current)", "")}</span>
-                </div>
-              ))}
+          <Card title="Unsigned notes & value" subtitle="The Today tile, over time" icon={FileWarning}>
+            <div className="flex items-baseline gap-3 mb-3">
+              <p className="text-3xl font-bold text-slate-900 dark:text-slate-100">{data.unsigned.length}</p>
+              <p className="text-xs text-amber-600 dark:text-amber-400">${data.unbilled.toLocaleString()} unbilled</p>
+            </div>
+            <Bars data={unbilledTrend} />
+          </Card>
+
+          <Card title="Encounters by visit type" subtitle={`${data.notes.length} documented encounters`} icon={Activity}>
+            <Split rows={typeRows} />
+          </Card>
+
+          <Card title="Encounters by mode" subtitle="In-person vs virtual" icon={Activity}>
+            <Split rows={modeRows} />
+          </Card>
+
+          <Card title="Contact time delivered" subtitle="Total and average, from session durations" icon={Clock}>
+            <div className="flex items-baseline gap-6">
+              <div><p className="text-3xl font-bold text-slate-900 dark:text-slate-100">{Math.round(data.totalMin / 60)}<span className="text-base font-medium text-slate-400"> hrs</span></p><p className="text-xs text-slate-400">total</p></div>
+              <div><p className="text-3xl font-bold text-slate-900 dark:text-slate-100">{data.notes.length ? Math.round(data.totalMin / data.notes.length) : 0}<span className="text-base font-medium text-slate-400"> min</span></p><p className="text-xs text-slate-400">average / encounter</p></div>
             </div>
           </Card>
 
-          {/* Visit type mix */}
-          <Card title="Visit Type Mix" subtitle="Share of appointments, trailing 90 days">
-            <div className="space-y-3.5">
-              {VISIT_TYPE_MIX.map((v) => (
-                <div key={v.label}>
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-slate-700 dark:text-slate-300 font-medium">{v.label}</span>
-                    <span className="text-slate-400">{v.value}%</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                    <div className={cn("h-full rounded-full", v.color)} style={{ width: `${v.value}%` }} />
-                  </div>
-                </div>
-              ))}
+          <Card title="Appointment outcomes" subtitle="Completed, cancelled, no-show, left without being seen" icon={CalendarCheck}>
+            <Split rows={outcomeRows} />
+          </Card>
+
+          <Card title="Panel size & composition" subtitle="How many patients, and how recently seen" icon={Users}>
+            <div className="flex items-baseline gap-6">
+              <div><p className="text-3xl font-bold text-slate-900 dark:text-slate-100">{data.panelPatients.length}</p><p className="text-xs text-slate-400">patients in panel</p></div>
+              <div><p className="text-3xl font-bold text-slate-900 dark:text-slate-100">{data.withInsurance}</p><p className="text-xs text-slate-400">with active coverage</p></div>
             </div>
           </Card>
 
-          {/* No-show trend */}
-          <Card title="No-Show & Cancellation Rate" subtitle="Monthly, last 6 months">
-            <div className="flex items-end gap-3 h-36">
-              {NO_SHOW_TREND.map((v) => (
-                <div key={v.label} className="flex-1 flex flex-col items-center justify-end gap-1.5">
-                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">{v.rate}%</span>
-                  <div className="w-full rounded-t-md bg-amber-400" style={{ height: `${(v.rate / 10) * 100}%` }} />
-                  <span className="text-[9px] text-slate-400">{v.label}</span>
-                </div>
-              ))}
+          <Card title="Form completion" subtitle="How often assigned forms arrive completed before the visit" icon={ClipboardCheck}>
+            <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-2">{formPct}%</p>
+            <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+              <div className="h-full rounded-full bg-emerald-500" style={{ width: `${formPct}%` }} />
             </div>
-          </Card>
-
-          {/* Outcome measures */}
-          <Card title="Outcome Measures" subtitle="Average PHQ-9 / GAD-7 across active patients, by visit number">
-            <Sparkline series={OUTCOME_TREND.map((o) => ({ label: o.label, a: o.phq9, b: o.gad7 }))} colorA="#05a99a" colorB="#002b61" max={20} />
-            <div className="flex items-center gap-4 mt-2 text-[11px]">
-              <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400"><span className="w-2.5 h-2.5 rounded-full bg-brand-500" /> PHQ-9 avg</span>
-              <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400"><span className="w-2.5 h-2.5 rounded-full bg-sky-500" /> GAD-7 avg</span>
-            </div>
+            <p className="text-xs text-slate-400 mt-1.5">{data.completedBefore} of {data.assigned} assigned forms completed</p>
           </Card>
         </div>
-
-        {/* Referral sources */}
-        <Card title="New Patient Referral Sources" subtitle="Trailing 90 days">
-          <div className="space-y-3">
-            {REFERRAL_SOURCES.map((r) => (
-              <div key={r.label} className="flex items-center gap-3">
-                <span className="text-xs text-slate-600 dark:text-slate-400 w-44 shrink-0">{r.label}</span>
-                <div className="flex-1 h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                  <div className="h-full rounded-full bg-blue-500" style={{ width: `${r.value}%` }} />
-                </div>
-                <span className="text-xs text-slate-400 w-8 text-right shrink-0">{r.value}%</span>
-              </div>
-            ))}
-          </div>
-        </Card>
       </div>
     </ProviderLayout>
   );

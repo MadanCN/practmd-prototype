@@ -1,16 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  ChevronLeft, Pencil, Ban, KeyRound, CalendarPlus, CheckCircle2,
+  ChevronLeft, Pencil, Ban, KeyRound, CalendarPlus, CheckCircle2, TriangleAlert,
+  ShieldAlert, X, CalendarClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   getPatientProfile, calcAge, getLastVisit, getNextVisit,
   type PatientProfile,
 } from "@/data/provider-patients";
+import { PATIENT_ALLERGIES_BY_ID, CARE_COMMENTS_BY_ID } from "@/data/provider-patient-clinical";
+import { addRecent } from "@/lib/provider-recents";
+import { useProviderSession } from "@/lib/provider-session";
+import { addFollowUpTask } from "@/lib/provider-tasks-store";
 import { useChartBase } from "./chart-base";
 import { SECTIONS, getSection, DEFAULT_SECTION } from "./sections/registry";
 import { OverviewSection } from "./sections/OverviewSection";
@@ -45,9 +50,21 @@ function fmtVisit(v: { date: string; startTime: string; visitType: string } | nu
 export function PatientProfileShell({ id }: { id: string }) {
   const router = useRouter();
   const chartBase = useChartBase();
+  const isProvider = chartBase === "/provider";
+  const session = useProviderSession();
   const seed = getPatientProfile(id);
 
   const [profile, setProfile] = useState<PatientProfile | undefined>(seed);
+  const [alertsDismissed, setAlertsDismissed] = useState(false);
+  const [followUpOpen, setFollowUpOpen] = useState(false);
+
+  const activeAllergies = useMemo(() => (PATIENT_ALLERGIES_BY_ID[id] ?? []).filter((a) => a.status === "active"), [id]);
+  const openAlerts = useMemo(() => (CARE_COMMENTS_BY_ID[id] ?? []).filter((c) => c.type === "alert" && !c.resolved), [id]);
+
+  useEffect(() => {
+    if (seed) addRecent({ kind: "patient", refId: id, title: seed.displayName, subtitle: seed.mrn, href: `${chartBase}/patients/${id}` });
+    setAlertsDismissed(false);
+  }, [id, seed, chartBase]);
   const [sectionId, setSectionId] = useState<string>(() => {
     if (typeof window === "undefined") return DEFAULT_SECTION;
     const s = new URLSearchParams(window.location.search).get("section");
@@ -119,36 +136,76 @@ export function PatientProfileShell({ id }: { id: string }) {
 
           <div className="flex items-center gap-1.5 ml-auto">
             <BarButton onClick={() => router.push(`${chartBase}/patients`)} icon={ChevronLeft} label="Back" />
-            <BarButton onClick={() => { selectSection("overview"); setEditing(true); }} icon={Pencil} label="Edit" />
-            <BarButton onClick={() => setConfirm("deactivate")} icon={Ban} label="Deactivate" disabled={p.status === "inactive"} />
-            <BarButton onClick={() => setConfirm("reset")} icon={KeyRound} label="Send password reset email" compact />
-            <Link
-              href="/care-coordinator/appointments/calendar"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold practmd-gradient text-white"
-            >
-              <CalendarPlus className="w-3.5 h-3.5" /> New Appointment
-            </Link>
+            {isProvider ? (
+              <>
+                <BarButton onClick={() => setFollowUpOpen(true)} icon={CalendarClock} label="Recommend follow-up" />
+                {session.capabilities.can_book ? (
+                  <Link href="/care-coordinator/appointments/calendar" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold practmd-gradient text-white">
+                    <CalendarPlus className="w-3.5 h-3.5" /> Book appointment
+                  </Link>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <BarButton onClick={() => { selectSection("overview"); setEditing(true); }} icon={Pencil} label="Edit" />
+                <BarButton onClick={() => setConfirm("deactivate")} icon={Ban} label="Deactivate" disabled={p.status === "inactive"} />
+                <BarButton onClick={() => setConfirm("reset")} icon={KeyRound} label="Send password reset email" compact />
+                <Link href="/care-coordinator/appointments/calendar" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold practmd-gradient text-white">
+                  <CalendarPlus className="w-3.5 h-3.5" /> New Appointment
+                </Link>
+              </>
+            )}
           </div>
         </div>
 
-        <div className="mt-2 flex items-center gap-x-4 gap-y-1 flex-wrap text-xs text-slate-500 dark:text-slate-400">
+        <div className="mt-2 flex items-center gap-x-3 gap-y-1 flex-wrap text-xs text-slate-500 dark:text-slate-400">
           <span><b className="font-semibold text-slate-700 dark:text-slate-300">{p.gender}</b> · {calcAge(p.dob)} yrs</span>
-          <span className="text-slate-300 dark:text-slate-600">|</span>
-          <span>DOB {p.dob}</span>
-          <span className="text-slate-300 dark:text-slate-600">|</span>
-          <span>{p.phone}</span>
-          <span className="text-slate-300 dark:text-slate-600">|</span>
-          <span className="truncate max-w-[220px]">{p.email}</span>
-          <span className="text-slate-300 dark:text-slate-600">|</span>
-          <span>Last visit: {fmtVisit(lastVisit) ?? "none"}</span>
-          {nextVisit && (
+          <Sep /><span>DOB {p.dob}</span>
+          {p.pronouns && <><Sep /><span>{p.pronouns}</span></>}
+          <Sep />
+          <span className={cn("inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-medium",
+            p.insuranceStatus === "active" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400"
+              : p.insuranceStatus === "pending" ? "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400"
+              : "bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400")}>
+            {p.insuranceProvider ?? "No insurer"} · {p.insuranceStatus ?? "unknown"}
+          </span>
+          <Sep />
+          {activeAllergies.length === 0 ? (
+            <span className="text-slate-400">NKDA</span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400 font-medium">
+              <TriangleAlert className="w-3.5 h-3.5" />
+              {activeAllergies.slice(0, 3).map((a) => a.allergen).join(", ")}{activeAllergies.length > 3 ? ` +${activeAllergies.length - 3}` : ""}
+            </span>
+          )}
+          {p.emergencyContact.contactConsent === "no" && (
             <>
-              <span className="text-slate-300 dark:text-slate-600">|</span>
-              <span className="text-brand-700 dark:text-brand-400 font-medium">Next: {fmtVisit(nextVisit)}</span>
+              <Sep />
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 font-bold uppercase tracking-wide text-[10px]">
+                <ShieldAlert className="w-3 h-3" /> EC: do not contact
+              </span>
             </>
           )}
+          <Sep /><span>Last visit: {fmtVisit(lastVisit) ?? "none"}</span>
+          {nextVisit && (<><Sep /><span className="text-brand-700 dark:text-brand-400 font-medium">Next: {fmtVisit(nextVisit)}</span></>)}
         </div>
       </div>
+
+      {/* Alert-flagged care comments surface on open */}
+      {isProvider && openAlerts.length > 0 && !alertsDismissed && (
+        <div className="mx-4 sm:mx-6 mt-3 rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-4 py-3">
+          <div className="flex items-start gap-2">
+            <TriangleAlert className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">{openAlerts.length} alert-flagged care comment{openAlerts.length > 1 ? "s" : ""}</p>
+              <ul className="mt-1 space-y-0.5">
+                {openAlerts.slice(0, 3).map((c) => <li key={c.id} className="text-xs text-amber-700 dark:text-amber-400">{c.body}</li>)}
+              </ul>
+            </div>
+            <button onClick={() => setAlertsDismissed(true)} className="text-amber-500 shrink-0"><X className="w-4 h-4" /></button>
+          </div>
+        </div>
+      )}
 
       {/* ── Section rail + outlet ────────────────────────────────────────── */}
       <div className="flex items-start">
@@ -227,6 +284,15 @@ export function PatientProfileShell({ id }: { id: string }) {
         </main>
       </div>
 
+      {/* ── Follow-up recommendation → coordinator task ─────────────────── */}
+      {followUpOpen && (
+        <FollowUpModal
+          patient={p}
+          onClose={() => setFollowUpOpen(false)}
+          onDone={(msg) => { setFollowUpOpen(false); flash(msg); }}
+        />
+      )}
+
       {/* ── Confirm dialog ──────────────────────────────────────────────── */}
       {confirm && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/30" onClick={() => setConfirm(null)}>
@@ -264,6 +330,42 @@ export function PatientProfileShell({ id }: { id: string }) {
           {toast}
         </div>
       )}
+    </div>
+  );
+}
+
+function Sep() {
+  return <span className="text-slate-300 dark:text-slate-600">|</span>;
+}
+
+function FollowUpModal({ patient, onClose, onDone }: { patient: PatientProfile; onClose: () => void; onDone: (m: string) => void }) {
+  const [rec, setRec] = useState("");
+  const [interval, setIntervalV] = useState("2 weeks");
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/30" onClick={onClose}>
+      <div className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl p-5" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">Recommend a follow-up</h2>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Raises a booking task to {patient.displayName}&apos;s coordinator — you don&apos;t hold the booking permission.</p>
+        <div className="mt-4 space-y-3">
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Recommendation</label>
+            <textarea value={rec} onChange={(e) => setRec(e.target.value)} rows={2} placeholder="e.g. Med check to reassess dose response"
+              className="mt-1 w-full px-3 py-2 rounded-lg text-sm border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950" />
+          </div>
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Suggested interval</label>
+            <select value={interval} onChange={(e) => setIntervalV(e.target.value)} className="mt-1 w-full px-3 py-2 rounded-lg text-sm border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950">
+              {["1 week", "2 weeks", "1 month", "6 weeks", "3 months"].map((x) => <option key={x}>{x}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">Cancel</button>
+          <button disabled={!rec.trim()}
+            onClick={() => { addFollowUpTask({ patientId: patient.id, patientName: patient.displayName, recommendation: rec.trim(), interval }); onDone("Follow-up recommendation sent to the coordinator."); }}
+            className="px-4 py-2 rounded-lg text-sm font-semibold practmd-gradient text-white disabled:opacity-40">Send to coordinator</button>
+        </div>
+      </div>
     </div>
   );
 }

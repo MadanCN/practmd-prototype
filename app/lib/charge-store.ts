@@ -7,6 +7,7 @@
 // claim. Same useSyncExternalStore pattern as the other prototype stores.
 
 import { useSyncExternalStore } from "react";
+import { createPersistedStore } from "@/lib/persist";
 import type { EncounterNoteDoc } from "@/lib/encounter-notes-store";
 import { DIAGNOSIS_CODES } from "@/lib/encounter-store";
 import { visitTypeDef } from "@/lib/visit-types";
@@ -74,16 +75,21 @@ function seed(): Charge[] {
   ];
 }
 
-let state: StoreState = { charges: seed() };
-let listeners: (() => void)[] = [];
-
-function emit() { for (const l of listeners) l(); }
-function subscribe(l: () => void) { listeners = [...listeners, l]; return () => { listeners = listeners.filter((x) => x !== l); }; }
-function getSnapshot() { return state; }
-function set(updater: (s: StoreState) => StoreState) { state = updater(state); emit(); }
+const store = createPersistedStore<StoreState>({
+  key: "charge-store",
+  initial: { charges: seed() },
+  revive: (raw, initial) => {
+    const p = (raw as StoreState)?.charges ?? [];
+    const seedIds = new Set(initial.charges.map((c) => c.id));
+    // keep any seed charge the saved blob is missing, plus everything saved
+    return { charges: [...p, ...initial.charges.filter((c) => !p.some((x) => x.id === c.id) && seedIds.has(c.id))] };
+  },
+});
+const state = new Proxy({} as StoreState, { get: (_t, p) => (store.get() as unknown as Record<string, unknown>)[p as string] });
+function set(updater: (s: StoreState) => StoreState) { store.set(updater); }
 
 export function useChargeStore() {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getServerSnapshot);
 }
 
 export function getCharges(): Charge[] {

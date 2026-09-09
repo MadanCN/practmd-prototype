@@ -9,9 +9,10 @@ import { CC_PATIENTS } from "@/data/cc-patients";
 import { ChevronLeft, ChevronRight, Video, Phone, Check, Eye, EyeOff, List, SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEncounterStore, getEffectiveAppointment } from "@/lib/encounter-store";
+import { useProviderSession } from "@/lib/provider-session";
 import { VISIT_TYPES, visitColor } from "@/lib/visit-types";
 
-const CURRENT_PROVIDER_ID = "p1";
+type CalView = "day" | "week" | "month";
 const SLOT_H = 56;
 const START_H = 7;
 const END_H = 20;
@@ -90,7 +91,9 @@ const STATUS_FILTERS = ["all", "confirmed", "arrived", "in-session", "completed"
 
 export default function ProviderAppointmentsPage() {
   useEncounterStore();
+  const providerId = useProviderSession().provider.id;
   const [anchor, setAnchor] = useState(new Date());
+  const [view, setView] = useState<CalView>("week");
   const [selectedApptId, setSelectedApptId] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
     return new URLSearchParams(window.location.search).get("appt");
@@ -108,11 +111,11 @@ export default function ProviderAppointmentsPage() {
   }, []);
 
   const today = new Date();
-  const days = useMemo(() => weekDays(anchor), [anchor]);
+  const days = useMemo(() => (view === "day" ? [new Date(anchor)] : weekDays(anchor)), [anchor, view]);
 
   const myAppts = useMemo(() => {
     return CC_APPOINTMENTS
-      .filter((a) => a.providerId === CURRENT_PROVIDER_ID)
+      .filter((a) => a.providerId === providerId)
       .map(getEffectiveAppointment)
       .filter((a) => {
         if (!showCancelled && a.status === "cancelled") return false;
@@ -121,12 +124,17 @@ export default function ProviderAppointmentsPage() {
         if (visitFilter.size > 0 && !visitFilter.has(a.visitType)) return false;
         return true;
       });
-  }, [showCancelled, statusFilter, modeFilter, visitFilter]);
+  }, [providerId, showCancelled, statusFilter, modeFilter, visitFilter]);
 
   const selectedRaw = selectedApptId ? CC_APPOINTMENTS.find((a) => a.id === selectedApptId) ?? null : null;
 
-  function prevWeek() { const d = new Date(anchor); d.setDate(d.getDate() - 7); setAnchor(d); }
-  function nextWeek() { const d = new Date(anchor); d.setDate(d.getDate() + 7); setAnchor(d); }
+  function shift(dir: -1 | 1) {
+    const d = new Date(anchor);
+    if (view === "day") d.setDate(d.getDate() + dir);
+    else if (view === "week") d.setDate(d.getDate() + dir * 7);
+    else d.setMonth(d.getMonth() + dir);
+    setAnchor(d);
+  }
   function goToday() { setAnchor(new Date()); }
 
   function openAppt(id: string) {
@@ -143,17 +151,30 @@ export default function ProviderAppointmentsPage() {
     });
   }
 
-  const weekLabel = `${days[0].toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${days[6].toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+  const rangeLabel = view === "day"
+    ? days[0].toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })
+    : view === "month"
+      ? anchor.toLocaleDateString("en-US", { month: "long", year: "numeric" })
+      : `${days[0].toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${days[6].toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
 
   return (
     <ProviderLayout>
       <div className="flex flex-col h-[calc(100vh-60px)]">
         {/* Toolbar */}
         <div className="flex items-center gap-2 px-5 py-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0 flex-wrap" data-tour="cal-toolbar">
-          <button onClick={prevWeek} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"><ChevronLeft className="w-4 h-4" /></button>
-          <button onClick={nextWeek} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"><ChevronRight className="w-4 h-4" /></button>
-          <span className="text-sm font-semibold text-slate-800 dark:text-slate-200 min-w-[190px]">{weekLabel}</span>
+          <button onClick={() => shift(-1)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"><ChevronLeft className="w-4 h-4" /></button>
+          <button onClick={() => shift(1)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500"><ChevronRight className="w-4 h-4" /></button>
+          <span className="text-sm font-semibold text-slate-800 dark:text-slate-200 min-w-[190px]">{rangeLabel}</span>
           <button onClick={goToday} className="px-2.5 py-1 text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700">Today</button>
+
+          <div className="flex rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden ml-1">
+            {(["day", "week", "month"] as CalView[]).map((v) => (
+              <button key={v} onClick={() => setView(v)}
+                className={cn("px-2.5 py-1 text-xs font-medium capitalize", view === v ? "bg-brand-600 text-white" : "bg-white dark:bg-slate-900 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800")}>
+                {v}
+              </button>
+            ))}
+          </div>
 
           <div className="ml-auto flex items-center gap-2" data-tour="cal-filters">
             <button onClick={() => setFiltersOpen((o) => !o)}
@@ -208,11 +229,62 @@ export default function ProviderAppointmentsPage() {
           })}
         </div>
 
-        <WeekView days={days} appointments={myAppts} today={today} nowMin={nowMin} onSelect={openAppt} />
+        {view === "month"
+          ? <MonthView anchor={anchor} appointments={myAppts} today={today} onSelect={openAppt} onPickDay={(d) => { setAnchor(d); setView("day"); }} />
+          : <WeekView days={days} appointments={myAppts} today={today} nowMin={nowMin} onSelect={openAppt} />}
       </div>
 
       {selectedRaw && <ProviderApptDetail appt={selectedRaw} mode="drawer" onClose={closeAppt} />}
     </ProviderLayout>
+  );
+}
+
+function MonthView({ anchor, appointments, today, onSelect, onPickDay }: {
+  anchor: Date;
+  appointments: CcAppointment[];
+  today: Date;
+  onSelect: (id: string) => void;
+  onPickDay: (d: Date) => void;
+}) {
+  const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+  const gridStart = new Date(first);
+  gridStart.setDate(first.getDate() - ((first.getDay() + 6) % 7));
+  const cells = Array.from({ length: 42 }, (_, i) => { const d = new Date(gridStart); d.setDate(gridStart.getDate() + i); return d; });
+
+  return (
+    <div className="flex-1 overflow-auto p-3">
+      <div className="grid grid-cols-7 gap-px bg-slate-200 dark:bg-slate-800 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800">
+        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+          <div key={d} className="bg-white dark:bg-slate-900 py-2 text-center text-[10px] font-bold uppercase tracking-wide text-slate-400">{d}</div>
+        ))}
+        {cells.map((d) => {
+          const ds = dateStr(d);
+          const inMonth = d.getMonth() === anchor.getMonth();
+          const isToday = isSameDay(d, today);
+          const dayAppts = appointments.filter((a) => a.date === ds && a.status !== "cancelled").sort((a, b) => toMin(a.startTime) - toMin(b.startTime));
+          return (
+            <button key={ds} onClick={() => onPickDay(d)}
+              className={cn("bg-white dark:bg-slate-900 min-h-[96px] p-1.5 text-left align-top hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors", !inMonth && "opacity-40")}>
+              <span className={cn("inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] font-semibold",
+                isToday ? "bg-brand-600 text-white" : "text-slate-600 dark:text-slate-300")}>{d.getDate()}</span>
+              <div className="mt-1 space-y-0.5">
+                {dayAppts.slice(0, 3).map((a) => {
+                  const patient = CC_PATIENTS.find((p) => p.id === a.patientId);
+                  return (
+                    <span key={a.id} onClick={(e) => { e.stopPropagation(); onSelect(a.id); }}
+                      className="flex items-center gap-1 text-[9px] truncate px-1 py-0.5 rounded" style={{ backgroundColor: visitColor(a.visitType) + "22", color: visitColor(a.visitType) }}>
+                      <span className="w-1 h-1 rounded-full shrink-0" style={{ backgroundColor: visitColor(a.visitType) }} />
+                      {fmt12(a.startTime).replace(":00", "")} {patient?.firstName}
+                    </span>
+                  );
+                })}
+                {dayAppts.length > 3 && <span className="text-[9px] text-slate-400">+{dayAppts.length - 3} more</span>}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

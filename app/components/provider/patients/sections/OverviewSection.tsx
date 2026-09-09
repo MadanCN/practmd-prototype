@@ -109,6 +109,21 @@ export function OverviewSection({
             label="Contact number" editing={editing} value={p.emergencyContact.phone}
             onChange={(v) => set("emergencyContact", { ...p.emergencyContact, phone: v })}
           />
+          <Field label="Consent to contact">
+            {p.emergencyContact.contactConsent === "no" ? (
+              <span className="inline-flex flex-col gap-0.5">
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide px-2 py-1 rounded bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 w-fit">
+                  Do not contact
+                </span>
+                <span className="text-xs text-red-600 dark:text-red-400">
+                  Patient declined consent for us to reach this contact about safety concerns.
+                  {p.emergencyContact.consentDeclineReason ? ` “${p.emergencyContact.consentDeclineReason}”` : ""}
+                </span>
+              </span>
+            ) : (
+              <span className="text-emerald-700 dark:text-emerald-400">Yes — may contact about safety or well-being concerns</span>
+            )}
+          </Field>
         </Group>
 
         {/* Caregiver */}

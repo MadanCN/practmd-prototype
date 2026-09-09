@@ -157,6 +157,11 @@ export function useProviderAvailabilityStore() {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
+/** PRD "My Availability" policy: "Allow off" hides the screen entirely. */
+export function availabilitySelfServiceEnabled(): boolean {
+  return state.leave.allow || state.blockTime.allow || state.hoursChange.allow;
+}
+
 // ── Global Masters admin actions ─────────────────────────────────────────────
 
 export function updateToggle(kind: "leave" | "blockTime" | "hoursChange", changes: Partial<ToggleConfig>) {

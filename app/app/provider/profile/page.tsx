@@ -3,19 +3,20 @@
 import { useState } from "react";
 import Link from "next/link";
 import ProviderLayout from "@/components/provider/layout/ProviderLayout";
-import { PROVIDERS, type Provider } from "@/data/providers";
+import { type Provider } from "@/data/providers";
 import { CLINICS } from "@/data/clinics";
 import {
   UserCircle, Eye, MapPin, Globe, Video, Star, CalendarDays, ChevronRight, BadgeCheck,
-  GraduationCap, Award, ShieldCheck, Pencil, Check, X,
+  GraduationCap, Award, ShieldCheck, Pencil, Check, X, Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useProviderSession } from "@/lib/provider-session";
+import { addRequestTask } from "@/lib/provider-tasks-store";
 
-const CURRENT_PROVIDER_ID = "p1";
 const fieldCls = "w-full px-3 py-2 rounded-lg text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500";
 
 export default function ProviderProfilePage() {
-  const provider = PROVIDERS.find((p) => p.id === CURRENT_PROVIDER_ID)!;
+  const provider = useProviderSession().provider;
   const [view, setView] = useState<"profile" | "preview">("profile");
   const [editing, setEditing] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -128,12 +129,21 @@ function FullProfile({ provider, editing, bio, setBio, phone, setPhone, email, s
         {[
           { label: "NPI", value: provider.npi },
           { label: "License", value: `${provider.licenseNumber} (${provider.licenseState})` },
+          { label: "Provider type", value: provider.providerType },
         ].map((f) => (
           <div key={f.label}>
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">{f.label}</p>
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1"><Lock className="w-2.5 h-2.5" /> {f.label}</p>
             <p className="text-sm text-slate-800 dark:text-slate-200">{f.value}</p>
           </div>
         ))}
+        <div className="col-span-2 -mt-1 flex items-center justify-between">
+          <p className="text-[11px] text-slate-400">NPI, licence and provider-type feed credentialing and billing — edited by your admin.</p>
+          <button
+            onClick={() => { addRequestTask({ kind: "coordinator-query", title: "Credentialing field change request", detail: `${provider.displayName} requested a change to a credentialing / billing field (NPI, licence or provider-type).` }); alert("Change request sent to the Credentialing Admin."); }}
+            className="text-xs font-semibold text-brand-700 dark:text-brand-400 hover:underline shrink-0">
+            Request a change
+          </button>
+        </div>
         <div className="col-span-2 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800" data-tour="profile-accepting">
           <div>
             <p className="text-sm font-medium text-slate-800 dark:text-slate-200">Accepting new patients</p>

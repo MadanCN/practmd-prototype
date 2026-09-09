@@ -38,6 +38,11 @@ export interface EmergencyContact {
   name: string;
   relationship: string;
   phone: string;
+  /** Captured at intake: "If we have concerns about your safety or well-being,
+   *  may we contact your emergency contact?" A stored "no" is a hard signal
+   *  displayed prominently wherever the emergency contact appears. */
+  contactConsent: "yes" | "no";
+  consentDeclineReason?: string;
 }
 
 export interface Caregiver {
@@ -139,6 +144,8 @@ function base(p: CcPatient, i: number): PatientProfile {
       name: `${["Sarah", "Michael", "Grace", "Daniel", "Rosa", "Kevin"][i % 6]} ${p.lastName}`,
       relationship: ["Spouse", "Parent", "Sibling", "Partner", "Friend"][i % 5],
       phone: `${homeArea} ${(200 + i).toString()}-0${(20 + i).toString()}0`,
+      contactConsent: i % 4 === 2 ? "no" : "yes",
+      consentDeclineReason: i % 4 === 2 && i % 8 === 2 ? "Estranged from family — prefer clinic not reach out" : undefined,
     },
     preferences: {
       email: true,
@@ -177,7 +184,7 @@ const OVERRIDES: Record<string, Partial<PatientProfile>> = {
     patientType: "Established Patient",
     address: { line1: "142 Maple Ridge Drive", city: "Penfield", state: "NY", country: "United States", zip: "14526" },
     homePhone: "+1 (585) 412-0100",
-    emergencyContact: { name: "Sarah Holloway", relationship: "Spouse", phone: "+1 (585) 412-0102" },
+    emergencyContact: { name: "Sarah Holloway", relationship: "Spouse", phone: "+1 (585) 412-0102", contactConsent: "yes" },
     caregiver: undefined,
     preferences: { email: true, text: true, voice: false },
     phr: {
@@ -194,7 +201,7 @@ const OVERRIDES: Record<string, Partial<PatientProfile>> = {
     middleName: "T.",
     pronouns: "He / Him",
     patientType: "Established Patient",
-    emergencyContact: { name: "Angela Webb", relationship: "Spouse", phone: "+1 (585) 512-0304" },
+    emergencyContact: { name: "Angela Webb", relationship: "Spouse", phone: "+1 (585) 512-0304", contactConsent: "yes" },
     preferences: { email: true, text: false, voice: true },
     phr: { status: "active", accountEmail: "mwebb@email.com", secondaryAccounts: [] },
     referral: { source: "Insurance Directory" },
@@ -214,7 +221,7 @@ const OVERRIDES: Record<string, Partial<PatientProfile>> = {
     middleName: "Ray",
     pronouns: "He / Him",
     patientType: "Established Patient",
-    emergencyContact: { name: "Helen Carter", relationship: "Sister", phone: "+1 (315) 533-1113" },
+    emergencyContact: { name: "Helen Carter", relationship: "Sister", phone: "+1 (315) 533-1113", contactConsent: "no", consentDeclineReason: "Patient requested we not involve family in care decisions" },
     preferences: { email: false, text: true, voice: true },
     phr: { status: "active", accountEmail: "d.carter@email.com", secondaryAccounts: [] },
     referral: { source: "Returning Patient" },
@@ -224,7 +231,7 @@ const OVERRIDES: Record<string, Partial<PatientProfile>> = {
     preferredName: "Carmen",
     pronouns: "She / Her",
     patientType: "Telehealth Only",
-    emergencyContact: { name: "Luis Rivera", relationship: "Spouse", phone: "+1 (315) 888-1416" },
+    emergencyContact: { name: "Luis Rivera", relationship: "Spouse", phone: "+1 (315) 888-1416", contactConsent: "yes" },
     preferences: { email: true, text: true, voice: true },
     phr: { status: "active", accountEmail: "c.rivera@email.com", secondaryAccounts: [] },
     referral: { source: "Psychology Today" },
