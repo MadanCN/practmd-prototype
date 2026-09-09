@@ -11,6 +11,7 @@
 // have to live somewhere shared rather than per-page local state.
 
 import { useSyncExternalStore } from "react";
+import { createPersistedStore } from "@/lib/persist";
 import { type AppointmentStatus, type CcAppointment } from "@/data/cc-appointments";
 import { CC_PATIENTS } from "@/data/cc-patients";
 import { noteForAppointment } from "@/lib/encounter-notes-store";
@@ -215,7 +216,7 @@ function seedNotifications(): EncounterNotification[] {
   ];
 }
 
-let state: StoreState = {
+const INITIAL_STATE: StoreState = {
   statusOverrides: {},
   apptPatches: {},
   calledAppointmentIds: {},
@@ -224,6 +225,21 @@ let state: StoreState = {
   notifications: seedNotifications(),
 };
 
+const store = createPersistedStore<StoreState>({
+  key: "encounter-store",
+  initial: INITIAL_STATE,
+  revive: (raw, initial) => {
+    const p = raw as Partial<StoreState>;
+    return {
+      ...initial,
+      ...p,
+      // notifications carry relative timestamps — keep the seed set unless the
+      // provider has dismissed some (fewer than seed) or generated new ones
+      notifications: p.notifications && p.notifications.length ? p.notifications : initial.notifications,
+    };
+  },
+});
+
 function now() {
   return new Date().toISOString();
 }
@@ -231,27 +247,13 @@ function id(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
-type Listener = () => void;
-let listeners: Listener[] = [];
-function emit() {
-  for (const l of listeners) l();
-}
-function subscribe(listener: Listener) {
-  listeners = [...listeners, listener];
-  return () => {
-    listeners = listeners.filter((l) => l !== listener);
-  };
-}
-function getSnapshot() {
-  return state;
-}
+const state = new Proxy({} as StoreState, { get: (_t, p) => (store.get() as unknown as Record<string, unknown>)[p as string] });
 function set(updater: (s: StoreState) => StoreState) {
-  state = updater(state);
-  emit();
+  store.set(updater);
 }
 
 export function useEncounterStore() {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getServerSnapshot);
 }
 
 // ── Derived reads (safe to call outside React render too) ──────────────────
