@@ -121,7 +121,7 @@ export default function ProviderLayout({ children }: { children: React.ReactNode
 
                 {/* Notifications */}
                 <div className="relative">
-                  <button onClick={() => setNotifOpen((o) => !o)}
+                  <button onClick={() => setNotifOpen((o) => !o)} aria-label={`Notifications${notifications.length ? ` (${notifications.length})` : ""}`}
                     className="relative z-40 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors">
                     <Bell className="w-4 h-4" />
                     {notifications.length > 0 && (
