@@ -422,7 +422,7 @@ export function noteForAppointment(appointmentId: string, seed: { patientId: str
 
 /** A note is content-editable by its author while it is a draft or has been
  *  returned for revision. Signed / awaiting-co-signature notes are frozen. */
-export function isEditable(n: EncounterNoteDoc | undefined): n is EncounterNoteDoc {
+export function isEditable(n: EncounterNoteDoc | undefined): boolean {
   return !!n && (n.status === "draft" || n.status === "returned");
 }
 
