@@ -10,6 +10,7 @@ import {
 import { cn } from "@/lib/utils";
 import { PractMdLogo, PractMdLockup } from "@/components/brand/PractMdLogo";
 import { markProviderOnboarded } from "@/lib/provider-onboarding";
+import { acceptInvitation, completeAccountStep } from "@/lib/provider-activation";
 import { FakeQrCode } from "./FakeQrCode";
 import { CodeInput } from "./CodeInput";
 
@@ -44,6 +45,7 @@ const SLIDES = [
 ];
 
 type Step =
+  | "verify"
   | "password"
   | "activated"
   | "mfa-intro"
@@ -52,7 +54,11 @@ type Step =
   | "mfa-connect"
   | "mfa-verify"
   | "mfa-recovery"
+  | "terms"
   | "mfa-done";
+
+const DOB_ON_FILE = "1978-04-15";
+const MOBILE_LAST4 = "6101";
 
 const MFA_SEQUENCE: Step[] = [
   "mfa-intro", "mfa-method", "mfa-download", "mfa-connect", "mfa-verify", "mfa-recovery",
@@ -68,7 +74,10 @@ const BACK: Partial<Record<Step, Step>> = {
 
 export default function ProviderOnboarding() {
   const router = useRouter();
-  const [step, setStep] = useState<Step>("password");
+  const [step, setStep] = useState<Step>("verify");
+  const [idValue, setIdValue] = useState("");
+  const [idError, setIdError] = useState(false);
+  const [termsAck, setTermsAck] = useState(false);
 
   // password
   const [pw, setPw] = useState("");
@@ -88,7 +97,23 @@ export default function ProviderOnboarding() {
 
   function finish() {
     markProviderOnboarded();
-    router.push("/provider/today");
+    ["welcome", "verify-identity", "set-password", "enrol-mfa", "accept-terms"].forEach((s) =>
+      completeAccountStep(s as Parameters<typeof completeAccountStep>[0]),
+    );
+    router.push("/provider/activate");
+  }
+
+  function verifyIdentity() {
+    const v = idValue.trim();
+    if (v === DOB_ON_FILE || v === MOBILE_LAST4) {
+      setIdError(false);
+      acceptInvitation();
+      completeAccountStep("welcome");
+      completeAccountStep("verify-identity");
+      setStep("password");
+    } else {
+      setIdError(true);
+    }
   }
 
   function verifyCode() {
@@ -121,6 +146,39 @@ export default function ProviderOnboarding() {
     } catch {
       /* ignore */
     }
+  }
+
+  /* ── Screen 0 — verify identity (split) ──────────────────────────────── */
+  if (step === "verify") {
+    return (
+      <div className="min-h-screen lg:flex bg-white dark:bg-navy-950">
+        <div className="lg:w-[46%] xl:w-[44%] bg-navy-50 dark:bg-navy-950 flex flex-col justify-center px-5 py-10 sm:px-8 lg:px-10 xl:px-14 lg:h-screen lg:overflow-y-auto">
+          <div className="w-full max-w-[452px] mx-auto my-6 bg-white dark:bg-navy-900 rounded-[20px] p-7 sm:p-8 practmd-card-pop">
+            <h1 className="text-[26px] font-bold text-navy-900 dark:text-slate-100 tracking-tight">
+              Let&apos;s confirm it&apos;s you
+            </h1>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+              You were invited to <span className="font-semibold text-navy-800 dark:text-slate-200">{CLINIC_NAME}</span> as a provider.
+              Confirm one detail from your record — light by design, your admin already knows who they invited.
+            </p>
+            <div className="mt-6">
+              <Label>Date of birth, or the last 4 digits of your mobile</Label>
+              <input
+                value={idValue}
+                onChange={(e) => { setIdValue(e.target.value); setIdError(false); }}
+                placeholder="YYYY-MM-DD  or  ####"
+                className="w-full px-3.5 py-2.5 rounded-xl text-sm border border-slate-200 dark:border-navy-800 bg-slate-50 dark:bg-navy-950 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+              {idError && <p className="mt-2 text-xs text-red-500">That doesn&apos;t match your record. (Demo: {DOB_ON_FILE} or {MOBILE_LAST4})</p>}
+            </div>
+            <PrimaryButton className="mt-6" disabled={idValue.trim().length < 4} onClick={verifyIdentity}>
+              Verify and continue
+            </PrimaryButton>
+          </div>
+        </div>
+        <BrandPanel />
+      </div>
+    );
   }
 
   /* ── Screen 1A — split: set password (left) + brand panel (right) ─────── */
@@ -173,7 +231,7 @@ export default function ProviderOnboarding() {
             <PrimaryButton
               className="mt-6"
               disabled={!isPasswordValid(pw) || pw !== confirm}
-              onClick={() => setStep("activated")}
+              onClick={() => { completeAccountStep("set-password"); setStep("activated"); }}
             >
               Set up my account
             </PrimaryButton>
@@ -452,8 +510,31 @@ export default function ProviderOnboarding() {
                   />
                   I have saved my recovery codes somewhere secure.
                 </label>
-                <PrimaryButton className="mt-5" disabled={!savedAck} onClick={() => setStep("mfa-done")}>
+                <PrimaryButton className="mt-5" disabled={!savedAck} onClick={() => { completeAccountStep("enrol-mfa"); setStep("terms"); }}>
                   Continue
+                </PrimaryButton>
+              </div>
+            )}
+
+            {step === "terms" && (
+              <div>
+                <IconBadge><Lock className="w-6 h-6" /></IconBadge>
+                <h1 className="mt-4 text-xl font-bold text-navy-900 dark:text-slate-100">Review and accept</h1>
+                <p className="mt-2 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                  This account holds clinical records. Please accept the platform terms and {CLINIC_NAME}&apos;s acceptable-use policy.
+                </p>
+                <div className="mt-4 h-40 overflow-y-auto rounded-xl border border-slate-200 dark:border-navy-800 bg-slate-50 dark:bg-navy-950 p-3 text-xs text-slate-500 dark:text-slate-400 leading-relaxed space-y-2">
+                  <p>You will access protected health information only for patients in your care or as your role requires. Every record you open is audit-logged.</p>
+                  <p>You are responsible for the security of this device and will lock or sign out when leaving it unattended. The portal also locks automatically after 15 minutes of inactivity.</p>
+                  <p>Clinical documentation you sign is a legal record and is immutable — corrections are made by addendum. Signing an encounter note creates the associated bill.</p>
+                  <p>Sharing credentials, or accessing records out of curiosity, is grounds for immediate suspension.</p>
+                </div>
+                <label className="mt-4 flex items-start gap-2.5 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                  <input type="checkbox" checked={termsAck} onChange={(e) => setTermsAck(e.target.checked)} className="mt-0.5 w-4 h-4 rounded accent-brand-600" />
+                  I have read and accept the platform terms and the acceptable-use policy.
+                </label>
+                <PrimaryButton className="mt-5" disabled={!termsAck} onClick={() => { completeAccountStep("accept-terms"); setStep("mfa-done"); }}>
+                  Accept and continue
                 </PrimaryButton>
               </div>
             )}
