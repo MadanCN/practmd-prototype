@@ -1,11 +1,12 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ClipboardList, Search, NotebookPen, FileCheck2, ChevronRight, Users, Undo2 } from "lucide-react";
 import ProviderLayout from "@/components/provider/layout/ProviderLayout";
 import { useEncounterNotes, getAllNotes, getNotesToCoSign, type EncounterNoteDoc } from "@/lib/encounter-notes-store";
+import { syncUnsignedNoteEscalations } from "@/lib/provider-tasks-store";
 import { useProviderSession } from "@/lib/provider-session";
 import { useQueryHighlight } from "@/lib/useQueryHighlight";
 import { visitColor, visitTypeDef } from "@/lib/visit-types";
@@ -48,6 +49,8 @@ function EncounterNotesInner() {
 
   const mine = notes.filter((n) => n.providerId === session.provider.id);
   const toCoSign = getNotesToCoSign(session.provider.displayName);
+
+  useEffect(() => { syncUnsignedNoteEscalations(session.provider.id); }, [session.provider.id]);
 
   const TABS: { id: FilterId; label: string; count: number; hidden?: boolean }[] = [
     { id: "unsigned", label: "Unsigned", count: mine.filter((n) => n.status === "draft").length },
