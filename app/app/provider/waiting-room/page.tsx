@@ -10,9 +10,9 @@ import ProviderLayout from "@/components/provider/layout/ProviderLayout";
 import { buildWaitingRoom, type WrEntry, type WrStatus } from "@/lib/provider-schedule";
 import { CC_APPOINTMENTS } from "@/data/cc-appointments";
 import { useEncounterStore, markCalled, startSession, checkOutPatient } from "@/lib/encounter-store";
+import { useProviderSession } from "@/lib/provider-session";
+import { PATIENT_FORMS_BY_ID, CARE_COMMENTS_BY_ID } from "@/data/provider-patient-clinical";
 import { cn } from "@/lib/utils";
-
-const CURRENT_PROVIDER_ID = "p1";
 
 const MODE_CFG = {
   "in-person": { icon: MapPin, label: "In Person", cls: "text-blue-600 bg-blue-50 dark:bg-blue-950/30 dark:text-blue-400" },
@@ -37,8 +37,17 @@ type ModeFilter = "all" | "in-person" | "telehealth" | "phone";
 export default function WaitingRoomPage() {
   const router = useRouter();
   useEncounterStore(); // subscribe so this page re-renders on call-in / session / check-out
-  const entries = buildWaitingRoom(CURRENT_PROVIDER_ID); // re-derived fresh from the store on every render
+  const session = useProviderSession();
+  const [, setTick] = useState(0);
+  const [lastRefresh, setLastRefresh] = useState(() => Date.now());
+  const entries = buildWaitingRoom(session.provider.id); // re-derived fresh; buildWaitingRoom order is stable so counts update without reshuffling
   const [refreshing, setRefreshing] = useState(false);
+
+  // Auto-refresh every 30s — counts update without reordering the list body.
+  useEffect(() => {
+    const t = setInterval(() => { setTick((n) => n + 1); setLastRefresh(Date.now()); }, 30000);
+    return () => clearInterval(t);
+  }, []);
   const [calling, setCalling] = useState<string | null>(null);
   const [activeMode, setActiveMode] = useState<ModeFilter>("all");
   const [highlightId] = useState<string | null>(() => {
@@ -58,7 +67,7 @@ export default function WaitingRoomPage() {
 
   function refresh() {
     setRefreshing(true);
-    setTimeout(() => { setRefreshing(false); }, 1200);
+    setTimeout(() => { setRefreshing(false); setLastRefresh(Date.now()); setTick((n) => n + 1); }, 800);
   }
 
   function callIn(id: string) {
@@ -102,13 +111,13 @@ export default function WaitingRoomPage() {
         <div>
           <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Waiting Room</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Dr. Sarah Mitchell · {activeMode === "all" ? "All patients" : `Showing: ${modeLabelMap[activeMode]}`}
+            {session.provider.displayName} · Shared with front desk · {activeMode === "all" ? "All patients" : `Showing: ${modeLabelMap[activeMode]}`}
           </p>
         </div>
         <button onClick={refresh}
           className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
           {refreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-          Refresh
+          Updated {Math.round((Date.now() - lastRefresh) / 1000)}s ago
         </button>
       </div>
 
@@ -181,6 +190,31 @@ export default function WaitingRoomPage() {
   );
 }
 
+function RowFlags({ entry }: { entry: WrEntry }) {
+  const forms = (PATIENT_FORMS_BY_ID[entry.patientId] ?? []).filter((f) => f.status !== "completed");
+  const alerts = (CARE_COMMENTS_BY_ID[entry.patientId] ?? []).filter((c) => c.type === "alert" && !c.resolved);
+  if (entry.insuranceStatus === "active" && forms.length === 0 && alerts.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-1 mt-1.5">
+      {entry.insuranceStatus !== "active" && (
+        <span className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+          <AlertCircle className="w-3 h-3" /> Insurance {entry.insuranceStatus} — verify before visit
+        </span>
+      )}
+      {forms.length > 0 && (
+        <span className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+          <FileText className="w-3 h-3" /> {forms.length} assigned form{forms.length > 1 ? "s" : ""} not completed
+        </span>
+      )}
+      {alerts.length > 0 && (
+        <span className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400">
+          <AlertCircle className="w-3 h-3" /> {alerts.length} alert-flagged care comment{alerts.length > 1 ? "s" : ""}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function PatientCard({ entry, onCall, calling, onJoin, onStartSession, onCheckOut, highlighted, cardRef }: {
   entry: WrEntry;
   onCall: () => void;
@@ -233,12 +267,7 @@ function PatientCard({ entry, onCall, calling, onJoin, onStartSession, onCheckOu
             )}
             {entry.room && <span className="text-slate-400">· {entry.room}</span>}
           </div>
-          {entry.insuranceStatus !== "active" && (
-            <div className="flex items-center gap-1.5 mt-1.5 text-xs text-amber-600 dark:text-amber-400">
-              <AlertCircle className="w-3 h-3" />
-              Insurance {entry.insuranceStatus} — verify before visit
-            </div>
-          )}
+          <RowFlags entry={entry} />
         </div>
 
         {/* Actions */}

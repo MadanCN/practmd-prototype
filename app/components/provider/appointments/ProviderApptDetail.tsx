@@ -12,20 +12,23 @@ import { useRouter } from "next/navigation";
 import {
   ChevronLeft, X, Pencil, XCircle, LogIn, Play, LogOut, ShieldCheck, Loader2,
   Video, Phone, MapPin, Clock, CalendarDays, FileText, CheckCircle2,
-  UserX, NotebookPen, ArrowRight, CreditCard,
+  UserX, NotebookPen, ArrowRight, CreditCard, TriangleAlert, CalendarClock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Drawer from "@/components/ui/Drawer";
 import { CC_PATIENTS } from "@/data/cc-patients";
 import { CLINICS } from "@/data/clinics";
 import { PROVIDERS } from "@/data/providers";
+import { getPatientProfile } from "@/data/provider-patients";
+import { PATIENT_FORMS_BY_ID } from "@/data/provider-patient-clinical";
 import { type CcAppointment, type AppointmentStatus } from "@/data/cc-appointments";
 import {
   useEncounterStore, getEffectiveAppointment,
   getNoteIdForAppointment, checkInPatient, startSession, checkOutPatient,
   setApptStatus, pushNotification,
 } from "@/lib/encounter-store";
-import { useEncounterNotes, getNoteForAppointment } from "@/lib/encounter-notes-store";
+import { useEncounterNotes, getNoteForAppointment, getNotesForPatient } from "@/lib/encounter-notes-store";
+import { addFollowUpTask } from "@/lib/provider-tasks-store";
 import { visitTypeDef, VISIT_TYPES } from "@/lib/visit-types";
 
 function fmt12(t: string) {
@@ -172,6 +175,30 @@ function EditApptModal({ appt, patientName, onClose, onConfirm }: { appt: CcAppo
   );
 }
 
+function FollowUpModal({ patientName, onClose, onConfirm }: { patientName: string; onClose: () => void; onConfirm: (rec: string, interval: string) => void }) {
+  const [rec, setRec] = useState("");
+  const [interval, setIntervalV] = useState("2 weeks");
+  return (
+    <ModalShell title="Recommend a follow-up" subtitle={`${patientName} · raises a booking task to the coordinator`} onClose={onClose}
+      footer={<>
+        <button onClick={onClose} className="flex-1 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-400">Cancel</button>
+        <button onClick={() => rec.trim() && onConfirm(rec.trim(), interval)} disabled={!rec.trim()}
+          className="flex-1 py-2.5 rounded-lg text-sm font-semibold practmd-gradient text-white disabled:opacity-40">Send to coordinator</button>
+      </>}>
+      <div>
+        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">Recommendation</label>
+        <textarea rows={2} value={rec} onChange={(e) => setRec(e.target.value)} className={cn(fieldCls, "resize-none")} placeholder="e.g. Book them again in two weeks for a med check" />
+      </div>
+      <div>
+        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">Suggested interval</label>
+        <select value={interval} onChange={(e) => setIntervalV(e.target.value)} className={fieldCls}>
+          {["1 week", "2 weeks", "1 month", "6 weeks", "3 months"].map((x) => <option key={x}>{x}</option>)}
+        </select>
+      </div>
+    </ModalShell>
+  );
+}
+
 // ── small presentational helpers ────────────────────────────────────────────
 
 function Card({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
@@ -210,8 +237,16 @@ export function ProviderApptDetail({ appt: rawAppt, mode, onClose }: { appt: CcA
   const noteDoc = getNoteForAppointment(appt.id);
 
   const [eligState, setEligState] = useState<"idle" | "checking" | "done">("idle");
-  const [modal, setModal] = useState<"cancel" | "edit" | null>(null);
+  const [modal, setModal] = useState<"cancel" | "edit" | "follow-up" | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+
+  const profile = getPatientProfile(appt.patientId);
+  const assignedForms = (PATIENT_FORMS_BY_ID[appt.patientId] ?? []).filter(
+    (f) => f.appointmentId === appt.id || (appt.forms ?? []).some((n) => f.name.toLowerCase().includes(n.toLowerCase()) || n.toLowerCase().includes(f.name.toLowerCase())),
+  );
+  const incompleteForms = assignedForms.filter((f) => f.status !== "completed");
+  const priorVisitNote = getNotesForPatient(appt.patientId).find((n) => n.appointmentId !== appt.id && n.date < appt.date);
+  const isFirstVisit = getNotesForPatient(appt.patientId).length === 0;
 
   const vt = visitTypeDef(appt.visitType);
   const st = STATUS_CFG[appt.status] ?? STATUS_CFG.confirmed;
@@ -261,8 +296,15 @@ export function ProviderApptDetail({ appt: rawAppt, mode, onClose }: { appt: CcA
     flash("Marked as no-show.");
   }
 
+  const canJoin = appt.mode === "telehealth" && ["confirmed", "arrived", "in-session"].includes(appt.status);
+
   const actions = (
     <div className="flex flex-wrap gap-2">
+      {canJoin && (
+        <Link href={`/provider/telehealth/${appt.id}`} className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold practmd-gradient text-white">
+          <Video className="w-4 h-4" /> Join
+        </Link>
+      )}
       {canCheckIn && (
         <button onClick={doCheckIn} className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold practmd-gradient text-white">
           <LogIn className="w-4 h-4" /> Check in patient
@@ -293,6 +335,9 @@ export function ProviderApptDetail({ appt: rawAppt, mode, onClose }: { appt: CcA
           <UserX className="w-3.5 h-3.5" /> No-show
         </button>
       )}
+      <button onClick={() => setModal("follow-up")} className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
+        <CalendarClock className="w-3.5 h-3.5" /> Recommend follow-up
+      </button>
       {!canCheckIn && checkInHint && (
         <span className="flex items-center gap-1.5 px-3 py-2 text-xs text-slate-400">
           <Clock className="w-3.5 h-3.5" /> {checkInHint}
@@ -349,6 +394,44 @@ export function ProviderApptDetail({ appt: rawAppt, mode, onClose }: { appt: CcA
       </div>
 
       {mode === "page" && <div>{actions}</div>}
+
+      {isFirstVisit && (
+        <div className="rounded-xl border border-sky-200 dark:border-sky-900 bg-sky-50 dark:bg-sky-950/20 px-4 py-2.5 text-sm text-sky-700 dark:text-sky-300 font-medium">
+          First visit with you
+        </div>
+      )}
+
+      {incompleteForms.length > 0 && (
+        <div className="rounded-xl border-2 border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-4">
+          <div className="flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-300">
+            <TriangleAlert className="w-4 h-4" /> {incompleteForms.length} assigned form{incompleteForms.length > 1 ? "s" : ""} not completed
+          </div>
+          <ul className="mt-1.5 space-y-1">
+            {incompleteForms.map((f) => (
+              <li key={f.id} className="text-xs text-amber-700 dark:text-amber-400">{f.name} — {f.status}</li>
+            ))}
+          </ul>
+          <p className="mt-1.5 text-[11px] text-amber-600 dark:text-amber-500">Know before the patient sits down, not after.</p>
+        </div>
+      )}
+
+      {/* previous visit & note */}
+      {priorVisitNote && (
+        <Card title="Previous visit">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+              <NotebookPen className="w-4 h-4 text-slate-500" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{new Date(priorVisitNote.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} · {priorVisitNote.visitType}</p>
+              <p className="text-xs text-slate-400">{priorVisitNote.noteType} note · {priorVisitNote.status}</p>
+            </div>
+            <Link href={`/provider/encounters/${priorVisitNote.id}`} className="flex items-center gap-1 text-sm font-semibold text-brand-700 dark:text-brand-400 hover:underline shrink-0">
+              View <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </Card>
+      )}
 
       {/* encounter note */}
       {noteId && (
@@ -419,21 +502,28 @@ export function ProviderApptDetail({ appt: rawAppt, mode, onClose }: { appt: CcA
       </Card>
 
       {/* forms */}
-      {appt.forms && appt.forms.length > 0 && (
-        <Card title="Forms assigned">
+      {assignedForms.length > 0 && (
+        <Card title="Assigned forms">
           <ul className="space-y-1.5">
-            {appt.forms.map((f) => (
-              <li key={f} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                <FileText className="w-3.5 h-3.5 text-slate-400 shrink-0" /> {f}
+            {assignedForms.map((f) => (
+              <li key={f.id} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                {f.status === "completed"
+                  ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  : <TriangleAlert className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
+                <span className="flex-1">{f.name}</span>
+                {f.score != null && <span className="text-xs text-slate-400">score {f.score}{f.maxScore ? `/${f.maxScore}` : ""}</span>}
               </li>
             ))}
           </ul>
         </Card>
       )}
 
-      {/* reason */}
+      {/* reason & referral */}
       <Card title="Reason for visit">
         <p className="text-sm text-slate-700 dark:text-slate-300">{appt.notes || "No reason recorded for this visit."}</p>
+        {profile?.referral?.source && (
+          <Row label="Referral source">{profile.referral.source}{profile.referral.specificSource ? ` — ${profile.referral.specificSource}` : ""}</Row>
+        )}
       </Card>
 
       {/* terminal states */}
@@ -457,6 +547,10 @@ export function ProviderApptDetail({ appt: rawAppt, mode, onClose }: { appt: CcA
     <>
       {modal === "cancel" && <CancelApptModal appt={appt} patientName={patient.displayName} onClose={() => setModal(null)} onConfirm={doCancel} />}
       {modal === "edit" && <EditApptModal appt={appt} patientName={patient.displayName} onClose={() => setModal(null)} onConfirm={doEdit} />}
+      {modal === "follow-up" && (
+        <FollowUpModal patientName={patient.displayName} onClose={() => setModal(null)}
+          onConfirm={(rec, interval) => { addFollowUpTask({ patientId: patient.id, patientName: patient.displayName, recommendation: rec, interval }); setModal(null); flash("Follow-up recommendation sent to the coordinator."); }} />
+      )}
       {toast && (
         <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[90] px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium shadow-xl">
           {toast}
