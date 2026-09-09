@@ -223,6 +223,10 @@ export default function ProviderSettingsPage() {
                       <option value="off">Off</option><option value="daily">Daily digest</option><option value="twice-daily">Twice daily</option><option value="realtime">As they occur</option>
                     </select>
                   </Field>
+                  <div className="rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400">
+                    <p className="font-semibold text-slate-600 dark:text-slate-300 mb-1">Escalation schedule (set by your clinic)</p>
+                    Day 2 — reminder to you · Day 5 — escalation to the clinic admin. The value at risk is shown at every level.
+                  </div>
                   <div>
                     <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Delivery channels</p>
                     <div className="flex flex-wrap gap-3">

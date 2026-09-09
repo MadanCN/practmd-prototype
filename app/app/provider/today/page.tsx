@@ -1,13 +1,14 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import ProviderLayout from "@/components/provider/layout/ProviderLayout";
 import { WeekBars, SignedDonut } from "@/components/provider/today/TodayCharts";
 import { CC_APPOINTMENTS } from "@/data/cc-appointments";
 import { CC_PATIENTS } from "@/data/cc-patients";
-import { PROVIDERS } from "@/data/providers";
 import { PROVIDER_MESSAGE_THREADS, PROVIDER_RESULTS, PROVIDER_REFILLS } from "@/data/provider-today";
-import { useProviderTasks, getTasks, slaRemaining } from "@/lib/provider-tasks-store";
+import { useProviderTasks, getTasks, slaRemaining, syncUnsignedNoteEscalations } from "@/lib/provider-tasks-store";
+import { useProviderSession } from "@/lib/provider-session";
 import { useEncounterStore, getEffectiveAppointment, checkInPatient } from "@/lib/encounter-store";
 import { useEncounterNotes, getAllNotes } from "@/lib/encounter-notes-store";
 import { useChargeStore } from "@/lib/charge-store";
@@ -18,8 +19,6 @@ import {
   NotebookPen, ArrowRight, ChevronRight, Video, Phone, LogIn, Play, AlertTriangle, TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const CURRENT_PROVIDER_ID = "p1";
 
 function fmt12(t: string) {
   const [h, m] = t.split(":").map(Number);
@@ -70,8 +69,14 @@ export default function ProviderTodayPage() {
   useEncounterNotes();
   useChargeStore();
   useProviderTasks();
+  const session = useProviderSession();
+  const CURRENT_PROVIDER_ID = session.provider.id;
 
-  const provider = PROVIDERS.find((p) => p.id === CURRENT_PROVIDER_ID)!;
+  useEffect(() => {
+    syncUnsignedNoteEscalations(CURRENT_PROVIDER_ID);
+  }, [CURRENT_PROVIDER_ID]);
+
+  const provider = session.provider;
   const todayIso = new Date().toISOString().split("T")[0];
   const now = new Date();
   const greeting = now.getHours() < 12 ? "Good morning" : now.getHours() < 17 ? "Good afternoon" : "Good evening";

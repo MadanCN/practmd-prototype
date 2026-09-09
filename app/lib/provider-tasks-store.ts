@@ -8,6 +8,8 @@
 import { useSyncExternalStore } from "react";
 import { createPersistedStore } from "@/lib/persist";
 import { PROVIDER_TASKS } from "@/data/provider-today";
+import { getAllNotes, type EncounterNoteDoc } from "@/lib/encounter-notes-store";
+import { visitTypeDef } from "@/lib/visit-types";
 
 export type ProviderTaskKind =
   | "sign-note" | "cosign-note" | "note-returned" | "unsigned-escalation"
@@ -72,13 +74,6 @@ function seed(): ProviderTaskItem[] {
   }));
   return [
     ...fromLegacy,
-    {
-      id: "tk_esc1", kind: "unsigned-escalation", title: "Unsigned note escalation — Carmen Rivera",
-      detail: "Discharge summary is 6 days past the signature SLA. $240 unbilled. Escalated to the clinic admin.",
-      patientId: "pt14", patientName: "Carmen Rivera",
-      dueAt: hoursFromNow(-4), createdAt: hoursFromNow(-30), status: "open", lane: "mine",
-      actionHref: "/provider/encounter-notes",
-    },
     {
       id: "tk_cred1", kind: "credential-expiring", title: "DEA registration expires in 52 days",
       detail: "Informational — the action sits with Credentialing. Renew before expiry to avoid an auto-suspend.",
@@ -173,6 +168,64 @@ export function addRequestTask(input: { kind: ProviderTaskKind; title: string; d
   };
   store.set((s) => ({ tasks: [task, ...s.tasks] }));
   return task;
+}
+
+/* ── Unsigned-note escalation (PRD: reminder → clinic-admin escalation, value
+ *    at risk shown at every level; configurable schedule) ─────────────────── */
+
+export const ESCALATION_SCHEDULE = {
+  /** days after date-of-service a reminder is raised to the provider */
+  providerReminderDays: 2,
+  /** days after which it escalates to the clinic admin */
+  clinicAdminEscalationDays: 5,
+};
+
+function noteAgeDays(n: EncounterNoteDoc) {
+  return Math.floor((Date.now() - new Date(n.date + "T12:00:00").getTime()) / 86400000);
+}
+
+/** Idempotently reconcile escalation tasks against the current unsigned notes
+ *  for a provider. Call from Today / Clinical Notes on mount. */
+export function syncUnsignedNoteEscalations(providerId: string) {
+  const unsigned = getAllNotes().filter((n) => n.providerId === providerId && (n.status === "draft" || n.status === "returned"));
+  store.set((s) => {
+    let tasks = s.tasks;
+    const existingByNote = new Map(tasks.filter((t) => t.autoCloseRef?.type === "note").map((t) => [t.autoCloseRef!.id, t]));
+
+    for (const n of unsigned) {
+      const age = noteAgeDays(n);
+      if (age < ESCALATION_SCHEDULE.providerReminderDays) continue;
+      const value = visitTypeDef(n.visitType).typicalCharge;
+      const escalated = age >= ESCALATION_SCHEDULE.clinicAdminEscalationDays;
+      const existing = existingByNote.get(n.id);
+      const detail = escalated
+        ? `${age} days unsigned — escalated to the clinic admin. ~$${value} unbilled.`
+        : `${age} days unsigned. ~$${value} unbilled — sign before it escalates to your clinic admin at day ${ESCALATION_SCHEDULE.clinicAdminEscalationDays}.`;
+      if (existing) {
+        if (existing.detail !== detail || existing.kind !== (escalated ? "unsigned-escalation" : "sign-note")) {
+          tasks = tasks.map((t) => (t.id === existing.id ? { ...t, detail, kind: escalated ? "unsigned-escalation" : "sign-note" } : t));
+        }
+      } else {
+        tasks = [
+          {
+            id: `tk_esc_${n.id}`,
+            kind: escalated ? "unsigned-escalation" : "sign-note",
+            title: `${escalated ? "Escalation" : "Sign note"} — ${n.patientName}`,
+            detail,
+            patientId: n.patientId, patientName: n.patientName,
+            dueAt: hoursFromNow(escalated ? -12 : 12),
+            createdAt: new Date().toISOString(),
+            status: "open",
+            lane: "mine",
+            actionHref: `/provider/encounters/${n.id}`,
+            autoCloseRef: { type: "note", id: n.id },
+          },
+          ...tasks,
+        ];
+      }
+    }
+    return { tasks };
+  });
 }
 
 /** "3h left" / "overdue by 2h" — time remaining, never elapsed. */
