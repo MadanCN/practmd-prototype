@@ -43,7 +43,8 @@ npm-debug.log*
 /app/app/package-lock.json
 /app/app/screenshot-*
 /app/app/ss-*
-/app/app/ss2.mjs
+/app/app/*.mjs
 /app/app/*.png
+/app/app/*.jpg
 /app/design/
 /app/netlify.toml
