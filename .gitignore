@@ -19,3 +19,31 @@ npm-debug.log*
 # Editor
 .vscode/
 .idea/
+
+# Stale OneDrive/other-device duplicate of the project — never commit.
+# The real project is app/ ; the App Router is app/app/<route>.
+# These are dupes and must stay ignored (see memory: repo-layout).
+/app/app/app/
+/app/app/components/
+/app/app/contexts/
+/app/app/data/
+/app/app/docs/
+/app/app/lib/
+/app/app/public/
+/app/app/types/
+/app/app/AGENTS.md
+/app/app/CLAUDE.md
+/app/app/README.md
+/app/app/.gitignore
+/app/app/eslint.config.mjs
+/app/app/next.config.ts
+/app/app/postcss.config.mjs
+/app/app/tsconfig.json
+/app/app/package.json
+/app/app/package-lock.json
+/app/app/screenshot-*
+/app/app/ss-*
+/app/app/ss2.mjs
+/app/app/*.png
+/app/design/
+/app/netlify.toml
