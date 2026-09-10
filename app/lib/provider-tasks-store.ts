@@ -14,7 +14,7 @@ import { visitTypeDef } from "@/lib/visit-types";
 export type ProviderTaskKind =
   | "sign-note" | "cosign-note" | "note-returned" | "unsigned-escalation"
   | "results-review" | "refill-request" | "coordinator-query" | "credential-expiring"
-  | "follow-up-booking" | "prior-auth" | "callback" | "admin";
+  | "follow-up-booking" | "prior-auth" | "callback" | "admin" | "rcm-coding-change";
 
 export const TASK_KIND_LABEL: Record<ProviderTaskKind, string> = {
   "sign-note": "Sign note",
@@ -29,6 +29,7 @@ export const TASK_KIND_LABEL: Record<ProviderTaskKind, string> = {
   "prior-auth": "Prior authorization",
   callback: "Callback",
   admin: "Administrative",
+  "rcm-coding-change": "Revenue Cycle — coding change",
 };
 
 export interface ProviderTaskItem {

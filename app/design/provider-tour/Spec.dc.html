@@ -1,0 +1,142 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;450;500;600;700&family=Geist+Mono:wght@400;500&display=swap');
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Geist', system-ui, -apple-system, sans-serif; color: #0f172a; background: #f8fafc; }
+    a { color: #0a827a; } a:hover { color: #0e625d; }
+    .wrap { width: 1240px; padding: 40px 48px 56px; }
+    h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 4px; }
+    .lede { font-size: 14px; color: #64748b; margin: 0 0 32px; max-width: 620px; line-height: 1.55; }
+    h2 { font-size: 12px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #05a99a; margin: 34px 0 14px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 22px 24px; }
+    .card h3 { font-size: 14px; font-weight: 600; margin: 0 0 8px; }
+    .card p { font-size: 13px; line-height: 1.6; color: #475569; margin: 0 0 8px; }
+    .card p:last-child { margin-bottom: 0; }
+    code, .mono { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 12px; background: #f1f5f9; padding: 1px 5px; border-radius: 4px; color: #0f172a; }
+    .code { font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11.5px; line-height: 1.7; background: #0c111d; color: #cbd5e1; border-radius: 12px; padding: 15px 18px; overflow-x: auto; margin: 10px 0 0; }
+    .code div { white-space: pre; }
+    .code .k { color: #5aead9; } .code .s { color: #fca5a5; } .code .c { color: #64748b; }
+    .steps { display: flex; align-items: flex-start; gap: 0; margin-top: 6px; }
+    .stp { flex: 1; text-align: center; position: relative; }
+    .stp .n { width: 30px; height: 30px; border-radius: 50%; border: 2px solid #cbfbf3; color: #05a99a; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; margin: 0 auto 8px; background: #fff; }
+    .stp.done .n { background: #05a99a; border-color: #05a99a; color: #fff; }
+    .stp .t { font-size: 11px; font-weight: 600; color: #475569; }
+    .stp::after { content: ''; position: absolute; top: 15px; left: 60%; right: -40%; height: 2px; background: #e2e8f0; }
+    .stp:last-child::after { display: none; }
+    .anat { display: flex; gap: 24px; align-items: flex-start; }
+    .coach { width: 300px; flex: none; background: #fff; border-radius: 14px; box-shadow: 0 22px 48px -14px rgba(0,43,97,0.28), 0 0 0 1px rgba(0,43,97,0.05); padding: 16px 18px 14px; }
+    .coach .ct { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+    .coach .cs { font-size: 11px; font-weight: 700; color: #05a99a; background: #ecfefb; padding: 2px 8px; border-radius: 999px; }
+    .coach .cg { font-size: 11px; font-weight: 600; color: #94a3b8; }
+    .coach .cx { margin-left: auto; color: #cbd5e1; }
+    .coach h4 { margin: 0 0 5px; font-size: 15px; font-weight: 700; }
+    .coach .cp { margin: 0; font-size: 13px; line-height: 1.5; color: #475569; }
+    .coach .cd { display: flex; gap: 5px; margin: 12px 0; }
+    .coach .cd i { width: 6px; height: 6px; border-radius: 50%; background: #e2e8f0; }
+    .coach .cd i.on { background: #05a99a; }
+    .coach .cb { display: flex; align-items: center; gap: 8px; }
+    .coach .cb b { font-size: 12px; font-weight: 600; padding: 7px 13px; border-radius: 9px; }
+    .callouts { flex: 1; display: flex; flex-direction: column; gap: 12px; padding-top: 6px; }
+    .callo { display: flex; gap: 12px; font-size: 12.5px; color: #475569; line-height: 1.5; }
+    .callo b { color: #0f172a; font-weight: 600; }
+    .callo .d { width: 7px; height: 7px; border-radius: 50%; background: #05a99a; margin-top: 6px; flex: none; }
+    .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .tag { font-size: 11px; font-weight: 500; color: #475569; background: #f1f5f9; border-radius: 6px; padding: 3px 8px; }
+  </style>
+</helmet>
+
+<div class="wrap">
+  <h1>Guided tour &amp; contextual help — system spec</h1>
+  <p class="lede">One reusable pattern, applied to every provider nav page. A first-visit tour teaches the page; a persistent <strong>?</strong> in the header reopens that page's help and replays its tour. Each page supplies only its own step list and help copy.</p>
+
+  <h2>The journey per page</h2>
+  <div class="steps">
+    <div class="stp done"><div class="n">1</div><div class="t">Land on the page<br>(first time)</div></div>
+    <div class="stp done"><div class="n">2</div><div class="t">Welcome card<br>Start / Skip</div></div>
+    <div class="stp done"><div class="n">3</div><div class="t">Coach-marks<br>spotlight each area</div></div>
+    <div class="stp"><div class="n">4</div><div class="t">Final step<br>spotlights the ?</div></div>
+    <div class="stp"><div class="n">5</div><div class="t">Done — ? stays<br>in the header</div></div>
+    <div class="stp"><div class="n">6</div><div class="t">? opens help<br>+ Take tour again</div></div>
+  </div>
+
+  <h2>Coach-mark anatomy</h2>
+  <div class="card">
+    <div class="anat">
+      <div class="coach">
+        <div class="ct"><span class="cs">3 / 8</span><span class="cg">Today tour</span><span class="cx">✕</span></div>
+        <h4>Unsigned notes come first</h4>
+        <p class="cp">Every unsigned note is a finished visit that can't be billed yet.</p>
+        <div class="cd"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="cb"><b style="color:#94a3b8">Skip tour</b><b style="border:1px solid #e2e8f0;color:#475569;margin-left:auto">Back</b><b style="background:linear-gradient(120deg,#002b61,#0a827a);color:#fff">Next</b></div>
+      </div>
+      <div class="callouts">
+        <div class="callo"><span class="d"></span><div><b>Spotlight</b> — the target element is measured with <code>getBoundingClientRect</code> and cut out of a 60%-black scrim, ringed in <code>#03d3bf</code>. It animates between steps.</div></div>
+        <div class="callo"><span class="d"></span><div><b>Step counter &amp; progress dots</b> — position in the page's step list. The list length is per page (5–8 steps).</div></div>
+        <div class="callo"><span class="d"></span><div><b>Skip tour</b> and the <b>✕</b> both end the tour and mark it seen. <b>Back</b> is hidden on step 1. <b>Next</b> becomes <b>Finish</b> on the last step.</div></div>
+        <div class="callo"><span class="d"></span><div><b>Click anywhere on the scrim</b> advances — the same as Next.</div></div>
+        <div class="callo"><span class="d"></span><div><b>Placement</b> — the card sits below its target, flipping above when there's no room, and clamps to the viewport. The final step pins it under the header <b>?</b>.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <h2>First-visit trigger</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>When the tour fires</h3>
+      <p>On mount of a nav page's main route, if that page's seen-flag is absent. It never fires on a sub-route, drawer, or modal — only the page a nav item points at.</p>
+      <p>Skipping or finishing sets the flag. The <code>?</code> → <em>Take tour again</em> replays it without touching the flag.</p>
+      <div class="code">
+        <div><span class="c">// one flag per page — survives reloads, per device</span></div>
+        <div><span class="k">const</span> key = <span class="s">`practmd.provider.tour.${pageId}`</span>;  <span class="c">// today | calendar | …</span></div>
+        <div><span class="k">if</span> (!localStorage.getItem(key)) startTour();</div>
+        <div><span class="c">// on skip / finish</span></div>
+        <div>localStorage.setItem(key, <span class="s">'seen'</span>);</div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Per-page step schema</h3>
+      <p>A page contributes an ordered array. Each step names a target by <code>id</code> (or <code>"help-btn"</code> for the last), a title, and one sentence of body. Nothing else is page-specific.</p>
+      <div class="code">
+        <div>steps: [</div>
+        <div>  { <span class="k">id</span>: <span class="s">'kpi-unsigned'</span>,</div>
+        <div>    <span class="k">title</span>: <span class="s">'Unsigned notes come first'</span>,</div>
+        <div>    <span class="k">body</span>: <span class="s">'…one sentence…'</span> },</div>
+        <div>  <span class="c">// …3–6 more…</span></div>
+        <div>  { <span class="k">id</span>: <span class="s">'help-btn'</span>, <span class="k">isHelpBtn</span>: <span class="k">true</span>,</div>
+        <div>    <span class="k">title</span>: <span class="s">"That's the tour"</span>, … },</div>
+        <div>]</div>
+      </div>
+    </div>
+  </div>
+
+  <h2>The ? help panel</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>Placement &amp; states</h3>
+      <p>A 32px icon button in the global header, between the clinic switcher and the notification bell. Present on every page.</p>
+      <p><b>Default</b> — quiet grey. <b>Tour's final step</b> — spotlit, tinted <code>#ecfefb</code>. <b>Panel open</b> — stays tinted. Clicking toggles the panel; it's inert while the welcome card is up.</p>
+    </div>
+    <div class="card">
+      <h3>Panel contents (module-scoped)</h3>
+      <p>A right slide-over titled <b>Help · {module}</b>. One intro line, then <b>In this section</b> — 4–5 short doc blocks specific to that page — then a fixed <b>Help resources</b> list, then a sticky <b>Take the {module} tour again</b> button.</p>
+      <div class="tags"><span class="tag">Knowledge base ↗</span><span class="tag">Video walkthroughs ↗</span><span class="tag">Keyboard shortcuts</span><span class="tag">What's new</span><span class="tag">Contact support</span></div>
+    </div>
+  </div>
+
+  <h2>Coverage</h2>
+  <div class="card">
+    <p>Every nav destination gets its own tour + help copy: <b>Today, Calendar, List, Encounter Notes, Waiting Room, Messages, Patients, Tasks, Reports, Recents, My Availability, Settings, Profile</b>. Sub-pages (a patient chart, a SOAP note, an appointment drawer) inherit the parent's <code>?</code> but do not auto-trigger a tour.</p>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

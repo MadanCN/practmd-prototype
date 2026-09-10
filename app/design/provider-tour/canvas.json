@@ -1,0 +1,28 @@
+{
+  "pages": [
+    { "id": "tours", "name": "Page tours" },
+    { "id": "spec", "name": "System spec" }
+  ],
+  "artboards": [
+    { "file": "Main.dc.html",          "page": "tours", "x": 0,     "y": 0,    "w": 1440, "h": 980, "title": "Today",          "is_interactive": true },
+    { "file": "Calendar.dc.html",       "page": "tours", "x": 1580,  "y": 0,    "w": 1440, "h": 980, "title": "Calendar",       "is_interactive": true },
+    { "file": "List.dc.html",           "page": "tours", "x": 3160,  "y": 0,    "w": 1440, "h": 980, "title": "Appointment list","is_interactive": true },
+    { "file": "EncounterNotes.dc.html", "page": "tours", "x": 4740,  "y": 0,    "w": 1440, "h": 980, "title": "Encounter Notes","is_interactive": true },
+    { "file": "WaitingRoom.dc.html",    "page": "tours", "x": 0,     "y": 1180, "w": 1440, "h": 980, "title": "Waiting Room",   "is_interactive": true },
+    { "file": "Messages.dc.html",       "page": "tours", "x": 1580,  "y": 1180, "w": 1440, "h": 980, "title": "Messages",       "is_interactive": true },
+    { "file": "Patients.dc.html",       "page": "tours", "x": 3160,  "y": 1180, "w": 1440, "h": 980, "title": "Patients",       "is_interactive": true },
+    { "file": "Tasks.dc.html",          "page": "tours", "x": 4740,  "y": 1180, "w": 1440, "h": 980, "title": "Tasks",          "is_interactive": true },
+    { "file": "Reports.dc.html",        "page": "tours", "x": 0,     "y": 2360, "w": 1440, "h": 980, "title": "Reports",        "is_interactive": true },
+    { "file": "Recents.dc.html",        "page": "tours", "x": 1580,  "y": 2360, "w": 1440, "h": 980, "title": "Recents",        "is_interactive": true },
+    { "file": "Availability.dc.html",   "page": "tours", "x": 3160,  "y": 2360, "w": 1440, "h": 980, "title": "My Availability","is_interactive": true },
+    { "file": "Settings.dc.html",       "page": "tours", "x": 4740,  "y": 2360, "w": 1440, "h": 980, "title": "Settings",       "is_interactive": true },
+    { "file": "Profile.dc.html",        "page": "tours", "x": 0,     "y": 3540, "w": 1440, "h": 980, "title": "Profile",        "is_interactive": true },
+
+    { "file": "Spec.dc.html", "page": "spec", "x": 0, "y": 0, "w": 1240, "h": 1380, "title": "System spec", "print": "flow" }
+  ],
+  "annotations": [
+    { "id": "how", "page": "tours", "x": 0, "y": -132, "w": 900, "text": "Guided onboarding tour — one pattern per nav page.\nEach artboard is a live prototype: the first-visit welcome card leads into coach-marks that spotlight real controls, and the final step points at the ? in the header. Click the ? any time to open that page's help panel and replay its tour.\nUse the 'Preview state' tweak on any artboard to jump straight to welcome / tour / done / help." },
+    { "id": "spec-note", "page": "spec", "x": 0, "y": -96, "w": 640, "text": "The reusable engine: trigger logic, coach-mark anatomy, step schema, and the ? help panel. Every page plugs into this — it only supplies its own step list and help copy." }
+  ],
+  "launch": { "view": "canvas", "page": "tours" }
+}

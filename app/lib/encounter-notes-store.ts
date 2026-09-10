@@ -22,6 +22,8 @@ export interface Addendum {
   body: string;
   /** set when the addendum changed diagnosis / procedure coding → RCM task */
   affectsCoding?: boolean;
+  /** human summary of what coding changed, e.g. "+Dx F41.1 · −CPT 99213" */
+  codingSummary?: string;
 }
 
 export interface NoteAuditEvent {
@@ -295,6 +297,38 @@ function seedProcedure(): ProcedureRow[] {
   }];
 }
 
+/** A worked example of the addendum flow on a couple of already-signed notes,
+ *  so the co-sign / addendum / RCM-task path is demonstrable out of the box. */
+function seedAddenda(noteId: string, signedAt: string | undefined): Addendum[] {
+  const t = (mins: number) => new Date((signedAt ? new Date(signedAt).getTime() : Date.now()) + mins * 60000).toISOString();
+  if (noteId === "note05") {
+    return [
+      {
+        id: "ad_seed_05a",
+        authorName: "Dr. Sarah Mitchell",
+        createdAt: t(60 * 26),
+        reason: "Coding correction after chart review",
+        body: "On review, the visit also addressed a new generalized anxiety complaint that warrants a secondary diagnosis, and the level of service supports 99215 rather than 99214. Diagnosis and procedure coding updated accordingly.",
+        affectsCoding: true,
+        codingSummary: "+Dx F41.1 · −CPT 99214 · +CPT 99215",
+      },
+    ];
+  }
+  if (noteId === "note04") {
+    return [
+      {
+        id: "ad_seed_04a",
+        authorName: "Dr. Sarah Mitchell",
+        createdAt: t(60 * 4),
+        reason: "Clarification requested by the patient's therapist",
+        body: "To clarify the plan: the patient was started on sertraline 25 mg for one week, then to increase to 50 mg. Follow-up in 2 weeks, sooner if side effects. No change to diagnosis or billing.",
+        affectsCoding: false,
+      },
+    ];
+  }
+  return [];
+}
+
 function makeSeed(): Record<string, EncounterNoteDoc> {
   const out: Record<string, EncounterNoteDoc> = {};
   for (const n of PROVIDER_ENCOUNTER_NOTES) {
@@ -318,14 +352,19 @@ function makeSeed(): Record<string, EncounterNoteDoc> {
       createdAt: n.visitDate,
       updatedAt: n.signedAt ?? n.visitDate,
       fields: signed ? { ...SIGNED_SAMPLE } : {},
-      diagnoses: signed ? ["F33.1"] : [],
-      procedures: signed ? seedProcedure() : [],
+      diagnoses: signed ? (n.id === "note05" ? ["F33.1", "F41.1"] : ["F33.1"]) : [],
+      procedures: signed
+        ? (n.id === "note05"
+            ? [{ id: "pc1", description: "E/M established, high complexity", code: "99215", quantity: "1", charge: "215.00", dxPointers: "1,2", modifiers: "", pos: "11" }]
+            : seedProcedure())
+        : [],
       templateId: signed ? "med-management" : undefined,
       templateVersion: signed ? 3 : undefined,
-      addenda: [],
+      addenda: signed ? seedAddenda(n.id, n.signedAt) : [],
       audit: [
         { id: `au_${n.id}_c`, at: n.visitDate, actor: "Dr. Sarah Mitchell", kind: "created" },
         ...(signed && n.signedAt ? [{ id: `au_${n.id}_s`, at: n.signedAt, actor: "Dr. Sarah Mitchell", kind: "signed" as const }] : []),
+        ...(signed ? seedAddenda(n.id, n.signedAt).map((a) => ({ id: `au_${a.id}`, at: a.createdAt, actor: a.authorName, kind: "addendum" as const, detail: a.affectsCoding ? `coding change · ${a.codingSummary}` : a.reason })) : []),
       ],
     };
   }
@@ -341,7 +380,17 @@ const store = createPersistedStore<StoreState>({
     // any note the provider has since touched wins.
     const merged: Record<string, EncounterNoteDoc> = { ...initial.notes };
     for (const [k, v] of Object.entries(persisted)) {
-      merged[k] = { ...v, addenda: v.addenda ?? [], audit: v.audit ?? [] } as EncounterNoteDoc;
+      const seed = initial.notes[k];
+      // an untouched seeded signed note gets its demo addenda / coding back so
+      // the addendum walkthrough is visible even on a warm (persisted) load
+      const keepSeededAddenda = seed && seed.status === "signed" && (v.addenda?.length ?? 0) === 0 && seed.addenda.length > 0;
+      merged[k] = {
+        ...v,
+        addenda: keepSeededAddenda ? seed.addenda : (v.addenda ?? []),
+        diagnoses: keepSeededAddenda ? seed.diagnoses : v.diagnoses,
+        procedures: keepSeededAddenda ? seed.procedures : v.procedures,
+        audit: keepSeededAddenda ? seed.audit : (v.audit ?? []),
+      } as EncounterNoteDoc;
     }
     return { notes: merged };
   },
@@ -579,14 +628,83 @@ export function returnForRevision(id: string, coSignerName: string, comment: str
   });
 }
 
-/** Append an addendum to a signed note. The original text is never touched. */
-export function addAddendum(id: string, input: { authorName: string; reason: string; body: string; affectsCoding?: boolean }) {
+function procKey(p: ProcedureRow) {
+  return `${p.code}|${p.description}|${p.quantity}|${p.charge}|${p.modifiers}|${p.pos}|${p.dxPointers}`;
+}
+export function sameProcedures(a: ProcedureRow[], b: ProcedureRow[]): boolean {
+  return a.length === b.length && a.every((p, i) => procKey(p) === procKey(b[i]));
+}
+export function sameDiagnoses(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((c, i) => c === b[i]);
+}
+
+/** Human summary of a coding change, for the addendum + the RCM task. */
+export function codingDiffSummary(dxBefore: string[], dxAfter: string[], procBefore: ProcedureRow[], procAfter: ProcedureRow[]): string {
+  const parts: string[] = [];
+  const dxAdded = dxAfter.filter((c) => !dxBefore.includes(c));
+  const dxRemoved = dxBefore.filter((c) => !dxAfter.includes(c));
+  if (dxAdded.length) parts.push(`+Dx ${dxAdded.join(", ")}`);
+  if (dxRemoved.length) parts.push(`−Dx ${dxRemoved.join(", ")}`);
+  if (!dxAdded.length && !dxRemoved.length && !sameDiagnoses(dxBefore, dxAfter)) parts.push("Dx order changed");
+  const cptBefore = procBefore.map((p) => p.code).filter(Boolean);
+  const cptAfter = procAfter.map((p) => p.code).filter(Boolean);
+  const cptAdded = cptAfter.filter((c) => !cptBefore.includes(c));
+  const cptRemoved = cptBefore.filter((c) => !cptAfter.includes(c));
+  if (cptAdded.length) parts.push(`+CPT ${cptAdded.join(", ")}`);
+  if (cptRemoved.length) parts.push(`−CPT ${cptRemoved.join(", ")}`);
+  if (!cptAdded.length && !cptRemoved.length && !sameProcedures(procBefore, procAfter)) parts.push("procedure detail edited");
+  return parts.join(" · ");
+}
+
+/**
+ * Append an addendum to a signed note. The original narrative is never touched.
+ * If `diagnoses` / `procedures` are supplied and differ from what's on file, the
+ * note's coding is amended and the return value flags the change so the caller
+ * can raise the Revenue Cycle task (a bill may already be submitted).
+ */
+export function addAddendum(id: string, input: {
+  authorName: string;
+  reason: string;
+  body: string;
+  diagnoses?: string[];
+  procedures?: ProcedureRow[];
+}): { codingChanged: boolean; summary: string } {
+  const n = getNote(id);
+  if (!n || n.status !== "signed") return { codingChanged: false, summary: "" };
+
+  const newDx = input.diagnoses ?? n.diagnoses;
+  const newProc = input.procedures ?? n.procedures;
+  const codingChanged = !sameDiagnoses(newDx, n.diagnoses) || !sameProcedures(newProc, n.procedures);
+  const summary = codingChanged ? codingDiffSummary(n.diagnoses, newDx, n.procedures, newProc) : "";
+
   set((s) => {
-    const n = s.notes[id];
-    if (!n || n.status !== "signed") return s;
-    const add: Addendum = { id: `ad_${Math.random().toString(36).slice(2, 8)}`, createdAt: now(), ...input };
-    return { notes: { ...s.notes, [id]: { ...n, addenda: [...n.addenda, add], updatedAt: now(), audit: audit(n, "addendum", input.authorName, input.reason) } } };
+    const cur = s.notes[id];
+    if (!cur || cur.status !== "signed") return s;
+    const add: Addendum = {
+      id: `ad_${Math.random().toString(36).slice(2, 8)}`,
+      createdAt: now(),
+      authorName: input.authorName,
+      reason: input.reason,
+      body: input.body,
+      affectsCoding: codingChanged,
+      codingSummary: summary || undefined,
+    };
+    return {
+      notes: {
+        ...s.notes,
+        [id]: {
+          ...cur,
+          diagnoses: newDx,
+          procedures: newProc,
+          addenda: [...cur.addenda, add],
+          updatedAt: now(),
+          audit: audit(cur, "addendum", input.authorName, codingChanged ? `coding change · ${summary}` : input.reason),
+        },
+      },
+    };
   });
+
+  return { codingChanged, summary };
 }
 
 /** Notes a designated co-signer must action (their supervisees, awaiting co-sign). */

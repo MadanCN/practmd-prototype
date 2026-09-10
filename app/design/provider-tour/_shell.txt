@@ -1,0 +1,17 @@
+Shared reference for all page tour artboards. Not an artboard itself.
+
+Each <Page>.dc.html file = full-screen 1440x980 recreation of one provider
+nav page + the guided-tour engine + the ? help slide-over.
+
+Parts that change per file:
+  - PAGE const (drives active nav item + breadcrumb label)
+  - <main id="pagebody"> inner HTML  (that page's UI)
+  - steps()   -> array of { id, title, body, isHelpBtn? }
+  - helpDoc() -> array of { h, p }
+  - pageName()
+
+Everything else (sidebar, header w/ ?, welcome modal, coach-mark engine,
+spotlight, help panel, resources list, "Take tour again") is identical.
+
+Spotlight targets are measured live with getBoundingClientRect against
+#root, re-measured on resize — production would do the same.

@@ -21,6 +21,7 @@ const KIND_CLS: Record<string, string> = {
   "credential-expiring": "bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
   "coordinator-query": "bg-teal-100 text-teal-700 dark:bg-teal-950/40 dark:text-teal-400",
   "follow-up-booking": "bg-brand-100 text-brand-700 dark:bg-brand-950/40 dark:text-brand-400",
+  "rcm-coding-change": "bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400",
 };
 
 function TasksInner() {

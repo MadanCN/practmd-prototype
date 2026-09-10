@@ -3,14 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  ChevronLeft, ChevronDown, ChevronRight, Printer, Download, Send, Save,
+  ChevronLeft, ChevronDown, ChevronRight, Printer, Download, Send,
   ShieldCheck, CheckCircle2, Plus, X, Lock, Users, Check, AlertTriangle,
   WifiOff, Wifi, FileClock, ArrowUp, ArrowDown, Copy, PanelRightOpen, PanelRightClose,
-  Undo2, MessageSquareWarning,
+  Undo2, MessageSquareWarning, PenLine, Receipt, History, ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DIAGNOSIS_CODES, completeEncounterForNote, pushNotification } from "@/lib/encounter-store";
-import { createChargeFromNote } from "@/lib/charge-store";
+import { createChargeFromNote, getChargeForNote } from "@/lib/charge-store";
 import { PROVIDERS } from "@/data/providers";
 import { getPatientProfile, calcAge } from "@/data/provider-patients";
 import { PATIENT_ALLERGIES_BY_ID, CARE_COMMENTS_BY_ID, PATIENT_FORMS_BY_ID } from "@/data/provider-patient-clinical";
@@ -18,13 +18,14 @@ import { visitTypeDef } from "@/lib/visit-types";
 import { useProviderSession } from "@/lib/provider-session";
 import { signaturePaths, signatureBlockers } from "@/lib/provider-permissions";
 import { useNoteTemplates, pickableTemplates, getTemplate, activeVersion, templateLabel } from "@/lib/note-templates";
-import { closeTasksForNote } from "@/lib/provider-tasks-store";
+import { closeTasksForNote, addRequestTask } from "@/lib/provider-tasks-store";
 import {
   useEncounterNotes, getNote, getNotesForPatient, getAllNotes, setField,
   toggleDiagnosis, reorderDiagnoses, addProcedure, updateProcedure, removeProcedure,
   signNote, addCoSign, returnForRevision, addAddendum, selectTemplateForNote, copyForwardInto,
+  sameDiagnoses, sameProcedures, codingDiffSummary,
   isEditable, groupsFor, FOLLOWUP_FIELDS,
-  type FieldDef, type NoteType, type EncounterNoteDoc, type FieldGroup,
+  type FieldDef, type NoteType, type EncounterNoteDoc, type FieldGroup, type ProcedureRow,
 } from "@/lib/encounter-notes-store";
 
 function fmtDate(ymd: string) {
@@ -166,6 +167,19 @@ function Editor({ doc, session }: { doc: EncounterNoteDoc; session: ReturnType<t
   const paths = signaturePaths(session.capabilities, session.clinicalStatus);
   const canSignAlone = paths.includes("sign");
 
+  function doSign() {
+    signNote(doc.id, { requestCoSign: false, signerName: session.provider.displayName });
+    afterSign();
+    setSignMenu(false);
+    flash("Note signed · encounter closed · bill created.");
+  }
+  function doSignAndRequestCoSign(coSigner: string) {
+    signNote(doc.id, { requestCoSign: true, coSignerName: coSigner, signerName: session.provider.displayName });
+    pushNotification({ kind: "generic", message: `Co-signature requested from ${coSigner} — ${doc.patientName} · ${doc.visitType}`, href: `/provider/encounters/${doc.id}` });
+    setAskCoSign(false);
+    flash(`Signed — co-signature requested from ${coSigner}. Note is locked until they act.`);
+  }
+
   // co-sign inbox view
   const isCoSignerHere = doc.status === "pending-cosign" && (doc.coSignerName === session.provider.displayName || session.capabilities.can_cosign);
 
@@ -209,8 +223,17 @@ function Editor({ doc, session }: { doc: EncounterNoteDoc; session: ReturnType<t
         <aside className="hidden lg:block">
           <div className="sticky top-[76px] space-y-1">
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 mb-1">Sections</p>
-            {[...sectionIndex, { id: "coding", label: "Coding", groups: [] }, { id: "followup", label: "Follow-up", groups: [] }].map((s) => {
-              const done = s.id === "coding" ? doc.diagnoses.length > 0 && doc.procedures.length > 0 : sectionComplete(doc, s.groups);
+            {[
+              ...sectionIndex,
+              { id: "coding", label: "Coding", groups: [] as FieldGroup[] },
+              { id: "followup", label: "Follow-up", groups: [] as FieldGroup[] },
+              ...(isEditable(doc) ? [{ id: "sign", label: "Sign", groups: [] as FieldGroup[] }] : []),
+              ...(doc.status === "signed" ? [{ id: "addenda", label: "Addenda", groups: [] as FieldGroup[] }] : []),
+            ].map((s) => {
+              const done = s.id === "coding" ? doc.diagnoses.length > 0 && doc.procedures.length > 0
+                : s.id === "sign" ? blockers.length === 0
+                : s.id === "addenda" ? doc.addenda.length > 0
+                : sectionComplete(doc, s.groups);
               const rec = tpl?.recommendedSections.some((r) => s.groups.some((g) => g.id === r));
               return (
                 <a key={s.id} href={`#sec-${s.id}`}
@@ -277,7 +300,7 @@ function Editor({ doc, session }: { doc: EncounterNoteDoc; session: ReturnType<t
                             {canSignAlone && (
                               <button
                                 disabled={blockers.length > 0}
-                                onClick={() => { signNote(doc.id, { requestCoSign: false, signerName: session.provider.displayName }); afterSign(); setSignMenu(false); flash("Note signed · encounter closed · bill created."); }}
+                                onClick={doSign}
                                 className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40">
                                 <ShieldCheck className="w-4 h-4 text-brand-600" /> Sign
                               </button>
@@ -306,12 +329,7 @@ function Editor({ doc, session }: { doc: EncounterNoteDoc; session: ReturnType<t
                 <select value={coSignPick} onChange={(e) => setCoSignPick(e.target.value)} className="px-2 py-1 rounded-lg text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">
                   {CO_SIGNERS.map((p) => <option key={p.id}>{p.displayName}</option>)}
                 </select>
-                <button onClick={() => {
-                  signNote(doc.id, { requestCoSign: true, coSignerName: coSignPick, signerName: session.provider.displayName });
-                  pushNotification({ kind: "generic", message: `Co-signature requested from ${coSignPick} — ${doc.patientName} · ${doc.visitType}`, href: `/provider/encounters/${doc.id}` });
-                  setAskCoSign(false);
-                  flash(`Signed — co-signature requested from ${coSignPick}. Note is locked until they act.`);
-                }}
+                <button onClick={() => doSignAndRequestCoSign(coSignPick)}
                   className="px-3 py-1.5 rounded-lg text-xs font-semibold practmd-gradient text-white">Sign &amp; send request</button>
                 <button onClick={() => setAskCoSign(false)} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-500">Cancel</button>
               </div>
@@ -449,20 +467,33 @@ function Editor({ doc, session }: { doc: EncounterNoteDoc; session: ReturnType<t
             </SoapArea>
 
             {/* addenda (signed notes) */}
-            {doc.status === "signed" && <Addenda doc={doc} me={session.provider.displayName} onDone={flash} />}
+            {doc.status === "signed" && (
+              <Addenda doc={doc} me={session.provider.displayName} onDone={flash} />
+            )}
+
+            {/* ── sign at the bottom — mirror of the toolbar action, so the
+                   provider can sign right where they finish writing ── */}
+            {isEditable(doc) && (
+              <SignAtBottom
+                doc={doc}
+                provider={session.provider}
+                credentials={session.provider.credentials}
+                blockers={blockers}
+                canSignAlone={canSignAlone}
+                coSigners={CO_SIGNERS}
+                onSign={doSign}
+                onSignAndCoSign={doSignAndRequestCoSign}
+              />
+            )}
+
+            {/* ── signed → what happened ── */}
+            {(doc.status === "signed" || doc.status === "pending-cosign") && (
+              <SignedSummary doc={doc} />
+            )}
           </div>
 
-          {/* patient meta footer */}
-          <div className="mt-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2.5 text-sm">
-            <Meta label="Patient"><Link href={`/provider/patients/${doc.patientId}`} className="font-semibold text-brand-700 dark:text-brand-400 hover:underline">{doc.patientName}</Link></Meta>
-            <Meta label="Age">{patient ? `${calcAge(patient.dob)} yrs` : "—"}</Meta>
-            <Meta label="Date of service">{fmtDate(doc.date)}</Meta>
-            <Meta label="Provider">{doc.providerName}</Meta>
-            <Meta label="Mode"><span className="capitalize">{doc.mode}</span></Meta>
-            <Meta label="Resource">{doc.resource}</Meta>
-            <Meta label="Template">{templateLabel(doc.templateId, doc.templateVersion)}</Meta>
-            <Meta label="Signed by">{doc.signedBy.length ? doc.signedBy.join(", ") : "—"}</Meta>
-          </div>
+          {/* encounter & signature details + audit trail */}
+          <EncounterDetails doc={doc} patient={patient} />
         </div>
       </div>
 
@@ -628,47 +659,341 @@ function CoSignPanel({ doc, me, onDone, afterSign }: {
   );
 }
 
+/* ── sign block (bottom of the note) ───────────────────────────────────── */
+
+function SignAtBottom({ doc, provider, credentials, blockers, canSignAlone, coSigners, onSign, onSignAndCoSign }: {
+  doc: EncounterNoteDoc;
+  provider: { displayName: string; firstName: string };
+  credentials: string;
+  blockers: string[];
+  canSignAlone: boolean;
+  coSigners: { id: string; displayName: string }[];
+  onSign: () => void;
+  onSignAndCoSign: (coSigner: string) => void;
+}) {
+  const [attested, setAttested] = useState(false);
+  const [coSigner, setCoSigner] = useState(coSigners[0]?.displayName ?? "");
+  const ready = attested && blockers.length === 0;
+
+  return (
+    <section id="sec-sign" className="scroll-mt-20 rounded-xl border-2 border-brand-200 dark:border-brand-900 bg-brand-50/40 dark:bg-brand-950/20 overflow-hidden">
+      <div className="px-4 py-3 border-b border-brand-100 dark:border-brand-900/60 flex items-center gap-2">
+        <PenLine className="w-4 h-4 text-brand-600 dark:text-brand-400" />
+        <h2 className="text-sm font-bold text-navy-900 dark:text-slate-100">Sign this note</h2>
+        {doc.status === "returned" && <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400">re-sign after revision</span>}
+      </div>
+      <div className="p-4 space-y-3">
+        {blockers.length > 0 && (
+          <div className="flex items-start gap-2 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 px-3 py-2 text-xs text-red-600 dark:text-red-400">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-px" />
+            <span>Can&apos;t sign yet — add {blockers.join(" and ")} in the Coding section above.</span>
+          </div>
+        )}
+        <label className="flex items-start gap-2.5 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+          <input type="checkbox" checked={attested} onChange={(e) => setAttested(e.target.checked)} className="mt-0.5 w-4 h-4 rounded accent-brand-600" />
+          <span>
+            I, <span className="font-semibold">{provider.displayName}{credentials ? `, ${credentials}` : ""}</span>, attest that I performed or supervised this encounter and that this note is accurate and complete. I understand that once signed the note is a legal record and can only be corrected by addendum, and that signing creates the associated bill.
+          </span>
+        </label>
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          {canSignAlone && (
+            <button disabled={!ready} onClick={onSign}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold practmd-gradient text-white disabled:opacity-40">
+              <ShieldCheck className="w-4 h-4" /> Sign &amp; close encounter
+            </button>
+          )}
+          <div className="flex items-center gap-1.5">
+            <button disabled={!ready} onClick={() => onSignAndCoSign(coSigner)}
+              className={cn("flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-sm font-semibold disabled:opacity-40",
+                canSignAlone ? "border border-brand-300 dark:border-brand-800 text-brand-700 dark:text-brand-400" : "practmd-gradient text-white")}>
+              <Users className="w-4 h-4" /> Sign &amp; request co-signature
+            </button>
+            {!ready ? null : (
+              <select value={coSigner} onChange={(e) => setCoSigner(e.target.value)}
+                className="px-2 py-1.5 rounded-lg text-xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200">
+                {coSigners.map((p) => <option key={p.id}>{p.displayName}</option>)}
+              </select>
+            )}
+          </div>
+          {!canSignAlone && <span className="text-[11px] text-slate-400">Your notes require a co-signature — signing alone isn&apos;t available.</span>}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ── signed summary (bottom of the note) ───────────────────────────────── */
+
+function SignedSummary({ doc }: { doc: EncounterNoteDoc }) {
+  const charge = getChargeForNote(doc.id);
+  return (
+    <section className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/20 p-4">
+      <div className="flex items-start gap-2.5">
+        <ShieldCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+        <div className="text-sm text-slate-700 dark:text-slate-200 space-y-1">
+          {doc.status === "signed" ? (
+            <>
+              <p className="font-semibold text-emerald-800 dark:text-emerald-300">
+                Signed by {doc.signedBy.join(", ")}{doc.signedAt ? ` on ${fmtDateTime(doc.signedAt)}` : ""}.
+              </p>
+              {doc.coSignerName && <p>Co-signed by {doc.coSignerName}.</p>}
+              <p className="text-slate-500 dark:text-slate-400">This note is immutable — the encounter is closed. Corrections are made by addendum below.</p>
+              {charge && (
+                <p className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                  <Receipt className="w-3.5 h-3.5" /> Bill created — {charge.lines.map((l) => l.code).join(", ")} · ${charge.total.toFixed(2)} ·{" "}
+                  <Link href="/revenue-management/charges" className="text-brand-600 dark:text-brand-400 hover:underline">view claim</Link>
+                </p>
+              )}
+            </>
+          ) : (
+            <>
+              <p className="font-semibold text-amber-800 dark:text-amber-300">
+                Signed by {doc.providerName} — awaiting co-signature from {doc.coSignerName}.
+              </p>
+              <p className="text-slate-500 dark:text-slate-400">The note is locked to the author and not billable until the co-signer acts.</p>
+            </>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ── encounter & signature details + audit trail ───────────────────────── */
+
+function EncounterDetails({ doc, patient }: { doc: EncounterNoteDoc; patient: ReturnType<typeof getPatientProfile> }) {
+  const [auditOpen, setAuditOpen] = useState(false);
+  const AUDIT_LABEL: Record<string, string> = {
+    created: "Note created", "template-selected": "Template selected", signed: "Signed",
+    "cosign-requested": "Co-signature requested", cosigned: "Co-signed", returned: "Returned for revision",
+    addendum: "Addendum appended", "copy-forward": "Copied forward",
+  };
+  return (
+    <div className="mt-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+      <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
+        <ClipboardList className="w-4 h-4 text-slate-400" />
+        <h2 className="text-sm font-bold text-navy-900 dark:text-slate-100">Encounter &amp; signature details</h2>
+      </div>
+      <div className="p-4 grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2.5 text-sm">
+        <Meta label="Patient"><Link href={`/provider/patients/${doc.patientId}`} className="font-semibold text-brand-700 dark:text-brand-400 hover:underline">{doc.patientName}</Link></Meta>
+        <Meta label="Age">{patient ? `${calcAge(patient.dob)} yrs` : "—"}</Meta>
+        <Meta label="Date of service">{fmtDate(doc.date)}</Meta>
+        <Meta label="Provider">{doc.providerName}</Meta>
+        <Meta label="Mode"><span className="capitalize">{doc.mode}</span></Meta>
+        <Meta label="Resource">{doc.resource}</Meta>
+        <Meta label="Visit type">{doc.visitType}</Meta>
+        <Meta label="Template">{templateLabel(doc.templateId, doc.templateVersion)}</Meta>
+        <Meta label="Status"><StatusPill status={doc.status} /></Meta>
+        <Meta label="Created">{fmtDateTime(doc.createdAt)}</Meta>
+        <Meta label="Last updated">{fmtDateTime(doc.updatedAt)}</Meta>
+        <Meta label="Signed">{doc.signedAt ? fmtDateTime(doc.signedAt) : "—"}</Meta>
+        <Meta label="Signed by">{doc.signedBy.length ? doc.signedBy.join(", ") : "—"}</Meta>
+        <Meta label="Co-signer">{doc.coSignerName ?? "—"}</Meta>
+        <Meta label="Addenda">{doc.addenda.length || "—"}</Meta>
+      </div>
+      <div className="border-t border-slate-100 dark:border-slate-800">
+        <button onClick={() => setAuditOpen((o) => !o)} className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-semibold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/40">
+          <span className="flex items-center gap-1.5"><History className="w-3.5 h-3.5" /> Audit trail ({doc.audit.length})</span>
+          {auditOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+        </button>
+        {auditOpen && (
+          <ol className="px-4 pb-4 space-y-1.5">
+            {[...doc.audit].reverse().map((e) => (
+              <li key={e.id} className="flex items-start gap-2 text-xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600 shrink-0 mt-1.5" />
+                <span className="text-slate-600 dark:text-slate-300">
+                  <span className="font-medium">{AUDIT_LABEL[e.kind] ?? e.kind}</span>
+                  {e.detail ? ` — ${e.detail}` : ""}
+                  <span className="text-slate-400"> · {e.actor} · {fmtDateTime(e.at)}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ── addenda ───────────────────────────────────────────────────────────── */
 
 function Addenda({ doc, me, onDone }: { doc: EncounterNoteDoc; me: string; onDone: (m: string) => void }) {
   const [adding, setAdding] = useState(false);
   const [reason, setReason] = useState("");
   const [body, setBody] = useState("");
-  const [affectsCoding, setAffectsCoding] = useState(false);
+  const [amendCoding, setAmendCoding] = useState(false);
+
+  // working copy of the coding — edited only inside the addendum flow
+  const [wDx, setWDx] = useState<string[]>(doc.diagnoses);
+  const [wProc, setWProc] = useState<ProcedureRow[]>(doc.procedures);
+  const [dxQuery, setDxQuery] = useState("");
+
+  function startAdding() {
+    setWDx(doc.diagnoses);
+    setWProc(doc.procedures);
+    setAmendCoding(false);
+    setReason("");
+    setBody("");
+    setAdding(true);
+  }
+
+  const codingChanged = amendCoding && (!sameDiagnoses(wDx, doc.diagnoses) || !sameProcedures(wProc, doc.procedures));
+  const summary = codingChanged ? codingDiffSummary(doc.diagnoses, wDx, doc.procedures, wProc) : "";
+  const dxOptions = DIAGNOSIS_CODES.filter((d) => !wDx.includes(d.code) && (d.code + d.label).toLowerCase().includes(dxQuery.toLowerCase()));
+
+  function append() {
+    const res = addAddendum(doc.id, {
+      authorName: me,
+      reason: reason.trim(),
+      body: body.trim(),
+      diagnoses: amendCoding ? wDx : undefined,
+      procedures: amendCoding ? wProc : undefined,
+    });
+    if (res.codingChanged) {
+      addRequestTask({
+        kind: "rcm-coding-change",
+        title: `Coding changed by addendum — ${doc.patientName}`,
+        detail: `${doc.visitType}, DOS ${fmtDate(doc.date)}. Addendum by ${me}: ${res.summary}. Re-review the claim — a bill may already be submitted.`,
+        lane: "queue",
+      });
+      pushNotification({
+        kind: "generic",
+        message: `Coding changed by addendum on ${doc.patientName}'s ${doc.visitType} (${res.summary}) — a Revenue Cycle task was raised.`,
+        href: "/revenue-management/charges",
+      });
+    }
+    setAdding(false);
+    onDone(res.codingChanged ? "Addendum appended · coding amended · Revenue Cycle task raised." : "Addendum appended.");
+  }
 
   return (
-    <section className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+    <section id="sec-addenda" className="scroll-mt-20 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
       <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-        <h2 className="text-sm font-bold text-navy-900 dark:text-slate-100">Addenda</h2>
-        {!adding && <button onClick={() => setAdding(true)} className="text-xs font-semibold text-brand-700 dark:text-brand-400 hover:underline flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> Add addendum</button>}
+        <div className="flex items-center gap-2">
+          <History className="w-4 h-4 text-slate-400" />
+          <h2 className="text-sm font-bold text-navy-900 dark:text-slate-100">Addenda</h2>
+          {doc.addenda.length > 0 && <span className="text-xs font-bold text-slate-400">{doc.addenda.length}</span>}
+        </div>
+        {!adding && <button onClick={startAdding} className="text-xs font-semibold text-brand-700 dark:text-brand-400 hover:underline flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> Add addendum</button>}
       </div>
       <div className="p-4 space-y-3">
-        {doc.addenda.length === 0 && !adding && <p className="text-xs text-slate-400">No addenda. The original signed text stays intact — corrections are appended here.</p>}
-        {doc.addenda.map((a) => (
+        {doc.addenda.length === 0 && !adding && (
+          <p className="text-xs text-slate-400">No addenda. The signed note is immutable — corrections are appended here, timestamped and attributed, leaving the original text intact.</p>
+        )}
+        {doc.addenda.map((a, i) => (
           <div key={a.id} className="rounded-lg border border-slate-200 dark:border-slate-800 p-3">
-            <p className="text-xs text-slate-400">{a.authorName} · {fmtDateTime(a.createdAt)}{a.affectsCoding ? " · coding change" : ""}</p>
-            <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 mt-1">Reason: {a.reason}</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] font-bold uppercase text-slate-400">Addendum {i + 1}</span>
+              {a.affectsCoding && <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400">coding change</span>}
+              <span className="text-xs text-slate-400">{a.authorName} · {fmtDateTime(a.createdAt)}</span>
+            </div>
+            <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 mt-1.5">Reason: {a.reason}</p>
             <p className="text-sm text-slate-700 dark:text-slate-200 mt-1 whitespace-pre-line">{a.body}</p>
+            {a.codingSummary && (
+              <p className="mt-1.5 text-xs text-purple-700 dark:text-purple-400 font-mono">{a.codingSummary} — Revenue Cycle notified</p>
+            )}
           </div>
         ))}
+
         {adding && (
-          <div className="rounded-lg border border-brand-200 dark:border-brand-900 bg-brand-50/40 dark:bg-brand-950/20 p-3 space-y-2">
+          <div className="rounded-lg border border-brand-200 dark:border-brand-900 bg-brand-50/40 dark:bg-brand-950/20 p-3 space-y-2.5">
             <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason for the addendum (required)"
               className="w-full px-3 py-1.5 rounded-lg text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900" />
-            <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} placeholder="Addendum text"
+            <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} placeholder="Addendum text — states who wrote it, when, and why"
               className="w-full px-3 py-2 rounded-lg text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900" />
-            <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
-              <input type="checkbox" checked={affectsCoding} onChange={(e) => setAffectsCoding(e.target.checked)} className="w-3.5 h-3.5 rounded accent-brand-600" />
-              This changes diagnosis or procedure coding (raises a task to Revenue Cycle — a bill may already be submitted)
+
+            <label className="flex items-center gap-2 text-xs font-medium text-slate-600 dark:text-slate-300">
+              <input type="checkbox" checked={amendCoding} onChange={(e) => setAmendCoding(e.target.checked)} className="w-3.5 h-3.5 rounded accent-brand-600" />
+              This addendum changes the diagnosis or procedure coding
             </label>
+
+            {amendCoding && (
+              <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-3">
+                {/* diagnoses */}
+                <div>
+                  <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1.5">Diagnoses</p>
+                  <div className="space-y-1 mb-1.5">
+                    {wDx.map((code, i) => {
+                      const d = DIAGNOSIS_CODES.find((x) => x.code === code);
+                      return (
+                        <div key={code} className={cn("flex items-center gap-2 pl-2 pr-1 py-1 rounded text-xs",
+                          i === 0 ? "bg-brand-100 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300" : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300")}>
+                          {i === 0 && <span className="text-[8px] font-bold uppercase px-1 rounded bg-brand-600 text-white">1°</span>}
+                          <span className="font-mono">{code}</span>
+                          <span className="truncate">{d?.label}</span>
+                          <span className="ml-auto flex items-center gap-0.5 shrink-0">
+                            <button disabled={i === 0} onClick={() => setWDx((v) => { const n = [...v]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; return n; })} className="p-0.5 disabled:opacity-20"><ArrowUp className="w-3 h-3" /></button>
+                            <button disabled={i === wDx.length - 1} onClick={() => setWDx((v) => { const n = [...v]; [n[i + 1], n[i]] = [n[i], n[i + 1]]; return n; })} className="p-0.5 disabled:opacity-20"><ArrowDown className="w-3 h-3" /></button>
+                            <button onClick={() => setWDx((v) => v.filter((c) => c !== code))} className="p-0.5 hover:text-red-500"><X className="w-3 h-3" /></button>
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="relative max-w-xs">
+                    <input value={dxQuery} onChange={(e) => setDxQuery(e.target.value)} placeholder="Add ICD-10…"
+                      className="w-full px-2.5 py-1 rounded text-xs border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950" />
+                    {dxQuery && dxOptions.length > 0 && (
+                      <div className="absolute left-0 right-0 top-8 z-20 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 shadow-lg max-h-40 overflow-y-auto">
+                        {dxOptions.slice(0, 8).map((d) => (
+                          <button key={d.code} onClick={() => { setWDx((v) => [...v, d.code]); setDxQuery(""); }}
+                            className="w-full text-left px-2.5 py-1.5 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
+                            <span className="font-mono font-semibold">{d.code}</span> — {d.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* procedures */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Procedures</p>
+                    <button onClick={() => setWProc((v) => [...v, { id: `pc_${Math.random().toString(36).slice(2, 7)}`, description: "", code: "", quantity: "1", charge: "", dxPointers: "1", modifiers: "", pos: doc.mode === "telehealth" ? "10" : "11" }])}
+                      className="flex items-center gap-1 text-[11px] font-semibold text-brand-700 dark:text-brand-400"><Plus className="w-3 h-3" /> Add row</button>
+                  </div>
+                  <div className="overflow-x-auto rounded border border-slate-200 dark:border-slate-800">
+                    <table className="w-full text-xs min-w-[620px]">
+                      <thead>
+                        <tr className="bg-slate-50 dark:bg-slate-800/50 text-left">
+                          {["Description", "CPT", "Qty", "Charge", "Dx ptrs", "Mods", "POS", ""].map((h) => (
+                            <th key={h} className="px-2 py-1.5 text-[10px] font-semibold text-slate-500 dark:text-slate-400">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {wProc.map((r) => (
+                          <tr key={r.id}>
+                            {(["description", "code", "quantity", "charge", "dxPointers", "modifiers", "pos"] as const).map((k) => (
+                              <td key={k} className="px-1 py-0.5">
+                                <input value={r[k]} onChange={(e) => setWProc((v) => v.map((x) => (x.id === r.id ? { ...x, [k]: e.target.value } : x)))}
+                                  className="w-full px-1.5 py-1 rounded border border-transparent hover:border-slate-200 dark:hover:border-slate-700 focus:border-brand-500 bg-transparent text-slate-800 dark:text-slate-200 focus:outline-none" />
+                              </td>
+                            ))}
+                            <td className="px-1 py-0.5 text-right">
+                              <button onClick={() => setWProc((v) => v.filter((x) => x.id !== r.id))} className="text-slate-300 hover:text-red-500"><X className="w-3 h-3" /></button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {codingChanged ? (
+                  <div className="flex items-start gap-2 rounded-lg bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900 px-3 py-2 text-xs text-purple-700 dark:text-purple-400">
+                    <Receipt className="w-3.5 h-3.5 shrink-0 mt-px" />
+                    <span>Coding will change (<span className="font-mono">{summary}</span>). Appending this raises a Revenue Cycle task to re-review the claim — a bill may already be submitted.</span>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400">No coding difference yet — edit the codes above.</p>
+                )}
+              </div>
+            )}
+
             <div className="flex gap-2">
-              <button disabled={!reason.trim() || !body.trim()}
-                onClick={() => {
-                  addAddendum(doc.id, { authorName: me, reason: reason.trim(), body: body.trim(), affectsCoding });
-                  if (affectsCoding) pushNotification({ kind: "generic", message: `Addendum changed coding on ${doc.patientName}'s ${doc.visitType} — review the claim.`, href: "/revenue-management/charges" });
-                  setAdding(false); setReason(""); setBody(""); setAffectsCoding(false);
-                  onDone("Addendum appended.");
-                }}
+              <button disabled={!reason.trim() || !body.trim()} onClick={append}
                 className="px-3 py-1.5 rounded-lg text-xs font-semibold practmd-gradient text-white disabled:opacity-40">Append addendum</button>
               <button onClick={() => setAdding(false)} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-500">Cancel</button>
             </div>
