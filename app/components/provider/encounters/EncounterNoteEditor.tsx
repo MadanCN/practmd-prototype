@@ -14,6 +14,7 @@ import { createChargeFromNote, getChargeForNote } from "@/lib/charge-store";
 import { PROVIDERS } from "@/data/providers";
 import { getPatientProfile, calcAge } from "@/data/provider-patients";
 import { PATIENT_ALLERGIES_BY_ID, CARE_COMMENTS_BY_ID, PATIENT_FORMS_BY_ID } from "@/data/provider-patient-clinical";
+import { searchProcedureCodes, type ProcedureCode } from "@/data/procedure-codes";
 import { visitTypeDef } from "@/lib/visit-types";
 import { useProviderSession } from "@/lib/provider-session";
 import { signaturePaths, signatureBlockers } from "@/lib/provider-permissions";
@@ -422,7 +423,7 @@ function Editor({ doc, session }: { doc: EncounterNoteDoc; session: ReturnType<t
               {/* procedures */}
               <div className="mt-4">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Procedures <span className="text-slate-400 font-normal">· POS follows the visit mode ({doc.mode === "telehealth" ? "10 telehealth" : "11 office"})</span></p>
+                  <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Procedures <span className="text-slate-400 font-normal">· type a CPT code or description for suggestions from the master · POS follows the visit mode ({doc.mode === "telehealth" ? "10 telehealth" : "11 office"})</span></p>
                   {!readOnly && (
                     <button onClick={() => addProcedure(doc.id)} className="flex items-center gap-1 text-xs font-semibold text-brand-700 dark:text-brand-400 hover:underline">
                       <Plus className="w-3.5 h-3.5" /> Add row
@@ -445,9 +446,23 @@ function Editor({ doc, session }: { doc: EncounterNoteDoc; session: ReturnType<t
                         <tr key={r.id}>
                           {(["description", "code", "quantity", "charge", "dxPointers", "modifiers", "pos"] as const).map((k) => (
                             <td key={k} className="px-1.5 py-1">
-                              <input value={r[k]} disabled={readOnly}
-                                onChange={(e) => updateProcedure(doc.id, r.id, { [k]: e.target.value })}
-                                className="w-full px-1.5 py-1 rounded text-xs border border-transparent hover:border-slate-200 dark:hover:border-slate-700 focus:border-brand-500 bg-transparent text-slate-800 dark:text-slate-200 focus:outline-none disabled:opacity-70" />
+                              {(k === "description" || k === "code") && !readOnly ? (
+                                <CptCell
+                                  value={r[k]}
+                                  field={k}
+                                  onChange={(v) => updateProcedure(doc.id, r.id, { [k]: v })}
+                                  onPick={(m) => updateProcedure(doc.id, r.id, {
+                                    code: m.code,
+                                    description: m.description,
+                                    charge: r.charge || m.charge.toFixed(2),
+                                    pos: doc.mode === "telehealth" ? "10" : (r.pos || m.pos),
+                                  })}
+                                />
+                              ) : (
+                                <input value={r[k]} disabled={readOnly}
+                                  onChange={(e) => updateProcedure(doc.id, r.id, { [k]: e.target.value })}
+                                  className="w-full px-1.5 py-1 rounded text-xs border border-transparent hover:border-slate-200 dark:hover:border-slate-700 focus:border-brand-500 bg-transparent text-slate-800 dark:text-slate-200 focus:outline-none disabled:opacity-70" />
+                              )}
                             </td>
                           ))}
                           <td className="px-1.5 py-1 text-right">
@@ -967,8 +982,17 @@ function Addenda({ doc, me, onDone }: { doc: EncounterNoteDoc; me: string; onDon
                           <tr key={r.id}>
                             {(["description", "code", "quantity", "charge", "dxPointers", "modifiers", "pos"] as const).map((k) => (
                               <td key={k} className="px-1 py-0.5">
-                                <input value={r[k]} onChange={(e) => setWProc((v) => v.map((x) => (x.id === r.id ? { ...x, [k]: e.target.value } : x)))}
-                                  className="w-full px-1.5 py-1 rounded border border-transparent hover:border-slate-200 dark:hover:border-slate-700 focus:border-brand-500 bg-transparent text-slate-800 dark:text-slate-200 focus:outline-none" />
+                                {k === "description" || k === "code" ? (
+                                  <CptCell
+                                    value={r[k]}
+                                    field={k}
+                                    onChange={(v) => setWProc((prev) => prev.map((x) => (x.id === r.id ? { ...x, [k]: v } : x)))}
+                                    onPick={(m) => setWProc((prev) => prev.map((x) => (x.id === r.id ? { ...x, code: m.code, description: m.description, charge: x.charge || m.charge.toFixed(2), pos: doc.mode === "telehealth" ? "10" : (x.pos || m.pos) } : x)))}
+                                  />
+                                ) : (
+                                  <input value={r[k]} onChange={(e) => setWProc((v) => v.map((x) => (x.id === r.id ? { ...x, [k]: e.target.value } : x)))}
+                                    className="w-full px-1.5 py-1 rounded border border-transparent hover:border-slate-200 dark:hover:border-slate-700 focus:border-brand-500 bg-transparent text-slate-800 dark:text-slate-200 focus:outline-none" />
+                                )}
                               </td>
                             ))}
                             <td className="px-1 py-0.5 text-right">
@@ -1001,6 +1025,64 @@ function Addenda({ doc, me, onDone }: { doc: EncounterNoteDoc; me: string; onDon
         )}
       </div>
     </section>
+  );
+}
+
+/* ── CPT type-ahead cell — suggestions from the procedure-code master ──── */
+
+function CptCell({ value, field, onChange, onPick }: {
+  value: string;
+  field: "code" | "description";
+  onChange: (v: string) => void;
+  onPick: (m: ProcedureCode) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  function place() {
+    const r = ref.current?.getBoundingClientRect();
+    if (r) setPos({ top: r.bottom + 2, left: r.left, width: Math.max(r.width, 360) });
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    const h = () => place();
+    window.addEventListener("scroll", h, true);
+    window.addEventListener("resize", h);
+    return () => { window.removeEventListener("scroll", h, true); window.removeEventListener("resize", h); };
+  }, [open]);
+
+  const matches = open ? searchProcedureCodes(value) : [];
+
+  return (
+    <div className="relative">
+      <input
+        ref={ref}
+        value={value}
+        placeholder={field === "code" ? "CPT…" : "Search CPT code or description…"}
+        onChange={(e) => { onChange(e.target.value); place(); setOpen(true); }}
+        onFocus={() => { place(); setOpen(true); }}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}
+        className="w-full px-1.5 py-1 rounded text-xs border border-transparent hover:border-slate-200 dark:hover:border-slate-700 focus:border-brand-500 bg-transparent text-slate-800 dark:text-slate-200 focus:outline-none"
+      />
+      {open && pos && matches.length > 0 && (
+        <div style={{ position: "fixed", top: pos.top, left: pos.left, width: pos.width }}
+          className="z-[75] bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 shadow-xl max-h-56 overflow-y-auto">
+          {matches.map((m) => (
+            <button key={m.code} type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => { onPick(m); setOpen(false); }}
+              className="w-full text-left px-3 py-1.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2">
+              <span className="font-mono font-semibold text-slate-800 dark:text-slate-200 shrink-0">{m.code}</span>
+              <span className="text-slate-600 dark:text-slate-300 truncate flex-1">{m.description}</span>
+              <span className="text-slate-400 shrink-0">${m.charge}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

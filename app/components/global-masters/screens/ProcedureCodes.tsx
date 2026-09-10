@@ -5,48 +5,14 @@ import { Hash, Plus, Pencil, PowerOff, Trash2, Search, X } from "lucide-react";
 import Drawer from "@/components/ui/Drawer";
 import Toggle from "@/components/ui/Toggle";
 import { cn } from "@/lib/utils";
+import {
+  PROCEDURE_CODE_MASTER, PROCEDURE_CODE_CATEGORIES, PROCEDURE_CODE_POS_OPTIONS,
+  type ProcedureCode,
+} from "@/data/procedure-codes";
 
-interface ProcedureCode {
-  id: string;
-  code: string;
-  description: string;
-  category: string;
-  charge: number;
-  discount: number;
-  modifier: string;
-  pos: string;
-  taxable: boolean;
-  displayOrder: number;
-  isActive: boolean;
-}
-
-const CATEGORIES = [
-  { value: "psychotherapy", label: "Psychotherapy" },
-  { value: "evaluation", label: "Evaluation & Management" },
-  { value: "assessment", label: "Assessment" },
-  { value: "group", label: "Group Therapy" },
-  { value: "crisis", label: "Crisis Intervention" },
-  { value: "other", label: "Other" },
-];
-
-const POS_OPTIONS = [
-  { value: "02", label: "02 — Telehealth" },
-  { value: "10", label: "10 — Telehealth (Home)" },
-  { value: "11", label: "11 — Office" },
-  { value: "12", label: "12 — Home" },
-  { value: "99", label: "99 — Other" },
-];
-
-const SEED: ProcedureCode[] = [
-  { id: "1", code: "90791", description: "Psychiatric Diagnostic Evaluation", category: "evaluation", charge: 350, discount: 0, modifier: "", pos: "11", taxable: false, displayOrder: 1, isActive: true },
-  { id: "2", code: "90837", description: "Psychotherapy, 60 minutes", category: "psychotherapy", charge: 200, discount: 0, modifier: "", pos: "11", taxable: false, displayOrder: 2, isActive: true },
-  { id: "3", code: "90834", description: "Psychotherapy, 45 minutes", category: "psychotherapy", charge: 160, discount: 0, modifier: "", pos: "11", taxable: false, displayOrder: 3, isActive: true },
-  { id: "4", code: "90832", description: "Psychotherapy, 30 minutes", category: "psychotherapy", charge: 120, discount: 0, modifier: "", pos: "11", taxable: false, displayOrder: 4, isActive: true },
-  { id: "5", code: "99213", description: "Office Visit, Established Patient — Low Complexity", category: "evaluation", charge: 175, discount: 0, modifier: "", pos: "11", taxable: false, displayOrder: 5, isActive: true },
-  { id: "6", code: "90853", description: "Group Psychotherapy", category: "group", charge: 80, discount: 0, modifier: "", pos: "11", taxable: false, displayOrder: 6, isActive: true },
-  { id: "7", code: "90839", description: "Psychotherapy for Crisis — First 60 minutes", category: "crisis", charge: 285, discount: 0, modifier: "", pos: "02", taxable: false, displayOrder: 7, isActive: true },
-  { id: "8", code: "96136", description: "Psychological or Neuropsychological Testing", category: "assessment", charge: 450, discount: 0, modifier: "", pos: "11", taxable: false, displayOrder: 8, isActive: true },
-];
+const CATEGORIES = PROCEDURE_CODE_CATEGORIES;
+const POS_OPTIONS = PROCEDURE_CODE_POS_OPTIONS;
+const SEED: ProcedureCode[] = PROCEDURE_CODE_MASTER;
 
 function StatusBadge({ active }: { active: boolean }) {
   return (

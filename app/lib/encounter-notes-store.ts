@@ -355,7 +355,7 @@ function makeSeed(): Record<string, EncounterNoteDoc> {
       diagnoses: signed ? (n.id === "note05" ? ["F33.1", "F41.1"] : ["F33.1"]) : [],
       procedures: signed
         ? (n.id === "note05"
-            ? [{ id: "pc1", description: "E/M established, high complexity", code: "99215", quantity: "1", charge: "215.00", dxPointers: "1,2", modifiers: "", pos: "11" }]
+            ? [{ id: "pc1", description: "Office/Outpatient Visit, Established Patient — High Complexity", code: "99215", quantity: "1", charge: "260.00", dxPointers: "1,2", modifiers: "", pos: "11" }]
             : seedProcedure())
         : [],
       templateId: signed ? "med-management" : undefined,
