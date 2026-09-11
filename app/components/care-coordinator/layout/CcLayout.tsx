@@ -6,12 +6,15 @@ import { Bell, Search, ChevronDown, Sun, Moon, Building2 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/contexts/AppContext";
+import { TourProvider } from "@/components/care-coordinator/tour/TourProvider";
+import { HeaderHelpButton } from "@/components/care-coordinator/tour/HeaderHelpButton";
 
 export default function CcLayout({ children }: { children: React.ReactNode }) {
   const { theme, setTheme } = useTheme();
   const { sidebarCollapsed } = useApp();
 
   return (
+    <TourProvider>
     <div className="h-full flex bg-slate-50 dark:bg-slate-950">
       <CcSidebar />
 
@@ -48,6 +51,8 @@ export default function CcLayout({ children }: { children: React.ReactNode }) {
               <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500 border border-white dark:border-slate-900" />
             </button>
 
+            <HeaderHelpButton />
+
             <button onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
               className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors"
               aria-label="Toggle theme">
@@ -60,5 +65,6 @@ export default function CcLayout({ children }: { children: React.ReactNode }) {
         <main className="flex-1 pt-[60px] overflow-y-auto">{children}</main>
       </div>
     </div>
+    </TourProvider>
   );
 }

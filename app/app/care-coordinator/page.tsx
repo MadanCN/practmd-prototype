@@ -106,7 +106,7 @@ export default function CcHomePage() {
         </div>
 
         {/* KPI row */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <div data-tour="cc-home-kpis" className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
           {kpis.map((k) => {
             const Icon = k.icon;
             return (
@@ -123,7 +123,7 @@ export default function CcHomePage() {
         </div>
 
         {/* Coverage / billing attention */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 mb-6">
+        <div data-tour="cc-home-coverage" className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 mb-6">
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-950/40 flex items-center justify-center">
@@ -160,7 +160,7 @@ export default function CcHomePage() {
         </div>
 
         {/* Today's schedule */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 mb-6">
+        <div data-tour="cc-home-schedule" className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 mb-6">
           <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
             <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Today&apos;s schedule</h2>
             <Link href="/care-coordinator/appointments/calendar" className="text-xs text-brand-600 dark:text-brand-400 font-medium flex items-center gap-1 hover:underline">Calendar <ArrowRight className="w-3 h-3" /></Link>
@@ -193,7 +193,7 @@ export default function CcHomePage() {
         </div>
 
         {/* Secondary grid */}
-        <div className="grid lg:grid-cols-3 gap-5">
+        <div data-tour="cc-home-secondary" className="grid lg:grid-cols-3 gap-5">
           <SectionCard icon={CheckSquare} iconCls="bg-brand-100 dark:bg-brand-950/40 text-brand-600 dark:text-brand-400" title="Tasks" count={openTasks.length} viewAllHref="/care-coordinator/tasks" emptyLabel="No open tasks.">
             {openTasks.slice(0, 4).map((t) => (
               <Row key={t.id} href="/care-coordinator/tasks">
