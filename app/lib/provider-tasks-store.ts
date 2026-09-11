@@ -137,23 +137,6 @@ export function closeTasksForNote(noteId: string) {
   }));
 }
 
-export function addFollowUpTask(input: { patientId: string; patientName: string; recommendation: string; interval: string }) {
-  const task: ProviderTaskItem = {
-    id: `tk_${Math.random().toString(36).slice(2, 9)}`,
-    kind: "follow-up-booking",
-    title: `Book follow-up — ${input.patientName}`,
-    detail: `${input.recommendation} · suggested interval: ${input.interval}. Raised to the coordinator for scheduling.`,
-    patientId: input.patientId,
-    patientName: input.patientName,
-    dueAt: hoursFromNow(48),
-    createdAt: new Date().toISOString(),
-    status: "open",
-    lane: "queue",
-  };
-  store.set((s) => ({ tasks: [task, ...s.tasks] }));
-  return task;
-}
-
 /** Generic task the provider raises for someone else (e.g. a credentialing
  *  change request from Settings / Profile). */
 export function addRequestTask(input: { kind: ProviderTaskKind; title: string; detail: string; lane?: "mine" | "queue" }) {

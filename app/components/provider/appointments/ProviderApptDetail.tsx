@@ -28,7 +28,7 @@ import {
   setApptStatus, pushNotification,
 } from "@/lib/encounter-store";
 import { useEncounterNotes, getNoteForAppointment, getNotesForPatient } from "@/lib/encounter-notes-store";
-import { addFollowUpTask } from "@/lib/provider-tasks-store";
+import { addFollowUpBookingTask } from "@/lib/onboarding-store";
 import { visitTypeDef, VISIT_TYPES } from "@/lib/visit-types";
 
 function fmt12(t: string) {
@@ -549,7 +549,7 @@ export function ProviderApptDetail({ appt: rawAppt, mode, onClose }: { appt: CcA
       {modal === "edit" && <EditApptModal appt={appt} patientName={patient.displayName} onClose={() => setModal(null)} onConfirm={doEdit} />}
       {modal === "follow-up" && (
         <FollowUpModal patientName={patient.displayName} onClose={() => setModal(null)}
-          onConfirm={(rec, interval) => { addFollowUpTask({ patientId: patient.id, patientName: patient.displayName, recommendation: rec, interval }); setModal(null); flash("Follow-up recommendation sent to the coordinator."); }} />
+          onConfirm={(rec, interval) => { addFollowUpBookingTask({ patientId: patient.id, patientName: patient.displayName, recommendation: rec, interval }); setModal(null); flash("Follow-up recommendation sent to the coordinator."); }} />
       )}
       {toast && (
         <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[90] px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-sm font-medium shadow-xl">

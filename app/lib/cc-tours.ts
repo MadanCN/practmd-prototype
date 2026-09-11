@@ -34,20 +34,19 @@ const HELP_STEP = (pageName: string): CcTourStep => ({
 export const CC_TOURS: Record<CcTourPageId, CcTourDef> = {
   home: {
     pageName: "Home",
-    welcome: { title: "Welcome to your Care Coordinator Home", body: "You're the front door for every patient at this clinic. Here's a 60-second tour of what Home gives you the moment you log in." },
+    welcome: { title: "Welcome to your Care Coordinator Home", body: "You manage every provider's patients at once, not one person's day. Here's a 60-second tour of what Home surfaces the moment you log in." },
     steps: [
-      { target: "cc-home-kpis", title: "Four numbers, one glance", body: "Today's appointments, who's in the waiting room, pending requests, and the waitlist. Each tile links straight to the work behind it." },
-      { target: "cc-home-coverage", title: "Coverage catches problems early", body: "Anyone on today's schedule with lapsed, pending, or self-pay coverage shows up here — before they're sitting in your waiting room. Click through to their Insurance tab to fix it." },
-      { target: "cc-home-schedule", title: "Today's schedule, live", body: "Every confirmed visit today, in order, with mode and time. It's the same list the calendar uses — click through to check a patient in." },
-      { target: "cc-home-secondary", title: "Tasks, requests, and the waitlist", body: "Your open work in one compact row, so you never have to leave Home to see what's pending. Full lists are one click away." },
+      { target: "cc-home-kpis", title: "Four queues, one glance", body: "Who's in the waiting room across every provider, pending requests, the waitlist, and open tasks. Each tile links straight to the work behind it." },
+      { target: "cc-home-actions", title: "This is the real job", body: "A patient finishing self-registration, Revenue Cycle resolving an eligibility check, a provider recommending a follow-up — each one hands you something to act on. This queue is where they all land." },
+      { target: "cc-home-secondary", title: "Live waiting room, requests, and the waitlist", body: "Who's actually checked in right now across every provider, plus a preview of pending requests and the waitlist. Full lists are one click away." },
       HELP_STEP("Home"),
     ],
-    helpIntro: "Home is your daily starting point — a single scan of today's schedule, coverage risk, and your team's open work.",
+    helpIntro: "Home is a coordinator's command centre across every provider — not a single schedule, but the queues you actually manage: who's here, who's waiting on a slot, and what other people just handed you to act on.",
     helpDoc: [
-      { h: "The KPI tiles", p: "Today's appointments, patients in the waiting room, pending appointment requests, and the waitlist. Each tile is a link." },
-      { h: "Coverage needs attention", p: "Patients on today's schedule whose insurance is inactive, pending renewal, or who are self-pay — resolved from each patient's Insurance tab." },
-      { h: "Today's schedule", p: "Your clinic's confirmed visits today, in time order." },
-      { h: "Tasks, requests & waitlist", p: "A compact preview of each queue, with a 'View all' link to the full page." },
+      { h: "The KPI tiles", p: "Waiting room (across all providers), pending appointment requests, the waitlist, and open tasks. Each tile is a link." },
+      { h: "Needs your action", p: "Your real task queue: new patient onboarding, appointments to book once Revenue Cycle resolves eligibility, and follow-ups a provider recommended. Coverage/billing itself is Revenue Cycle's queue, not yours." },
+      { h: "Waiting room now", p: "A live snapshot of who's checked in across every provider — not a forward-looking calendar." },
+      { h: "Requests & waitlist", p: "A compact preview of each queue, with a 'View all' link to the full page." },
     ],
   },
 };

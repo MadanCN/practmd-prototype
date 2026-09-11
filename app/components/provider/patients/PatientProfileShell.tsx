@@ -15,7 +15,7 @@ import {
 import { PATIENT_ALLERGIES_BY_ID, CARE_COMMENTS_BY_ID } from "@/data/provider-patient-clinical";
 import { addRecent } from "@/lib/provider-recents";
 import { useProviderSession } from "@/lib/provider-session";
-import { addFollowUpTask } from "@/lib/provider-tasks-store";
+import { addFollowUpBookingTask } from "@/lib/onboarding-store";
 import { useChartBase } from "./chart-base";
 import { SECTIONS, getSection, DEFAULT_SECTION } from "./sections/registry";
 import { OverviewSection } from "./sections/OverviewSection";
@@ -371,7 +371,7 @@ function FollowUpModal({ patient, onClose, onDone }: { patient: PatientProfile; 
         <div className="mt-4 flex justify-end gap-2">
           <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">Cancel</button>
           <button disabled={!rec.trim()}
-            onClick={() => { addFollowUpTask({ patientId: patient.id, patientName: patient.displayName, recommendation: rec.trim(), interval }); onDone("Follow-up recommendation sent to the coordinator."); }}
+            onClick={() => { addFollowUpBookingTask({ patientId: patient.id, patientName: patient.displayName, recommendation: rec.trim(), interval }); onDone("Follow-up recommendation sent to the coordinator."); }}
             className="px-4 py-2 rounded-lg text-sm font-semibold practmd-gradient text-white disabled:opacity-40">Send to coordinator</button>
         </div>
       </div>

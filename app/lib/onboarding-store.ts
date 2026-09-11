@@ -1,11 +1,16 @@
 "use client";
 
-// In-memory demo store bridging the Patient Onboarding wizard, the Revenue
-// Management eligibility worklist, and the Care Coordinator task queue.
-// No backend in this prototype — state lives for the lifetime of the tab and
-// is shared across routes via client-side navigation.
+// Demo store bridging the Patient Onboarding wizard, the Revenue Management
+// eligibility worklist, and the Care Coordinator task queue — this is the
+// data path for "another persona's action becomes a CC task" (a patient
+// self-registering, RCM resolving eligibility). No backend in this
+// prototype; persisted to localStorage like the other *-store.ts modules so
+// a task raised in one portal is still there when a coordinator opens
+// /care-coordinator fresh — the Provider and CC portals are separate
+// top-level routes a real user reaches by URL, not just client-side Links.
 
 import { useSyncExternalStore } from "react";
+import { createPersistedStore } from "@/lib/persist";
 
 export type EligibilityState =
   | "pending"
@@ -57,11 +62,14 @@ export interface EligibilityWorklistItem {
 
 export interface Task {
   id: string;
-  type: "onboarding-prep" | "book-appointment";
+  type: "onboarding-prep" | "book-appointment" | "follow-up-booking";
   title: string;
   detail: string;
+  patientId?: string;
   patientName: string;
-  submissionId: string;
+  /** onboarding-prep / book-appointment come from a submission; a provider's
+   *  follow-up-booking task has no submission behind it. */
+  submissionId?: string;
   assignee: string;
   status: "open" | "done";
   createdAt: string;
@@ -316,37 +324,41 @@ const seedTasks: Task[] = [
   },
 ];
 
-let state: StoreState = {
+const initialState: StoreState = {
   submissions: seedSubmissions,
   worklist: seedWorklist,
   tasks: seedTasks,
 };
 
-type Listener = () => void;
-let listeners: Listener[] = [];
-
-function emit() {
-  for (const l of listeners) l();
+/** Merge a persisted collection with the seed rows: keep everything saved,
+ *  plus any seed row the saved blob is missing — same idempotent pattern as
+ *  charge-store / insurance-store so a schema-widened seed (e.g. a new task
+ *  kind) still shows up for a browser with old persisted state. */
+function mergeById<T extends { id: string }>(persisted: T[] | undefined, seed: T[]): T[] {
+  const p = persisted ?? [];
+  const pIds = new Set(p.map((x) => x.id));
+  return [...p, ...seed.filter((x) => !pIds.has(x.id))];
 }
 
-function subscribe(listener: Listener) {
-  listeners = [...listeners, listener];
-  return () => {
-    listeners = listeners.filter((l) => l !== listener);
-  };
-}
-
-function getSnapshot() {
-  return state;
-}
+const store = createPersistedStore<StoreState>({
+  key: "onboarding-store",
+  initial: initialState,
+  revive: (raw, initial) => {
+    const r = raw as Partial<StoreState> | null;
+    return {
+      submissions: mergeById(r?.submissions, initial.submissions),
+      worklist: mergeById(r?.worklist, initial.worklist),
+      tasks: mergeById(r?.tasks, initial.tasks),
+    };
+  },
+});
 
 function set(updater: (s: StoreState) => StoreState) {
-  state = updater(state);
-  emit();
+  store.set(updater);
 }
 
 export function useOnboardingStore() {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getServerSnapshot);
 }
 
 // ── Onboarding wizard actions ────────────────────────────────────────────────
@@ -586,6 +598,25 @@ export function completeTask(taskId: string) {
     ...s,
     tasks: s.tasks.map((t) => (t.id === taskId ? { ...t, status: "done" } : t)),
   }));
+}
+
+/** A provider recommending a follow-up doesn't hold the booking permission —
+ *  it lands here, in the coordinator's real queue, not the provider's own
+ *  task list. Called from the Patient 360 "Recommend a follow-up" modal. */
+export function addFollowUpBookingTask(input: { patientId: string; patientName: string; recommendation: string; interval: string }): Task {
+  const task: Task = {
+    id: id("task"),
+    type: "follow-up-booking",
+    title: `Book follow-up — ${input.patientName}`,
+    detail: `${input.recommendation} · suggested interval: ${input.interval}.`,
+    patientId: input.patientId,
+    patientName: input.patientName,
+    assignee: DEFAULT_COORDINATOR,
+    status: "open",
+    createdAt: now(),
+  };
+  set((s) => ({ ...s, tasks: [...s.tasks, task] }));
+  return task;
 }
 
 export const RCM_ASSIGNEES = RCM_STAFF;
