@@ -3,10 +3,21 @@
 import RmSidebar from "./RmSidebar";
 import { Bell, Sun, Moon } from "lucide-react";
 import { useTheme } from "next-themes";
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+
+const TITLES: Record<string, string> = {
+  "/revenue-management/worklist": "Eligibility Worklist",
+  "/revenue-management/charges": "Charges",
+  "/revenue-management/invoices": "Invoices",
+  "/revenue-management/claims": "Claims",
+  "/revenue-management/settings": "Settings",
+};
 
 export default function RmLayout({ children }: { children: React.ReactNode }) {
   const { theme, setTheme } = useTheme();
+  const pathname = usePathname();
+  const title = TITLES[pathname] ?? "Revenue Management";
 
   return (
     <div className="h-full flex bg-slate-50 dark:bg-slate-950">
@@ -15,7 +26,7 @@ export default function RmLayout({ children }: { children: React.ReactNode }) {
       <div className="flex-1 flex flex-col min-h-screen ml-60 transition-[margin] duration-200">
         <header className="fixed top-0 right-0 left-60 z-30 h-[60px] bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center px-5 gap-4 transition-[left] duration-200">
           <div className="flex items-center gap-2 text-sm flex-1 min-w-0">
-            <span className="font-semibold text-slate-800 dark:text-slate-100">Eligibility Worklist</span>
+            <span className="font-semibold text-slate-800 dark:text-slate-100">{title}</span>
           </div>
           <div className="flex items-center gap-2 ml-auto">
             <button className="relative w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors">

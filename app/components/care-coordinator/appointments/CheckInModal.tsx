@@ -1,11 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { X, ShieldCheck, ShieldAlert, ShieldX, Loader2, CheckCircle2, AlertTriangle, User, CreditCard, Video } from "lucide-react";
+import { X, ShieldCheck, ShieldAlert, ShieldX, Loader2, CheckCircle2, AlertTriangle, User, CreditCard, Video, Wallet } from "lucide-react";
 import { type CcAppointment } from "@/data/cc-appointments";
 import { type CcPatient } from "@/data/cc-patients";
 import { type Provider } from "@/data/providers";
 import { cn } from "@/lib/utils";
+import { runEligibilityCheck as runEligibilityCheckStore, isSelfPay } from "@/lib/insurance-store";
+import type { EligibilityCheckReport } from "@/data/insurance";
+import { visitTypeDef } from "@/lib/visit-types";
+import CollectPaymentModal from "@/components/billing/CollectPaymentModal";
+import { type Invoice, getInvoicesForAppointment } from "@/lib/invoice-store";
 
 interface EligibilityResult {
   status: "eligible" | "issue" | "expired";
@@ -23,15 +28,17 @@ function fmt12(t: string) {
   return `${(h % 12) || 12}:${m.toString().padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
 }
 
+function toEligibilityResult(r: EligibilityCheckReport): EligibilityResult {
+  return {
+    status: r.status === "eligible" ? "eligible" : r.status === "expired" ? "expired" : "issue",
+    message: r.message, planName: r.planName, memberId: r.memberId,
+    copay: r.copay, deductibleMet: r.deductibleMet, deductibleTotal: r.deductibleTotal,
+  };
+}
+
 async function runEligibilityCheck(patient: CcPatient): Promise<EligibilityResult> {
-  await new Promise(r => setTimeout(r, 1600));
-  if (patient.insuranceStatus === "inactive") {
-    return { status: "issue", message: "Coverage inactive as of last verification. Confirm with patient before proceeding.", planName: patient.insuranceProvider, memberId: patient.insuranceMemberId };
-  }
-  if (patient.insuranceStatus === "pending") {
-    return { status: "expired", message: "Coverage pending renewal. Prior authorization may be required.", planName: patient.insuranceProvider, memberId: patient.insuranceMemberId };
-  }
-  return { status: "eligible", planName: patient.insuranceProvider, memberId: patient.insuranceMemberId, copay: 30, deductibleMet: 850, deductibleTotal: 2000 };
+  const report = await runEligibilityCheckStore(patient.id, { source: "check-in", checkedBy: "Front desk — check-in" });
+  return toEligibilityResult(report);
 }
 
 interface Props {
@@ -48,11 +55,17 @@ export default function CheckInModal({ appointment, patient, provider, onConfirm
   const [eligibilityState, setEligibilityState] = useState<"idle" | "running" | "done">("idle");
   const [eligibilityResult, setEligibilityResult] = useState<EligibilityResult | null>(null);
   const [proceedWithWarning, setProceedWithWarning] = useState(false);
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [collectedInvoice, setCollectedInvoice] = useState<Invoice | null>(() => getInvoicesForAppointment(appointment.id)[0] ?? null);
 
   const isTelehealth = appointment.mode === "telehealth";
   const canRunEligibility = idVerified && insurancePresented;
   const eligibilityOk = eligibilityResult?.status === "eligible" || (eligibilityResult?.status !== null && proceedWithWarning);
   const canCheckIn = idVerified && insurancePresented && eligibilityOk;
+
+  const selfPay = isSelfPay(patient.id) || (eligibilityResult?.status !== "eligible" && eligibilityState === "done");
+  const amountOwed = eligibilityState !== "done" ? 0 : selfPay ? visitTypeDef(appointment.visitType).typicalCharge : (eligibilityResult?.copay ?? 0);
+  const paymentLabel = selfPay ? "Self-pay — full visit fee" : "Copay due today";
 
   async function handleEligibility() {
     setEligibilityState("running");
@@ -217,6 +230,31 @@ export default function CheckInModal({ appointment, patient, provider, onConfirm
             )}
           </div>
 
+          {/* Collect Payment */}
+          {eligibilityState === "done" && amountOwed > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+                {isTelehealth ? "Collect Payment" : "3 · Collect Payment"}
+              </p>
+              {collectedInvoice ? (
+                <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800 flex items-center gap-2.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                    {collectedInvoice.status === "paid" ? `$${collectedInvoice.amountPaid.toFixed(2)} collected` : collectedInvoice.amountPaid > 0 ? `$${collectedInvoice.amountPaid.toFixed(2)} collected — $${collectedInvoice.amountDue.toFixed(2)} still due` : "Invoice created — patient will be billed"}
+                  </p>
+                </div>
+              ) : (
+                <button type="button" onClick={() => setPaymentOpen(true)}
+                  className="w-full flex items-center justify-between gap-2 p-3 rounded-xl border-2 border-brand-300 dark:border-brand-700 bg-brand-50 dark:bg-brand-950/20 hover:bg-brand-100 dark:hover:bg-brand-950/40 transition-colors">
+                  <span className="flex items-center gap-2 text-sm font-semibold text-brand-700 dark:text-brand-400">
+                    <Wallet className="w-4 h-4" /> {paymentLabel}
+                  </span>
+                  <span className="text-sm font-bold text-brand-700 dark:text-brand-400">${amountOwed.toFixed(2)}</span>
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Encounter preview */}
           {canCheckIn && (
             <div className="p-3 rounded-xl bg-brand-50 dark:bg-brand-950/20 border border-brand-200 dark:border-brand-800">
@@ -243,6 +281,24 @@ export default function CheckInModal({ appointment, patient, provider, onConfirm
           </button>
         </div>
       </div>
+
+      {paymentOpen && (
+        <CollectPaymentModal
+          patientId={patient.id}
+          patientName={patient.displayName}
+          collectionPoint="pre-checkin"
+          collectedBy="Front desk — check-in"
+          newInvoice={{
+            type: selfPay ? "self-pay" : "copay",
+            lineItems: [{ description: `${paymentLabel} — ${appointment.visitType}`, amount: amountOwed }],
+            appointmentId: appointment.id,
+            title: paymentLabel,
+            subtitle: fmt12(appointment.startTime),
+          }}
+          onClose={() => setPaymentOpen(false)}
+          onDone={(inv) => { setCollectedInvoice(inv); setPaymentOpen(false); }}
+        />
+      )}
     </div>
   );
 }

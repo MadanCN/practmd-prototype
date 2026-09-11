@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, ClipboardCheck, Receipt, Settings, ChevronLeft, ChevronRight } from "lucide-react";
+import { LayoutDashboard, ClipboardCheck, Receipt, FileStack, Wallet, Settings, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const BASE = "/revenue-management";
@@ -11,6 +11,8 @@ const BASE = "/revenue-management";
 const NAV = [
   { label: "Eligibility Worklist", href: `${BASE}/worklist`, icon: ClipboardCheck },
   { label: "Charges", href: `${BASE}/charges`, icon: Receipt },
+  { label: "Invoices", href: `${BASE}/invoices`, icon: Wallet },
+  { label: "Claims", href: `${BASE}/claims`, icon: FileStack },
 ];
 
 const BOTTOM_NAV = [

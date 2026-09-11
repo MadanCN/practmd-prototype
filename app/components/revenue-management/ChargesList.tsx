@@ -1,21 +1,19 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Receipt, Search, ChevronRight, ArrowRight } from "lucide-react";
 import Drawer from "@/components/ui/Drawer";
 import { useChargeStore, advanceChargeStatus, type Charge, type ChargeStatus } from "@/lib/charge-store";
+import { isSelfPay } from "@/lib/insurance-store";
+import { createInvoice } from "@/lib/invoice-store";
+import { createClaimFromCharge } from "@/lib/claim-store";
 import { cn } from "@/lib/utils";
 
 const STATUS_CFG: Record<ChargeStatus, { label: string; cls: string }> = {
   ready: { label: "Ready to submit", cls: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400" },
   submitted: { label: "Submitted", cls: "bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400" },
   paid: { label: "Paid", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400" },
-};
-
-const NEXT_LABEL: Record<ChargeStatus, string | null> = {
-  ready: "Submit claim",
-  submitted: "Mark paid",
-  paid: null,
 };
 
 function fmtDate(iso: string) {
@@ -31,11 +29,37 @@ const FILTERS: { id: string; label: string; match: (s: ChargeStatus) => boolean 
 ];
 
 function ChargeDrawer({ charge, onClose }: { charge: Charge; onClose: () => void }) {
-  const nextLabel = NEXT_LABEL[charge.status];
+  const router = useRouter();
+  const selfPay = isSelfPay(charge.patientId);
+
+  function handlePrimaryAction() {
+    if (charge.status === "ready") {
+      if (selfPay) {
+        createInvoice({
+          patientId: charge.patientId, patientName: charge.patientName, chargeId: charge.id,
+          type: "self-pay", lineItems: [{ description: `${charge.visitType} — self-pay`, amount: charge.total }],
+          createdBy: "Revenue Cycle",
+        });
+        advanceChargeStatus(charge.id);
+        onClose();
+      } else {
+        const claim = createClaimFromCharge(charge, "Revenue Cycle");
+        advanceChargeStatus(charge.id);
+        onClose();
+        router.push(`/revenue-management/claims?claim=${claim.id}`);
+      }
+    } else {
+      advanceChargeStatus(charge.id);
+      onClose();
+    }
+  }
+
+  const nextLabel = charge.status === "ready" ? (selfPay ? "Create self-pay invoice" : "Create claim") : charge.status === "submitted" ? "Mark paid" : null;
+
   return (
     <Drawer open onClose={onClose} title={charge.patientName} description={`${charge.visitType} · DOS ${fmtDate(charge.dateOfService)}`} width="w-[520px]"
       footer={nextLabel ? (
-        <button onClick={() => { advanceChargeStatus(charge.id); onClose(); }}
+        <button onClick={handlePrimaryAction}
           className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold bg-amber-600 hover:bg-amber-700 text-white">
           {nextLabel} <ArrowRight className="w-4 h-4" />
         </button>

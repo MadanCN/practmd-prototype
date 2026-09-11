@@ -32,6 +32,8 @@ import { EncountersSection } from "./sections/EncountersSection";
 import { PhrProfileSection } from "./sections/PhrProfileSection";
 import { TimelineSection } from "./sections/TimelineSection";
 import { EmailsSection } from "./sections/EmailsSection";
+import { InsuranceSection } from "./sections/InsuranceSection";
+import { BillingSection } from "./sections/BillingSection";
 
 const HIGHLIGHT_BAR_H = 88; // px — keep in sync with the bar's rendered height
 
@@ -65,11 +67,14 @@ export function PatientProfileShell({ id }: { id: string }) {
     if (seed) addRecent({ kind: "patient", refId: id, title: seed.displayName, subtitle: seed.mrn, href: `${chartBase}/patients/${id}` });
     setAlertsDismissed(false);
   }, [id, seed, chartBase]);
-  const [sectionId, setSectionId] = useState<string>(() => {
-    if (typeof window === "undefined") return DEFAULT_SECTION;
+  // Deterministic on first render (server and client both start at the
+  // default) — the query-param deep link is applied after mount instead, to
+  // avoid a hydration mismatch from reading window.location during render.
+  const [sectionId, setSectionId] = useState<string>(DEFAULT_SECTION);
+  useEffect(() => {
     const s = new URLSearchParams(window.location.search).get("section");
-    return SECTIONS.some((x) => x.id === s) ? (s as string) : DEFAULT_SECTION;
-  });
+    if (s && SECTIONS.some((x) => x.id === s)) setSectionId(s);
+  }, []);
   const [editing, setEditing] = useState(false);
   const [confirm, setConfirm] = useState<null | "deactivate" | "reset">(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -254,6 +259,10 @@ export function PatientProfileShell({ id }: { id: string }) {
               onSave={(next) => { setProfile(next); setEditing(false); flash("Patient overview updated."); }}
               onCancel={() => setEditing(false)}
             />
+          ) : section.id === "insurance" ? (
+            <InsuranceSection patient={p} />
+          ) : section.id === "billing" ? (
+            <BillingSection patient={p} />
           ) : section.id === "appointments" ? (
             <AppointmentsSection patient={p} />
           ) : section.id === "messages" ? (

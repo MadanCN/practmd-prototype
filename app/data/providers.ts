@@ -1,4 +1,4 @@
-import type { BusinessHour, DayName } from "./clinics";
+import { DAYS, type BusinessHour, type DayName } from "./clinics";
 
 export { type BusinessHour };
 
@@ -74,7 +74,8 @@ const defaultWH: WorkingHour[] = [
   wh("Saturday", false), wh("Sunday", false),
 ];
 
-export const PROVIDERS: Provider[] = [
+/** Hand-authored, richly-detailed providers — used across demo flows. */
+const HAND_AUTHORED_PROVIDERS: Provider[] = [
   {
     id: "p1", kind: "provider",
     firstName: "Sarah", lastName: "Mitchell", displayName: "Dr. Sarah Mitchell",
@@ -287,3 +288,105 @@ export const PROVIDER_COLORS = [
   { label: "Slate", value: "#64748b" },
   { label: "Indigo", value: "#6366f1" },
 ];
+
+// ── Bulk provider roster ─────────────────────────────────────────────────────
+// A real multi-site behavioral health group runs 60+ clinicians. The five
+// above are hand-authored for demo depth (profile pages, tour, etc.); the
+// rest are generated deterministically (no Math.random — this file is read
+// during SSR, and non-deterministic seed data causes hydration mismatches)
+// so the roster is large enough to exercise the CC calendar's provider
+// search/filter at real scale.
+
+const CREDENTIALS_BY_TYPE: Record<string, string> = {
+  "Psychiatrist": "MD",
+  "Psychologist": "PhD",
+  "Licensed Clinical Social Worker": "LCSW",
+  "Licensed Professional Counselor": "LPC",
+  "Nurse Practitioner": "PMHNP-BC",
+  "Physician Assistant": "PA-C",
+  "Marriage & Family Therapist": "LMFT",
+  "Licensed Mental Health Counselor": "LMHC",
+};
+
+const GEN_FIRST_NAMES = [
+  "Olivia", "Ethan", "Maya", "Noah", "Isabella", "Liam", "Zoe", "Mason", "Ava", "Lucas",
+  "Chloe", "Jackson", "Nora", "Elijah", "Layla", "Aiden", "Grace", "Caleb", "Harper", "Owen",
+  "Ruby", "Wyatt", "Leah", "Julian", "Stella", "Gabriel", "Naomi", "Hudson", "Violet", "Ezra",
+  "Willow", "Nathaniel", "Aria", "Dominic", "Ivy", "Theo", "Elena", "Felix", "Sadie", "Miles",
+  "Priyanka", "Rohan", "Yara", "Amir", "Keiko", "Diego", "Fatima", "Kwame", "Anaya", "Sanjay",
+  "Camila", "Xavier", "Mei", "Tobias", "Soraya", "Bennett", "Nadia", "Cyrus", "Delphine", "Malik",
+];
+const GEN_LAST_NAMES = [
+  "Bennett", "Alvarez", "Foster", "Reyes", "Coleman", "Bishop", "Whitfield", "Navarro", "Sterling", "Osei",
+  "Delgado", "Whitmore", "Hutchinson", "Marchetti", "Kowalczyk", "Abernathy", "Castellano", "Fairweather", "Lindqvist", "Okafor",
+  "Villanueva", "Ashworth", "Dunmore", "Rosales", "Blackwood", "Tanaka", "Haverford", "Quintana", "Sokolov", "Merriweather",
+  "Chowdhury", "Larkspur", "Winslow", "Abara", "Castellanos", "Fenwick", "Amador", "Whitaker", "Sandoval", "Pemberton",
+];
+const GEN_LANGUAGE_SETS = [["English"], ["English", "Spanish"], ["English", "Mandarin"], ["English", "French"], ["English", "Portuguese"], ["English", "Hindi"], ["English", "Vietnamese"], ["English", "Arabic"]];
+const GEN_STREETS = ["14 Cobblestone Way", "220 Harborview Ln", "77 Aspen Grove Rd", "5 Lakeshore Dr", "312 Chestnut St", "89 Wintergreen Ave", "460 Birchcrest Blvd", "18 Foxglove Ct"];
+const GEN_CITIES: Record<string, { city: string; state: string; zip: string }[]> = {
+  "penfield-psychiatry": [{ city: "Penfield", state: "New York", zip: "14526" }, { city: "Rochester", state: "New York", zip: "14618" }, { city: "Pittsford", state: "New York", zip: "14534" }],
+  "new-hartford": [{ city: "Utica", state: "New York", zip: "13501" }, { city: "New Hartford", state: "New York", zip: "13413" }],
+  "shore-counseling": [{ city: "Ocean City", state: "New Jersey", zip: "08226" }, { city: "Somers Point", state: "New Jersey", zip: "08244" }],
+};
+const GEN_INSURERS = ["Aetna", "Blue Cross Blue Shield", "Cigna", "UnitedHealthcare", "Medicare", "Medicaid", "Optum Behavioral Health", "Excellus", "Fidelis Care", "Horizon NJ Health"];
+
+function generateAdditionalProviders(count: number): Provider[] {
+  const clinicIds = Object.keys(GEN_CITIES);
+  const out: Provider[] = [];
+  for (let i = 0; i < count; i++) {
+    const n = i + HAND_AUTHORED_PROVIDERS.length + 1; // continues p6, p7, ...
+    const first = GEN_FIRST_NAMES[i % GEN_FIRST_NAMES.length];
+    // *7 +3 spreads the last-name pairing so adjacent providers don't repeat combos
+    const last = GEN_LAST_NAMES[(i * 7 + 3) % GEN_LAST_NAMES.length];
+    const providerType = PROVIDER_TYPES[i % PROVIDER_TYPES.length];
+    const credentials = CREDENTIALS_BY_TYPE[providerType];
+    const primaryClinic = clinicIds[i % clinicIds.length];
+    const secondClinic = i % 5 === 0 ? clinicIds[(i + 1) % clinicIds.length] : undefined;
+    const loc = GEN_CITIES[primaryClinic][i % GEN_CITIES[primaryClinic].length];
+    const color = PROVIDER_COLORS[i % PROVIDER_COLORS.length].value;
+    const specs = [SPECIALIZATIONS_LIST[i % SPECIALIZATIONS_LIST.length], SPECIALIZATIONS_LIST[(i + 5) % SPECIALIZATIONS_LIST.length]];
+    const visitTypes = [VISIT_TYPES_LIST[i % VISIT_TYPES_LIST.length], VISIT_TYPES_LIST[(i + 2) % VISIT_TYPES_LIST.length]];
+    const services = [SERVICES_LIST[i % SERVICES_LIST.length], SERVICES_LIST[(i + 3) % SERVICES_LIST.length]];
+    const insuranceAccepted = [GEN_INSURERS[i % GEN_INSURERS.length], GEN_INSURERS[(i + 4) % GEN_INSURERS.length], GEN_INSURERS[(i + 7) % GEN_INSURERS.length]];
+    const domain = primaryClinic === "penfield-psychiatry" ? "penfieldpsych.com" : primaryClinic === "new-hartford" ? "newhartfordpsych.com" : "shorecounseling.com";
+    const openDays: DayName[] = i % 3 === 0
+      ? ["Monday", "Tuesday", "Wednesday", "Thursday"]
+      : i % 3 === 1
+        ? ["Tuesday", "Wednesday", "Thursday", "Friday"]
+        : ["Monday", "Wednesday", "Friday", "Saturday"];
+    const startH = 8 + (i % 3); // 8, 9, or 10 AM start
+    const endH = i % 4 === 0 ? 20 : 17; // one in four runs an evening clinic (up to 8 PM)
+
+    out.push({
+      id: `p${n}`, kind: "provider",
+      firstName: first, lastName: last, displayName: providerType === "Psychiatrist" ? `Dr. ${first} ${last}` : `${first} ${last}, ${credentials}`,
+      gender: i % 2 === 0 ? "Female" : "Male",
+      email: `${first.toLowerCase()}.${last.toLowerCase()}@${domain}`,
+      phone: `+1 (585) ${(400 + i).toString()}-${(1000 + i * 3).toString().slice(-4)}`,
+      dob: `${1965 + (i % 30)}-${((i % 12) + 1).toString().padStart(2, "0")}-${((i % 27) + 1).toString().padStart(2, "0")}`,
+      providerType, npi: `12345${(10000 + n).toString().slice(-5)}`,
+      licenseNumber: `${providerType === "Psychiatrist" ? "PN" : providerType === "Psychologist" ? "PY" : "LC"}-${(20000 + n * 13).toString()}`,
+      licenseState: loc.state,
+      specializations: specs,
+      clinicAccess: secondClinic ? [primaryClinic, secondClinic] : [primaryClinic],
+      color, credentials,
+      bio: `${first} ${last} provides ${specs[0].toLowerCase()} and ${specs[1].toLowerCase()} care${secondClinic ? " across multiple clinic sites" : ""}.`,
+      languages: GEN_LANGUAGE_SETS[i % GEN_LANGUAGE_SETS.length],
+      street: GEN_STREETS[i % GEN_STREETS.length], city: loc.city, state: loc.state, zip: loc.zip,
+      visitTypes, services,
+      telehealthEnabled: i % 3 !== 2,
+      permissionRole: PERMISSION_ROLES[i % PERMISSION_ROLES.length],
+      insuranceAccepted,
+      acceptingNewPatients: i % 6 !== 5,
+      isActive: i % 17 !== 16,
+      isDeleted: false,
+      workingHours: DAYS.map((day) => openDays.includes(day)
+        ? wh(day, true, `${startH.toString().padStart(2, "0")}:00`, `${endH.toString().padStart(2, "0")}:00`, "12:00", "13:00")
+        : wh(day, false)),
+    });
+  }
+  return out;
+}
+
+export const PROVIDERS: Provider[] = [...HAND_AUTHORED_PROVIDERS, ...generateAdditionalProviders(60)];

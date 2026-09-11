@@ -159,9 +159,11 @@ const RAW_APPOINTMENTS: CcAppointment[] = [
   { id: "a95", patientId: "pt11", providerId: "p1", clinicId: "penfield-psychiatry", visitType: "Spravato", mode: "in-person", date: d(weekOffset(5)), startTime: "09:00", endTime: "11:00", duration: 120, status: "confirmed", scheduleType: "appointment", appointmentType: "fixed" },
   { id: "a96", patientId: "pt07", providerId: "p1", clinicId: "penfield-psychiatry", visitType: "TMS", mode: "in-person", date: d(weekOffset(5)), startTime: "12:00", endTime: "12:40", duration: 40, status: "confirmed", scheduleType: "appointment", appointmentType: "fixed" },
 
-  // ── EVENING SLOTS (5–7 PM) — Dr. Sarah Mitchell (p1), demo coverage across
-  //    yesterday / today / tomorrow / this week, so Day, Week and Month views
-  //    all show appointments in the 5–7 PM band ─────────────────────────────
+  // ── EVENING SLOTS (4:30–10 PM) — Dr. Sarah Mitchell (p1) plus p2/p3, demo
+  //    coverage across yesterday / today / tomorrow / this week, so Day, Week
+  //    and Month views all show appointments in the late-afternoon-through-
+  //    10 PM band (some clinics run an evening shift for patients who work
+  //    days) ────────────────────────────────────────────────────────────────
   { id: "e01", patientId: "pt09", providerId: "p1", clinicId: "penfield-psychiatry", visitType: "Talk Therapy", mode: "in-person", date: d(0), startTime: "17:00", endTime: "17:45", duration: 45, status: "confirmed", scheduleType: "appointment", appointmentType: "fixed", notes: "Evening slot — patient works days" },
   { id: "e02", patientId: "pt13", providerId: "p1", clinicId: "penfield-psychiatry", visitType: "Med Management", mode: "telehealth", date: d(0), startTime: "18:00", endTime: "18:30", duration: 30, status: "confirmed", scheduleType: "appointment", appointmentType: "fixed" },
   { id: "e03", patientId: "pt15", providerId: "p1", clinicId: "penfield-psychiatry", visitType: "Initial Consultation", mode: "in-person", date: d(1), startTime: "17:30", endTime: "18:30", duration: 60, status: "confirmed", scheduleType: "appointment", appointmentType: "fixed", forms: ["PHQ-9", "GAD-7", "New Patient Intake"] },
@@ -169,6 +171,21 @@ const RAW_APPOINTMENTS: CcAppointment[] = [
   { id: "e05", patientId: "pt01", providerId: "p1", clinicId: "penfield-psychiatry", visitType: "Med Management", mode: "phone", date: d(weekOffset(1)), startTime: "17:00", endTime: "17:30", duration: 30, status: "confirmed", scheduleType: "appointment", appointmentType: "fixed" },
   { id: "e06", patientId: "pt05", providerId: "p1", clinicId: "penfield-psychiatry", visitType: "Talk Therapy", mode: "telehealth", date: d(weekOffset(4)), startTime: "18:00", endTime: "18:45", duration: 45, status: "confirmed", scheduleType: "appointment", appointmentType: "fixed" },
   { id: "e07", patientId: "pt07", providerId: "p1", clinicId: "penfield-psychiatry", visitType: "Crisis Visit", mode: "in-person", date: d(weekOffset(5)), startTime: "17:00", endTime: "17:45", duration: 45, status: "confirmed", scheduleType: "appointment", appointmentType: "fixed", notes: "Added late in the day — urgent" },
+  // 4:30-5:00 PM band + extended evening through 10 PM, today
+  { id: "e08", patientId: "pt02", providerId: "p1", clinicId: "penfield-psychiatry", visitType: "Follow-Up", mode: "in-person", date: d(0), startTime: "16:30", endTime: "17:00", duration: 30, status: "confirmed", scheduleType: "appointment", appointmentType: "fixed" },
+  { id: "e09", patientId: "pt06", providerId: "p1", clinicId: "penfield-psychiatry", visitType: "Talk Therapy", mode: "in-person", date: d(0), startTime: "19:00", endTime: "19:45", duration: 45, status: "confirmed", scheduleType: "appointment", appointmentType: "fixed", notes: "Evening slot — patient works days" },
+  { id: "e10", patientId: "pt12", providerId: "p1", clinicId: "penfield-psychiatry", visitType: "Med Management", mode: "telehealth", date: d(0), startTime: "19:45", endTime: "20:15", duration: 30, status: "confirmed", scheduleType: "appointment", appointmentType: "fixed" },
+  { id: "e11", patientId: "pt04", providerId: "p1", clinicId: "penfield-psychiatry", visitType: "Follow-Up", mode: "phone", date: d(0), startTime: "20:30", endTime: "21:00", duration: 30, status: "confirmed", scheduleType: "appointment", appointmentType: "fixed" },
+  { id: "e12", patientId: "pt08", providerId: "p1", clinicId: "penfield-psychiatry", visitType: "Talk Therapy", mode: "in-person", date: d(0), startTime: "21:15", endTime: "22:00", duration: 45, status: "confirmed", scheduleType: "appointment", appointmentType: "fixed", notes: "Last slot of the evening clinic" },
+  // Same late-afternoon/evening band for the other two default calendar providers
+  { id: "e13", patientId: "pt13", providerId: "p2", clinicId: "penfield-psychiatry", visitType: "Talk Therapy", mode: "in-person", date: d(0), startTime: "16:30", endTime: "17:30", duration: 60, status: "confirmed", scheduleType: "appointment", appointmentType: "fixed" },
+  { id: "e14", patientId: "pt09", providerId: "p2", clinicId: "penfield-psychiatry", visitType: "Initial Consultation", mode: "in-person", date: d(0), startTime: "20:00", endTime: "21:00", duration: 60, status: "confirmed", scheduleType: "appointment", appointmentType: "fixed" },
+  { id: "e15", patientId: "pt01", providerId: "p3", clinicId: "new-hartford", visitType: "Talk Therapy", mode: "in-person", date: d(0), startTime: "17:30", endTime: "18:15", duration: 45, status: "confirmed", scheduleType: "appointment", appointmentType: "fixed" },
+  { id: "e16", patientId: "pt15", providerId: "p3", clinicId: "new-hartford", visitType: "Follow-Up", mode: "telehealth", date: d(0), startTime: "20:00", endTime: "20:45", duration: 45, status: "confirmed", scheduleType: "appointment", appointmentType: "fixed" },
+  // Tomorrow, same 4:30 PM-10 PM band
+  { id: "e17", patientId: "pt11", providerId: "p1", clinicId: "penfield-psychiatry", visitType: "Med Management", mode: "in-person", date: d(1), startTime: "16:30", endTime: "17:00", duration: 30, status: "confirmed", scheduleType: "appointment", appointmentType: "fixed" },
+  { id: "e18", patientId: "pt03", providerId: "p1", clinicId: "penfield-psychiatry", visitType: "Crisis Visit", mode: "in-person", date: d(1), startTime: "19:30", endTime: "20:15", duration: 45, status: "confirmed", scheduleType: "appointment", appointmentType: "fixed" },
+  { id: "e19", patientId: "pt14", providerId: "p1", clinicId: "penfield-psychiatry", visitType: "Follow-Up", mode: "phone", date: d(1), startTime: "21:00", endTime: "21:30", duration: 30, status: "confirmed", scheduleType: "appointment", appointmentType: "fixed" },
 
   // ── NEXT WEEK (+1) — Dr. Sarah Mitchell (p1) ───────────────────────────────
   { id: "b01", patientId: "pt02", providerId: "p1", clinicId: "penfield-psychiatry", visitType: "Follow-Up", mode: "in-person", date: d(futureWeek(1, 1)), startTime: "09:00", endTime: "09:30", duration: 30, status: "confirmed", scheduleType: "appointment", appointmentType: "fixed" },

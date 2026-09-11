@@ -72,6 +72,24 @@ function seed(): Charge[] {
       diagnoses: [{ code: "F41.1", label: "Generalized Anxiety Disorder" }],
       total: 130, status: "submitted", createdAt: new Date(Date.now() - 20 * 86400000).toISOString(),
     },
+    {
+      id: "chg_seed3", noteId: "note07", appointmentId: "a01",
+      patientId: "pt01", patientName: "James Holloway", providerName: "Dr. Sarah Mitchell",
+      dateOfService: new Date(Date.now() - 2 * 86400000).toISOString().split("T")[0],
+      visitType: "Initial Consultation",
+      lines: [{ code: "90792", description: "Psychiatric diagnostic evaluation", units: "1", charge: "350.00", modifiers: "", pos: "11", dxPointers: "1" }],
+      diagnoses: [{ code: "F41.1", label: "Generalized Anxiety Disorder" }],
+      total: 350, status: "ready", createdAt: new Date(Date.now() - 2 * 86400000).toISOString(),
+    },
+    {
+      id: "chg_seed4", noteId: "note08", appointmentId: undefined,
+      patientId: "pt05", patientName: "David Okafor", providerName: "Dr. Sarah Mitchell",
+      dateOfService: new Date(Date.now() - 1 * 86400000).toISOString().split("T")[0],
+      visitType: "Follow-Up",
+      lines: [{ code: "99213", description: "E/M established, low", units: "1", charge: "130.00", modifiers: "", pos: "11", dxPointers: "1" }],
+      diagnoses: [{ code: "F32.9", label: "Major Depressive Disorder, unspecified" }],
+      total: 130, status: "ready", createdAt: new Date(Date.now() - 1 * 86400000).toISOString(),
+    },
   ];
 }
 

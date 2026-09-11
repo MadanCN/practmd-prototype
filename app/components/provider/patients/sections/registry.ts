@@ -1,7 +1,7 @@
 import {
   LayoutGrid, CreditCard, CalendarDays, MessageSquare, CheckSquare, ShieldAlert,
   HeartPulse, NotebookPen, StickyNote, ClipboardList, Files, ContactRound,
-  Pill, FlaskConical, History, Mail, type LucideIcon,
+  Pill, FlaskConical, History, Mail, ShieldCheck, type LucideIcon,
 } from "lucide-react";
 
 export interface SectionDef {
@@ -16,7 +16,8 @@ export interface SectionDef {
 
 export const SECTIONS: SectionDef[] = [
   { id: "overview", label: "Overview", icon: LayoutGrid, blurb: "Demographics, contact, emergency & caregiver details, communication preferences, PHR registration and referral source." },
-  { id: "billing", label: "Billing", icon: CreditCard, soon: true, blurb: "Claims, statements, balances and payment history." },
+  { id: "insurance", label: "Insurance", icon: ShieldCheck, blurb: "Policies, policy holder details, prior authorizations, and current & historical eligibility check reports." },
+  { id: "billing", label: "Billing", icon: CreditCard, blurb: "Saved payment methods, invoices, claims and payment history." },
   { id: "appointments", label: "Appointments", icon: CalendarDays, blurb: "This patient's upcoming, past and pending / waitlisted appointments, with a detail drawer." },
   { id: "messages", label: "Messages", icon: MessageSquare, blurb: "Every secure-message thread involving this patient and its full conversation." },
   { id: "tasks", label: "Tasks", icon: CheckSquare, blurb: "Open and completed care tasks tied to this patient." },

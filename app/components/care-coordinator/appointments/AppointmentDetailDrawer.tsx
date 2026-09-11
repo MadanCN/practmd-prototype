@@ -6,7 +6,10 @@ import { type CcAppointment, getWaitlistMatchesForProvider, getLastVisitForPatie
 import { CC_PATIENTS, type CcPatient } from "@/data/cc-patients";
 import { PROVIDERS, type Provider } from "@/data/providers";
 import { CLINIC_CONFIG } from "@/data/cc-masters";
-import { visitColor } from "@/lib/visit-types";
+import { visitColor, visitTypeDef } from "@/lib/visit-types";
+import { isSelfPay } from "@/lib/insurance-store";
+import { useInvoiceStore, getInvoicesForAppointment } from "@/lib/invoice-store";
+import CollectPaymentModal from "@/components/billing/CollectPaymentModal";
 import CancelModal from "./CancelModal";
 import CheckInModal from "./CheckInModal";
 import RescheduleModal from "./RescheduleModal";
@@ -297,8 +300,15 @@ export default function AppointmentDetailDrawer({ appointment, allAppointments, 
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [noShowOpen, setNoShowOpen] = useState(false);
   const [elig, setElig] = useState<EligResult>({ status: "idle" });
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  useInvoiceStore();
 
   const patient = appointment ? CC_PATIENTS.find(p => p.id === appointment.patientId) ?? null : null;
+  const apptInvoices = appointment ? getInvoicesForAppointment(appointment.id) : [];
+  const outstandingBalance = apptInvoices.filter(i => i.status !== "void" && i.status !== "refunded").reduce((s, i) => s + i.amountDue, 0);
+  const hasAnyPayment = apptInvoices.length > 0;
+  const selfPay = patient ? isSelfPay(patient.id) : false;
+  const suggestedAmount = appointment ? visitTypeDef(appointment.visitType).typicalCharge : 0;
   const provider = appointment ? PROVIDERS.find(p => p.id === appointment.providerId) ?? null : null;
   const lastVisit = useMemo(() => patient ? getLastVisitForPatient(patient.id) : null, [patient]);
   const waitlistMatches = useMemo(() =>
@@ -496,7 +506,7 @@ export default function AppointmentDetailDrawer({ appointment, allAppointments, 
                   </button>
 
                   {/* No Show */}
-                  <div className="relative group col-span-2">
+                  <div className="relative group">
                     <button onClick={() => canNoShow && setNoShowOpen(true)}
                       disabled={!canNoShow}
                       className={cn("w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all",
@@ -510,6 +520,19 @@ export default function AppointmentDetailDrawer({ appointment, allAppointments, 
                       )}
                     </button>
                   </div>
+
+                  {/* Collect Payment — works before or after check-in */}
+                  <button onClick={() => setPaymentOpen(true)}
+                    disabled={!["confirmed", "arrived", "in-session", "completed"].includes(appointment.status)}
+                    className={cn("flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all",
+                      outstandingBalance > 0
+                        ? "bg-amber-50 dark:bg-amber-950/20 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/40"
+                        : hasAnyPayment
+                        ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400"
+                        : "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/20")}>
+                    <CreditCard className="w-4 h-4 shrink-0" />
+                    {outstandingBalance > 0 ? `Collect $${outstandingBalance.toFixed(2)}` : hasAnyPayment ? "Paid" : "Collect Payment"}
+                  </button>
                 </div>
               </div>
 
@@ -733,6 +756,26 @@ export default function AppointmentDetailDrawer({ appointment, allAppointments, 
           onClose={() => setNoShowOpen(false)}
         />
       )}
+      {paymentOpen && appointment && patient && (() => {
+        const openInvoice = apptInvoices.find(i => i.amountDue > 0 && i.status !== "void" && i.status !== "refunded");
+        return (
+          <CollectPaymentModal
+            patientId={patient.id}
+            patientName={patient.displayName}
+            collectionPoint={["arrived", "in-session", "completed"].includes(appointment.status) ? "post-checkin" : "pre-checkin"}
+            collectedBy="Front desk"
+            existingInvoice={openInvoice}
+            newInvoice={openInvoice ? undefined : {
+              type: selfPay ? "self-pay" : "copay",
+              lineItems: [{ description: `${selfPay ? "Self-pay — full visit fee" : "Copay"} — ${appointment.visitType}`, amount: suggestedAmount }],
+              appointmentId: appointment.id,
+              title: selfPay ? "Collect self-pay balance" : "Collect copay",
+            }}
+            onClose={() => setPaymentOpen(false)}
+            onDone={() => setPaymentOpen(false)}
+          />
+        );
+      })()}
     </>
   );
 }
