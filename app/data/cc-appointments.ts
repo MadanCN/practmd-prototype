@@ -45,6 +45,8 @@ export interface CcAppointment {
   cancellationReason?: string;
   rescheduledFrom?: { date: string; startTime: string; endTime: string };
   activityLog?: AppointmentActivity[];
+  /** Room (+ its equipment) booked for an in-person visit — see data/resources.ts. */
+  resourceId?: string;
 }
 
 function d(offset: number): string {

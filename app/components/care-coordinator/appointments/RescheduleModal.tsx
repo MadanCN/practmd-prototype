@@ -3,15 +3,12 @@
 import { useState, useMemo, useEffect } from "react";
 import { X, Bell, BellOff, Check, AlertCircle, Loader2, CheckCircle2 } from "lucide-react";
 import WaitlistOfferPanel from "./WaitlistOfferPanel";
-import { type CcAppointment, getBookedSlots, getWaitlistMatchesForProvider } from "@/data/cc-appointments";
+import { type CcAppointment, getWaitlistMatchesForProvider } from "@/data/cc-appointments";
 import { CC_PATIENTS, type CcPatient } from "@/data/cc-patients";
 import { type Provider } from "@/data/providers";
 import { RESCHEDULE_REASONS, CLINIC_CONFIG } from "@/data/cc-masters";
-import { DAYS } from "@/data/clinics";
+import { generateDaySlots, getBookedSlots } from "@/lib/cc-availability";
 import { cn } from "@/lib/utils";
-
-
-const SLOT_INTERVAL = 30;
 
 function fmt12(t: string) {
   if (!t) return "";
@@ -29,21 +26,6 @@ function fmtDate(iso: string) {
   return new Date(iso + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
 }
 
-
-function generateSlots(provider: Provider, date: string): string[] {
-  const dayName = new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long" }) as typeof DAYS[number];
-  const wh = provider.workingHours.find(w => w.day === dayName);
-  if (!wh || !wh.isOpen) return [];
-  const slots: string[] = [];
-  let cur = wh.openTime;
-  while (cur < wh.closeTime) {
-    const next = addMinutes(cur, SLOT_INTERVAL);
-    if (next > wh.closeTime) break;
-    slots.push(cur);
-    cur = next;
-  }
-  return slots;
-}
 
 const INPUT = "w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500";
 
@@ -65,7 +47,7 @@ export default function RescheduleModal({ appointment, patient, provider, allApp
   const [notifyPatient, setNotifyPatient] = useState(true);
   const [phase, setPhase] = useState<Phase>("form");
 
-  const allSlots = useMemo(() => (newDate ? generateSlots(provider, newDate) : []), [provider, newDate]);
+  const allSlots = useMemo(() => (newDate ? generateDaySlots(provider, newDate) : []), [provider, newDate]);
   const bookedSlots = useMemo(() => (newDate ? getBookedSlots(provider.id, newDate) : []), [provider.id, newDate]);
 
   // Waitlist entries for the OLD slot (freed by reschedule)

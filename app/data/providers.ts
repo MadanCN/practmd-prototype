@@ -86,7 +86,7 @@ const HAND_AUTHORED_PROVIDERS: Provider[] = [
     clinicAccess: ["penfield-psychiatry", "new-hartford"],
     color: "#3b82f6", credentials: "MD, FAPA", bio: "Dr. Mitchell is a board-certified psychiatrist with over 15 years of experience specializing in adult mood disorders and anxiety.",
     languages: ["English", "Spanish"], street: "120 Oak Lane", city: "Penfield", state: "New York", zip: "14526",
-    visitTypes: ["Initial Consultation", "Follow-Up", "Medication Check"],
+    visitTypes: ["Initial Consultation", "Follow-Up", "Medication Check", "Spravato", "TMS"],
     services: ["Psychiatry", "Psychopharmacology", "Telehealth Consultation"],
     telehealthEnabled: true, permissionRole: "Attending Physician",
     isActive: true, isDeleted: false,

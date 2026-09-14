@@ -38,6 +38,7 @@ const ALIASES: Record<string, string> = {
   "medication check": "Med Management",
   "therapy session": "Talk Therapy",
   "telehealth consultation": "Follow-Up",
+  "telehealth visit": "Follow-Up",
   "discharge summary": "Follow-Up",
 };
 

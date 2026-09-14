@@ -1,13 +1,34 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { X, Search, UserPlus, Check, X as XIcon, ChevronRight, AlertCircle, Phone, Mail, Shield, ShieldCheck, ShieldAlert, Clock, Hourglass } from "lucide-react";
+// Progressive-disclosure booking flow: Location -> Provider (filtered to that
+// location) -> Visit type (filtered to that provider) -> Patient -> in/out-of-
+// network check -> mini calendar with day-level availability -> slot -> (if
+// in-person) Room & equipment -> forms/notes -> confirm. Each answered
+// section collapses to a summary chip with a "Change" link; changing an
+// earlier answer clears whatever depended on it, which is what re-expands
+// the flow from that point — no separate "which section is open" state to
+// keep in sync by hand.
+//
+// A calendar-slot click hands us providerId + date + startTime already —
+// those pre-fill Location/Provider/Date/Slot so the coordinator only answers
+// what the click didn't already tell us (visit type, patient, resource).
+
+import { useMemo, useState } from "react";
+import {
+  X, Search, UserPlus, Check, ChevronRight, ChevronDown, Phone, Mail, Shield, ShieldCheck,
+  ShieldAlert, Clock, MapPin, DoorOpen, Pencil, Building2, Wallet,
+} from "lucide-react";
 import { CC_PATIENTS, type CcPatient } from "@/data/cc-patients";
-import { PROVIDERS, type Provider, providerNetworkStatus } from "@/data/providers";
-import { getBookedSlots, getLastVisitForPatient, type CcAppointment, type AppointmentMode, type RecurrenceType, type ScheduleType, type AppointmentType } from "@/data/cc-appointments";
-import { VISIT_TYPE_LABELS } from "@/lib/visit-types";
-import { DAYS } from "@/data/clinics";
+import { PROVIDERS, providerNetworkStatus } from "@/data/providers";
+import { CLINICS } from "@/data/clinics";
+import { getResourcesForClinic, type ClinicResource, roomTypeLabel } from "@/data/resources";
+import { getLastVisitForPatient, type CcAppointment, type AppointmentMode, type RecurrenceType, type ScheduleType, type AppointmentType } from "@/data/cc-appointments";
+import { visitTypeDef } from "@/lib/visit-types";
+import { getPrimaryPolicy, isSelfPay } from "@/lib/insurance-store";
+import { generateDaySlots, getBookedSlots, isResourceFree } from "@/lib/cc-availability";
+import { fmt12, fmtDateMDY, fmtDuration, addMinutes } from "@/lib/cc-date-format";
 import { cn } from "@/lib/utils";
+import MiniAvailabilityCalendar from "./MiniAvailabilityCalendar";
 
 export interface PrefilledSlot {
   date?: string;
@@ -32,76 +53,52 @@ interface RecurrenceConfig {
 }
 
 interface FormState {
-  // Step 1
+  clinicId: string;
+  providerId: string;
+  visitType: string;
+  mode: AppointmentMode;
   patient: CcPatient | null;
   patientSearch: string;
-  // Step 2
-  visitType: string;
-  providerId: string;
-  mode: AppointmentMode;
-  recurrence: RecurrenceConfig;
-  // Step 3
   scheduleType: ScheduleType;
   appointmentType: AppointmentType;
   waitlistPriority: "crisis" | "urgent" | "routine";
   date: string;
   selectedSlots: string[];
-  // Step 4
+  resourceId: string | null;
+  resourceSkipped: boolean;
+  recurrence: RecurrenceConfig;
   forms: string[];
   notes: string;
 }
 
-const VISIT_TYPES = VISIT_TYPE_LABELS;
 const FORMS_LIBRARY = ["PHQ-9", "GAD-7", "New Patient Intake", "Medication Review", "ADHD Screening", "PTSD Checklist", "Session Notes", "Consent Form"];
-const SLOT_INTERVAL = 30;
+const IN_PERSON_ONLY_VISIT_TYPES = new Set(["Spravato", "TMS"]);
 
-function fmt12(t: string) {
-  if (!t) return "";
-  const [h, m] = t.split(":").map(Number);
-  const ampm = h >= 12 ? "PM" : "AM";
-  return `${((h % 12) || 12)}:${m.toString().padStart(2, "0")} ${ampm}`;
+const defaultRecurrence: RecurrenceConfig = { type: "none", every: 1, daysOfWeek: [], endDate: "", occurrences: 8, endMode: "occurrences" };
+
+function genApptId(): string {
+  return `new-${Date.now()}`;
 }
 
-function addMinutes(time: string, mins: number): string {
-  const [h, m] = time.split(":").map(Number);
-  const total = h * 60 + m + mins;
-  return `${Math.floor(total / 60).toString().padStart(2, "0")}:${(total % 60).toString().padStart(2, "0")}`;
-}
-
-function fmtDate(iso: string) {
-  return new Date(iso + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
-function calcAge(dob: string) {
-  const birth = new Date(dob);
-  const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const m = today.getMonth() - birth.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
-  return age;
-}
-
-function generateSlots(provider: Provider | undefined, date: string): string[] {
-  if (!provider) return [];
-  const dayName = new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long" }) as typeof DAYS[number];
-  const wh = provider.workingHours.find(w => w.day === dayName);
-  if (!wh || !wh.isOpen) return [];
-  const slots: string[] = [];
-  let cur = wh.openTime;
-  const end = wh.closeTime;
-  while (cur < end) {
-    const next = addMinutes(cur, SLOT_INTERVAL);
-    if (next > end) break;
-    slots.push(cur);
-    cur = next;
-  }
-  return slots;
+function initialForm(prefilled?: PrefilledSlot | null): FormState {
+  const provider = prefilled?.providerId ? PROVIDERS.find((p) => p.id === prefilled.providerId) : undefined;
+  return {
+    clinicId: provider?.clinicAccess[0] ?? "",
+    providerId: prefilled?.providerId ?? "",
+    visitType: "",
+    mode: "in-person",
+    patient: null, patientSearch: "",
+    scheduleType: "appointment", appointmentType: "fixed", waitlistPriority: "routine",
+    date: prefilled?.date ?? "",
+    selectedSlots: prefilled?.startTime ? [prefilled.startTime] : [],
+    resourceId: null, resourceSkipped: false,
+    recurrence: defaultRecurrence,
+    forms: [], notes: "",
+  };
 }
 
 const INPUT = "w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500";
 const LABEL = "block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5";
-
-const defaultRecurrence: RecurrenceConfig = { type: "none", every: 1, daysOfWeek: [], endDate: "", occurrences: 8, endMode: "occurrences" };
 
 const INSURANCE_STATUS_STYLES = {
   active: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400",
@@ -109,240 +106,339 @@ const INSURANCE_STATUS_STYLES = {
   pending: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400",
 };
 
-export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAppointment }: DrawerProps) {
-  const [step, setStep] = useState(1);
-  const [form, setForm] = useState<FormState>({
-    patient: null, patientSearch: "",
-    visitType: "", providerId: prefilled?.providerId ?? "", mode: "in-person",
-    recurrence: defaultRecurrence,
-    scheduleType: "appointment", appointmentType: "fixed", waitlistPriority: "routine",
-    date: prefilled?.date ?? "", selectedSlots: [],
-    forms: [], notes: "",
-  });
-  const [formSearch, setFormSearch] = useState("");
+// ── Section shell — collapses to a summary chip once answered ──────────────
 
-  function set<K extends keyof FormState>(key: K, val: FormState[K]) {
-    setForm(f => ({ ...f, [key]: val }));
+function Section({ n, title, done, summary, onChange, locked, children }: {
+  n: number; title: string; done: boolean; summary?: React.ReactNode; onChange?: () => void; locked?: boolean; children: React.ReactNode;
+}) {
+  if (locked) {
+    return (
+      <div className="flex items-center gap-3 py-2.5 opacity-40">
+        <span className="w-6 h-6 rounded-full border border-slate-300 dark:border-slate-600 text-[11px] font-semibold text-slate-400 flex items-center justify-center shrink-0">{n}</span>
+        <span className="text-sm text-slate-400">{title}</span>
+      </div>
+    );
+  }
+  if (done) {
+    return (
+      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 px-3.5 py-2.5">
+        <button type="button" onClick={onChange} className="w-full flex items-center gap-3 text-left group">
+          <span className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+            <Check className="w-3.5 h-3.5" />
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{title}</p>
+            <div className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{summary}</div>
+          </div>
+          {onChange && (
+            <span className="flex items-center gap-1 text-xs font-semibold text-brand-600 dark:text-brand-400 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Pencil className="w-3 h-3" /> Change
+            </span>
+          )}
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div className="flex items-center gap-3 mb-3">
+        <span className="w-6 h-6 rounded-full bg-brand-600 text-white text-[11px] font-semibold flex items-center justify-center shrink-0">{n}</span>
+        <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{title}</p>
+      </div>
+      <div className="ml-9">{children}</div>
+    </div>
+  );
+}
+
+export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAppointment }: DrawerProps) {
+  const [form, setForm] = useState<FormState>(() => initialForm(prefilled));
+  const [formSearch, setFormSearch] = useState("");
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  // The drawer is mounted once for the page's lifetime (it just slides in/out
+  // via `open`), so a `useState(() => initialForm(prefilled))` lazy
+  // initializer only ever runs on that first mount — a later calendar-slot
+  // click changes the `prefilled` *prop* on an already-mounted instance and
+  // would otherwise never reach the form. Re-seed on every closed->open
+  // transition instead, via the "adjust state during render" pattern already
+  // used in TourProvider.tsx (not an effect, so no cascading-render lint).
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
+      setForm(initialForm(prefilled));
+      setFormSearch("");
+      setDetailsOpen(false);
+    }
   }
 
-  // Step 1: patient search results
+  function set<K extends keyof FormState>(key: K, val: FormState[K]) {
+    setForm((f) => ({ ...f, [key]: val }));
+  }
+
+  const clinic = CLINICS.find((c) => c.id === form.clinicId);
+  const provider = PROVIDERS.find((p) => p.id === form.providerId);
+
+  const providersAtLocation = useMemo(
+    () => (form.clinicId ? PROVIDERS.filter((p) => p.clinicAccess.includes(form.clinicId) && p.isActive) : []),
+    [form.clinicId],
+  );
+
+  const providerVisitTypes = useMemo(() => {
+    if (!provider) return [];
+    const canonical = new Set(provider.visitTypes.map((v) => visitTypeDef(v).label));
+    return Array.from(canonical);
+  }, [provider]);
+
+  // ── Section 1: Location ──────────────────────────────────────────────────
+  function changeLocation() {
+    setForm((f) => ({ ...initialForm(null), patient: f.patient, patientSearch: f.patientSearch }));
+  }
+  function pickLocation(clinicId: string) {
+    setForm((f) => ({ ...initialForm(null), clinicId, patient: f.patient, patientSearch: f.patientSearch }));
+  }
+
+  // ── Section 2: Provider ──────────────────────────────────────────────────
+  function changeProvider() {
+    setForm((f) => ({ ...f, providerId: "", visitType: "", mode: "in-person", date: "", selectedSlots: [], resourceId: null, resourceSkipped: false }));
+  }
+  function pickProvider(id: string) {
+    setForm((f) => ({ ...f, providerId: id, visitType: "", date: "", selectedSlots: [], resourceId: null, resourceSkipped: false }));
+  }
+
+  // ── Section 3: Visit type (+ mode) ───────────────────────────────────────
+  function changeVisitType() {
+    setForm((f) => ({ ...f, visitType: "", date: "", selectedSlots: [], resourceId: null, resourceSkipped: false }));
+  }
+  function pickVisitType(v: string) {
+    // Only clear a chosen date/slot when this is an actual change of an
+    // already-picked visit type (duration may differ) — not on the first
+    // pick, which would otherwise wipe a calendar-click's prefilled date and
+    // time before the coordinator ever sees them.
+    const forceInPerson = IN_PERSON_ONLY_VISIT_TYPES.has(v);
+    setForm((f) => ({ ...f, visitType: v, mode: forceInPerson ? "in-person" : f.mode }));
+  }
+
+  // ── Section 4: Patient ───────────────────────────────────────────────────
   const patientResults = useMemo(() => {
     const q = form.patientSearch.trim().toLowerCase();
     if (!q || q.length < 2) return [];
-    return CC_PATIENTS.filter(p =>
-      p.displayName.toLowerCase().includes(q) ||
-      p.mrn.toLowerCase().includes(q) ||
-      p.email.toLowerCase().includes(q)
+    return CC_PATIENTS.filter((p) =>
+      p.displayName.toLowerCase().includes(q) || p.mrn.toLowerCase().includes(q) || p.email.toLowerCase().includes(q),
     ).slice(0, 8);
   }, [form.patientSearch]);
+  const lastVisit = useMemo(() => (form.patient ? getLastVisitForPatient(form.patient.id) : null), [form.patient]);
 
-  // Derive last visit for selected patient
-  const lastVisit = useMemo(() => form.patient ? getLastVisitForPatient(form.patient.id) : null, [form.patient]);
+  // ── Network status (informational, not a gate) ──────────────────────────
+  const network = useMemo(() => {
+    if (!form.patient || !provider) return null;
+    if (isSelfPay(form.patient.id)) return { kind: "self-pay" as const };
+    const payer = getPrimaryPolicy(form.patient.id)?.payerName ?? form.patient.insuranceProvider;
+    const status = providerNetworkStatus(provider.id, payer ?? null);
+    return { kind: status, payer: payer ?? "their plan" };
+  }, [form.patient, provider]);
 
-  // Step 3: slots
-  const provider = PROVIDERS.find(p => p.id === form.providerId);
-  const allSlots = useMemo(() => generateSlots(provider, form.date), [provider, form.date]);
-  const bookedSlots = useMemo(() => (form.providerId && form.date ? getBookedSlots(form.providerId, form.date) : []), [form.providerId, form.date]);
-
+  // ── Section 6: Date & time ───────────────────────────────────────────────
   const isWaitlist = form.scheduleType === "waitlist";
   const maxSelect = isWaitlist ? Infinity : form.appointmentType === "reserved" ? 3 : 1;
+  const allSlots = useMemo(() => generateDaySlots(provider, form.date), [provider, form.date]);
+  const bookedSlots = useMemo(() => (form.providerId && form.date ? getBookedSlots(form.providerId, form.date) : []), [form.providerId, form.date]);
+  const duration = form.visitType ? visitTypeDef(form.visitType).defaultDurationMin : 30;
 
   function toggleSlot(slot: string) {
-    // On the waitlist every slot is selectable — even ones already booked —
-    // because a waitlist entry is a *preference*, not a hold.
     if (!isWaitlist && bookedSlots.includes(slot)) return;
     if (form.selectedSlots.includes(slot)) {
-      set("selectedSlots", form.selectedSlots.filter(s => s !== slot));
+      set("selectedSlots", form.selectedSlots.filter((s) => s !== slot));
     } else if (form.selectedSlots.length >= maxSelect) {
       if (form.appointmentType === "fixed" && !isWaitlist) set("selectedSlots", [slot]);
     } else {
       set("selectedSlots", [...form.selectedSlots, slot]);
     }
+    set("resourceId", null);
+    set("resourceSkipped", false);
   }
+  function changeDateTime() {
+    setForm((f) => ({ ...f, date: "", selectedSlots: [], resourceId: null, resourceSkipped: false }));
+  }
+  const scheduleDone = !!form.date && (isWaitlist || form.selectedSlots.length >= 1);
 
-  // Step validation
-  const canStep1 = !!form.patient;
-  const canStep2 = !!(form.visitType && form.providerId);
-  const canStep3 = !!(form.date && (
-    // waitlist: preferred slots are optional (0 = "any time works")
-    isWaitlist ||
-    (form.appointmentType === "fixed" && form.selectedSlots.length === 1) ||
-    (form.appointmentType === "reserved" && form.selectedSlots.length >= 1 && form.selectedSlots.length <= 3)
-  ));
+  // ── Section 7: Resources (in-person only) ────────────────────────────────
+  const needsResource = form.mode === "in-person";
+  const clinicResources = useMemo(() => (form.clinicId ? getResourcesForClinic(form.clinicId) : []), [form.clinicId]);
+  const primarySlot = form.selectedSlots[0];
+  const slotEndTime = primarySlot ? addMinutes(primarySlot, duration) : undefined;
 
-  function nextStep() { setStep(s => Math.min(s + 1, 4)); }
-  function prevStep() { setStep(s => Math.max(s - 1, 1)); }
-  const canProceed = step === 1 ? canStep1 : step === 2 ? canStep2 : step === 3 ? canStep3 : true;
+  function resourceFree(r: ClinicResource): boolean {
+    if (!primarySlot || !slotEndTime || !form.date) return true;
+    return isResourceFree(r.id, form.date, primarySlot, slotEndTime);
+  }
+  const resourceDone = !needsResource || !!form.resourceId || form.resourceSkipped;
+
+  // ── Steps / gating ───────────────────────────────────────────────────────
+  const locationDone = !!form.clinicId;
+  const providerDone = !!form.providerId;
+  const visitTypeDone = !!form.visitType;
+  const patientDone = !!form.patient;
+
+  const canConfirm = locationDone && providerDone && visitTypeDone && patientDone && scheduleDone;
 
   function handleConfirmAppointment() {
-    if (!form.patient || !form.providerId || !form.date) return;
-    if (!isWaitlist && form.selectedSlots.length === 0) return;
-    if (onNewAppointment) {
-      // Waitlist entries with no preferred time get a nominal slot for display.
-      const slot = form.selectedSlots[0] ?? (allSlots[0] ?? "09:00");
-      const duration = 60; // default duration
-      const newAppt: CcAppointment = {
-        id: `new-${Date.now()}`,
-        patientId: form.patient.id,
-        providerId: form.providerId,
-        clinicId: "penfield-psychiatry",
-        visitType: form.visitType || "Follow-Up",
-        mode: form.mode,
-        date: form.date,
-        startTime: slot,
-        endTime: addMinutes(slot, duration),
-        duration,
-        status: form.scheduleType === "waitlist" ? "waitlisted" : "confirmed",
-        scheduleType: form.scheduleType,
-        appointmentType: form.appointmentType,
-        forms: form.forms.length > 0 ? form.forms : undefined,
-        notes: form.notes || undefined,
-        recurrence: form.recurrence.type !== "none" ? form.recurrence : undefined,
-        waitlistPriority: form.scheduleType === "waitlist" ? form.waitlistPriority : undefined,
-        waitlistPosition: form.scheduleType === "waitlist" ? 99 : undefined,
-        reservedSlots: form.appointmentType === "reserved" ? form.selectedSlots.map(s => ({ date: form.date, startTime: s, endTime: addMinutes(s, duration) })) : undefined,
-      };
-      onNewAppointment(newAppt);
-    }
+    if (!canConfirm || !form.patient || !provider) return;
+    const slot = form.selectedSlots[0] ?? (allSlots[0] ?? "09:00");
+    const newAppt: CcAppointment = {
+      id: genApptId(),
+      patientId: form.patient.id,
+      providerId: form.providerId,
+      clinicId: form.clinicId,
+      visitType: form.visitType || "Follow-Up",
+      mode: form.mode,
+      date: form.date,
+      startTime: slot,
+      endTime: addMinutes(slot, duration),
+      duration,
+      status: isWaitlist ? "waitlisted" : "confirmed",
+      scheduleType: form.scheduleType,
+      appointmentType: form.appointmentType,
+      forms: form.forms.length > 0 ? form.forms : undefined,
+      notes: form.notes || undefined,
+      recurrence: form.recurrence.type !== "none" ? form.recurrence : undefined,
+      waitlistPriority: isWaitlist ? form.waitlistPriority : undefined,
+      waitlistPosition: isWaitlist ? 99 : undefined,
+      reservedSlots: form.appointmentType === "reserved" ? form.selectedSlots.map((s) => ({ date: form.date, startTime: s, endTime: addMinutes(s, duration) })) : undefined,
+      resourceId: needsResource && form.resourceId ? form.resourceId : undefined,
+    };
+    onNewAppointment?.(newAppt);
     handleClose();
   }
 
   function handleClose() {
-    setStep(1);
-    setForm({ patient: null, patientSearch: "", visitType: "", providerId: prefilled?.providerId ?? "", mode: "in-person", recurrence: defaultRecurrence, scheduleType: "appointment", appointmentType: "fixed", waitlistPriority: "routine", date: prefilled?.date ?? "", selectedSlots: [], forms: [], notes: "" });
+    setForm(initialForm(prefilled));
+    setDetailsOpen(false);
     onClose();
   }
 
-  const STEP_LABELS = ["Patient", "Details", "Schedule", "Summary"];
-
   return (
     <>
-      {/* Backdrop */}
       {open && <div className="fixed inset-0 bg-black/30 z-40" onClick={handleClose} />}
-
-      {/* Drawer */}
       <div className={cn(
-        "fixed top-0 right-0 h-full w-[480px] bg-white dark:bg-slate-900 z-50 shadow-2xl flex flex-col transition-transform duration-300",
-        open ? "translate-x-0" : "translate-x-full"
+        "fixed top-0 right-0 h-full w-[520px] bg-white dark:bg-slate-900 z-50 shadow-2xl flex flex-col transition-transform duration-300",
+        open ? "translate-x-0" : "translate-x-full",
       )}>
-        {/* Header */}
-        <div className="px-6 pt-5 pb-4 border-b border-slate-200 dark:border-slate-800 shrink-0">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">New Appointment</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Step {step} of 4 — {STEP_LABELS[step - 1]}</p>
-            </div>
-            <button onClick={handleClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors">
-              <X className="w-4 h-4" />
-            </button>
+        <div className="px-6 pt-5 pb-4 border-b border-slate-200 dark:border-slate-800 shrink-0 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">New Appointment</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Answer each step — earlier ones narrow the ones after.</p>
           </div>
-          {/* Step bar */}
-          <div className="flex gap-1.5">
-            {STEP_LABELS.map((label, i) => (
-              <div key={label} className="flex-1">
-                <div className={cn("h-1 rounded-full", i + 1 <= step ? "bg-brand-500" : "bg-slate-200 dark:bg-slate-700")} />
-                <p className={cn("text-[10px] mt-1 font-medium", i + 1 === step ? "text-brand-600 dark:text-brand-400" : "text-slate-400")}>{label}</p>
-              </div>
-            ))}
-          </div>
+          <button onClick={handleClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
         </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-3">
 
-          {/* ── STEP 1: Patient ── */}
-          {step === 1 && (
-            <div className="space-y-4">
-              <div>
-                <label className={LABEL}>Search Patient</label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input className={cn(INPUT, "pl-9")} placeholder="Search by name, MRN, or email…"
-                    value={form.patientSearch} onChange={e => set("patientSearch", e.target.value)} />
-                </div>
-              </div>
+          {/* 1 — Location */}
+          <Section n={1} title="Location" done={locationDone}
+            summary={clinic && <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-slate-400" /> {clinic.name} <span className="text-slate-400 font-normal">· {clinic.city}, {clinic.state}</span></span>}
+            onChange={changeLocation}>
+            <div className="grid gap-2">
+              {CLINICS.filter((c) => c.isActive).map((c) => (
+                <button key={c.id} type="button" onClick={() => pickLocation(c.id)}
+                  className="flex items-center gap-3 px-3.5 py-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/20 text-left transition-colors">
+                  <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-lg shrink-0">{c.logoEmoji}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{c.name}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{c.address}, {c.city}, {c.state} {c.zip}</p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
+                </button>
+              ))}
+            </div>
+          </Section>
 
-              {/* Selected patient — rich card */}
-              {form.patient && (
-                <div className="rounded-xl border border-brand-200 dark:border-brand-800 bg-brand-50/60 dark:bg-brand-950/20 overflow-hidden">
-                  {/* Name row */}
-                  <div className="flex items-start gap-3 px-4 pt-4 pb-3">
-                    <div className="w-10 h-10 rounded-full bg-brand-600 flex items-center justify-center text-sm font-bold text-white shrink-0">
-                      {form.patient.firstName[0]}{form.patient.lastName[0]}
-                    </div>
+          {/* 2 — Provider (filtered to location) */}
+          <Section n={2} title="Provider" done={providerDone} locked={!locationDone}
+            summary={provider && <span>{provider.displayName} <span className="text-slate-400 font-normal">· {provider.providerType}</span></span>}
+            onChange={changeProvider}>
+            {providersAtLocation.length === 0 ? (
+              <p className="text-sm text-slate-400 py-3">No active providers at this location.</p>
+            ) : (
+              <div className="grid gap-1.5 max-h-72 overflow-y-auto pr-1">
+                {providersAtLocation.map((p) => (
+                  <button key={p.id} type="button" onClick={() => pickProvider(p.id)}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/20 text-left transition-colors">
+                    <span className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ backgroundColor: p.color }}>
+                      {p.firstName[0]}{p.lastName[0]}
+                    </span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-slate-900 dark:text-slate-100">{form.patient.displayName}</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        {form.patient.mrn} · {form.patient.gender} · {calcAge(form.patient.dob)} yrs (DOB {fmtDate(form.patient.dob)})
-                      </p>
+                      <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{p.displayName}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{p.providerType} · {p.specializations.slice(0, 2).join(", ")}</p>
                     </div>
-                    <button onClick={() => set("patient", null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 mt-0.5">
-                      <XIcon className="w-4 h-4" />
+                    <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </Section>
+
+          {/* 3 — Visit type + mode */}
+          <Section n={3} title="Visit type" done={visitTypeDone} locked={!providerDone}
+            summary={form.visitType && <span>{form.visitType} <span className="text-slate-400 font-normal">· {form.mode === "in-person" ? "In-Person" : form.mode === "telehealth" ? "Telehealth" : "Phone"}</span></span>}
+            onChange={changeVisitType}>
+            {providerVisitTypes.length === 0 ? (
+              <p className="text-sm text-slate-400 py-3">This provider has no visit types configured.</p>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {providerVisitTypes.map((v) => (
+                    <button key={v} type="button" onClick={() => pickVisitType(v)}
+                      className="px-3.5 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/20 text-sm font-medium text-slate-700 dark:text-slate-300 transition-colors">
+                      {v} <span className="text-xs text-slate-400 ml-1">{fmtDuration(visitTypeDef(v).defaultDurationMin)}</span>
                     </button>
-                  </div>
-
-                  {/* Details grid */}
-                  <div className="border-t border-brand-100 dark:border-brand-900 divide-y divide-brand-100 dark:divide-brand-900">
-                    {/* Insurance */}
-                    <div className="flex items-center gap-3 px-4 py-2.5">
-                      <Shield className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <span className="text-xs text-slate-500 dark:text-slate-400">Insurance</span>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-sm font-medium text-slate-800 dark:text-slate-200">
-                            {form.patient.insuranceProvider ?? "—"}
-                          </span>
-                          {form.patient.insuranceMemberId && (
-                            <span className="text-xs text-slate-400">#{form.patient.insuranceMemberId}</span>
-                          )}
-                          {form.patient.insuranceStatus && (
-                            <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full uppercase tracking-wide", INSURANCE_STATUS_STYLES[form.patient.insuranceStatus])}>
-                              {form.patient.insuranceStatus}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Last visit */}
-                    <div className="flex items-center gap-3 px-4 py-2.5">
-                      <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <div className="flex-1">
-                        <span className="text-xs text-slate-500 dark:text-slate-400">Last Visit</span>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          {lastVisit ? (
-                            <>
-                              <span className="text-sm font-medium text-slate-800 dark:text-slate-200">{fmtDate(lastVisit.date)}</span>
-                              <span className="text-xs text-slate-500">·</span>
-                              <span className="text-xs text-slate-600 dark:text-slate-400">{lastVisit.visitType}</span>
-                            </>
-                          ) : (
-                            <span className="text-sm text-slate-400 italic">No prior visits</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Contact row */}
-                    <div className="flex items-center gap-4 px-4 py-2.5">
-                      <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                        <Phone className="w-3 h-3" />
-                        {form.patient.phone}
-                      </div>
-                      <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 truncate">
-                        <Mail className="w-3 h-3 shrink-0" />
-                        <span className="truncate">{form.patient.email}</span>
-                      </div>
-                    </div>
-                  </div>
+                  ))}
                 </div>
-              )}
+              </>
+            )}
+          </Section>
 
-              {/* Search results */}
-              {!form.patient && patientResults.length > 0 && (
+          {/* Mode toggle — visible once a visit type is chosen; folded into the same visual group */}
+          {visitTypeDone && (
+            <div className="ml-9 -mt-1">
+              <label className={cn(LABEL, "text-xs")}>Mode</label>
+              <div className="flex gap-2">
+                {(["in-person", "telehealth", "phone"] as AppointmentMode[]).map((m) => {
+                  const forcedInPerson = IN_PERSON_ONLY_VISIT_TYPES.has(form.visitType);
+                  const disabled = forcedInPerson && m !== "in-person";
+                  return (
+                    <button key={m} type="button" disabled={disabled}
+                      onClick={() => { set("mode", m); set("resourceId", null); set("resourceSkipped", false); }}
+                      className={cn("flex-1 py-1.5 rounded-lg border text-xs font-medium transition-colors capitalize",
+                        disabled ? "border-slate-100 dark:border-slate-800 text-slate-300 dark:text-slate-700 cursor-not-allowed" :
+                        form.mode === m ? "bg-brand-600 border-brand-600 text-white" : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-brand-400")}>
+                      {m === "in-person" ? "In-Person" : m === "telehealth" ? "Telehealth" : "Phone"}
+                    </button>
+                  );
+                })}
+              </div>
+              {IN_PERSON_ONLY_VISIT_TYPES.has(form.visitType) && (
+                <p className="text-[11px] text-slate-400 mt-1">{form.visitType} requires an in-person visit.</p>
+              )}
+            </div>
+          )}
+
+          {/* 4 — Patient */}
+          <Section n={4} title="Patient" done={patientDone} locked={!visitTypeDone}
+            summary={form.patient && <span>{form.patient.displayName} <span className="text-slate-400 font-normal">· {form.patient.mrn}</span></span>}
+            onChange={() => set("patient", null)}>
+            <div className="space-y-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input className={cn(INPUT, "pl-9")} placeholder="Search by name, MRN, or email…"
+                  value={form.patientSearch} onChange={(e) => set("patientSearch", e.target.value)} />
+              </div>
+              {patientResults.length > 0 && (
                 <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden divide-y divide-slate-100 dark:divide-slate-800">
-                  {patientResults.map(p => (
-                    <button key={p.id} onClick={() => { set("patient", p); set("patientSearch", ""); }}
+                  {patientResults.map((p) => (
+                    <button key={p.id} type="button" onClick={() => { set("patient", p); set("patientSearch", ""); }}
                       className="w-full flex items-start gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 text-left transition-colors">
                       <div className="w-8 h-8 rounded-full bg-brand-100 dark:bg-brand-900 flex items-center justify-center text-xs font-bold text-brand-700 dark:text-brand-300 shrink-0">
                         {p.firstName[0]}{p.lastName[0]}
@@ -356,386 +452,291 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
                   ))}
                 </div>
               )}
-
-              {!form.patient && form.patientSearch.trim().length >= 2 && patientResults.length === 0 && (
+              {form.patientSearch.trim().length >= 2 && patientResults.length === 0 && (
                 <p className="text-sm text-slate-500 text-center py-4">No patients found matching &quot;{form.patientSearch}&quot;</p>
               )}
-
-              {/* Register new */}
-              <button className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 text-sm text-slate-500 hover:border-brand-400 hover:text-brand-600 transition-colors">
-                <UserPlus className="w-4 h-4" />
-                Register a new patient
+              <button type="button" className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 text-sm text-slate-500 hover:border-brand-400 hover:text-brand-600 transition-colors">
+                <UserPlus className="w-4 h-4" /> Register a new patient
               </button>
             </div>
-          )}
+          </Section>
 
-          {/* ── STEP 2: Details ── */}
-          {step === 2 && (
-            <div className="space-y-4">
-              <div>
-                <label className={LABEL}>Visit Type <span className="text-red-500">*</span></label>
-                <select className={INPUT} value={form.visitType} onChange={e => set("visitType", e.target.value)}>
-                  <option value="">Select visit type</option>
-                  {VISIT_TYPES.map(v => <option key={v} value={v}>{v}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <label className={LABEL}>Provider <span className="text-red-500">*</span></label>
-                <select className={INPUT} value={form.providerId} onChange={e => set("providerId", e.target.value)}>
-                  <option value="">Select provider</option>
-                  {PROVIDERS.map(p => <option key={p.id} value={p.id}>{p.displayName} · {p.providerType}</option>)}
-                </select>
-                {form.providerId && form.patient && (() => {
-                  const net = providerNetworkStatus(form.providerId, form.patient.insuranceProvider);
-                  const insurer = form.patient.insuranceProvider ?? "self-pay";
-                  if (net === "in-network") return (
-                    <div className="mt-2 flex items-start gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-400">
-                      <ShieldCheck className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                      <span><strong>In-network</strong> for {form.patient.displayName.split(" ")[0]}&apos;s {insurer} plan — standard copay applies.</span>
-                    </div>
-                  );
-                  if (net === "out-of-network") return (
-                    <div className="mt-2 flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-                      <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                      <span><strong>Out-of-network</strong> for {insurer}. The patient may face higher out-of-pocket costs or need an out-of-network authorization — confirm before booking.</span>
-                    </div>
-                  );
-                  return (
-                    <div className="mt-2 flex items-start gap-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs text-slate-500 dark:text-slate-400">
-                      <Shield className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                      <span>Network status unknown for this plan — verify eligibility before booking.</span>
-                    </div>
-                  );
-                })()}
-              </div>
-
-              <div>
-                <label className={LABEL}>Mode</label>
-                <div className="flex gap-2">
-                  {(["in-person", "telehealth", "phone"] as AppointmentMode[]).map(m => (
-                    <button key={m} onClick={() => set("mode", m)}
-                      className={cn("flex-1 py-2 rounded-lg border text-xs font-medium transition-colors capitalize",
-                        form.mode === m ? "bg-brand-600 border-brand-600 text-white" : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-brand-400")}>
-                      {m === "in-person" ? "In-Person" : m === "telehealth" ? "Telehealth" : "Phone"}
-                    </button>
-                  ))}
+          {/* Patient detail + network status — shown once patient is picked, folded under the section */}
+          {patientDone && form.patient && (
+            <div className="ml-9 -mt-1 space-y-2.5">
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                <div className="flex items-center gap-3 px-3.5 py-2">
+                  <Shield className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <span className="text-slate-500">Insurance</span>
+                  <span className="font-medium text-slate-700 dark:text-slate-300">{form.patient.insuranceProvider ?? "Self-pay"}</span>
+                  {form.patient.insuranceStatus && (
+                    <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full uppercase tracking-wide ml-auto", INSURANCE_STATUS_STYLES[form.patient.insuranceStatus])}>{form.patient.insuranceStatus}</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 px-3.5 py-2">
+                  <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <span className="text-slate-500">Last visit</span>
+                  <span className="font-medium text-slate-700 dark:text-slate-300">{lastVisit ? `${fmtDateMDY(lastVisit.date)} · ${lastVisit.visitType}` : "None"}</span>
+                </div>
+                <div className="flex items-center gap-4 px-3.5 py-2 text-slate-500">
+                  <span className="flex items-center gap-1.5"><Phone className="w-3 h-3" /> {form.patient.phone}</span>
+                  <span className="flex items-center gap-1.5 truncate"><Mail className="w-3 h-3 shrink-0" /> <span className="truncate">{form.patient.email}</span></span>
                 </div>
               </div>
 
-              <div>
-                <label className={LABEL}>Recurrence</label>
-                <div className="flex gap-2 flex-wrap">
-                  {(["none", "daily", "weekly", "monthly"] as RecurrenceType[]).map(r => (
-                    <button key={r} onClick={() => set("recurrence", { ...form.recurrence, type: r })}
-                      className={cn("px-3 py-1.5 rounded-lg border text-xs font-medium capitalize transition-colors",
-                        form.recurrence.type === r ? "bg-brand-600 border-brand-600 text-white" : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-brand-400")}>
-                      {r === "none" ? "No Repeat" : r}
-                    </button>
-                  ))}
+              {network && network.kind === "self-pay" && (
+                <div className="flex items-start gap-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs text-slate-500 dark:text-slate-400">
+                  <Wallet className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <span>Self-pay — no insurance on file, network status not applicable.</span>
                 </div>
-
-                {form.recurrence.type !== "none" && (
-                  <div className="mt-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-slate-600 dark:text-slate-400">Every</span>
-                      <input type="number" min={1} max={12} className="w-16 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-center bg-white dark:bg-slate-900"
-                        value={form.recurrence.every} onChange={e => set("recurrence", { ...form.recurrence, every: parseInt(e.target.value) || 1 })} />
-                      <span className="text-sm text-slate-600 dark:text-slate-400">{form.recurrence.type === "daily" ? "day(s)" : form.recurrence.type === "weekly" ? "week(s)" : "month(s)"}</span>
-                    </div>
-
-                    {form.recurrence.type === "weekly" && (
-                      <div>
-                        <p className="text-xs text-slate-500 mb-2">On these days:</p>
-                        <div className="flex gap-1 flex-wrap">
-                          {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(day => (
-                            <button key={day} onClick={() => {
-                              const days = form.recurrence.daysOfWeek.includes(day)
-                                ? form.recurrence.daysOfWeek.filter(d => d !== day)
-                                : [...form.recurrence.daysOfWeek, day];
-                              set("recurrence", { ...form.recurrence, daysOfWeek: days });
-                            }} className={cn("w-10 h-8 rounded-lg text-xs font-medium transition-colors",
-                              form.recurrence.daysOfWeek.includes(day) ? "bg-brand-600 text-white" : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400")}>
-                              {day}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    <div>
-                      <div className="flex gap-3 text-sm">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input type="radio" checked={form.recurrence.endMode === "occurrences"} onChange={() => set("recurrence", { ...form.recurrence, endMode: "occurrences" })} className="accent-brand-600" />
-                          <span className="text-slate-700 dark:text-slate-300">After</span>
-                          <input type="number" min={1} max={52} className="w-16 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-center bg-white dark:bg-slate-900"
-                            value={form.recurrence.occurrences} onChange={e => set("recurrence", { ...form.recurrence, occurrences: parseInt(e.target.value) || 1 })} />
-                          <span className="text-slate-600 dark:text-slate-400">sessions</span>
-                        </label>
-                      </div>
-                      <div className="flex gap-2 items-center mt-2 text-sm">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input type="radio" checked={form.recurrence.endMode === "date"} onChange={() => set("recurrence", { ...form.recurrence, endMode: "date" })} className="accent-brand-600" />
-                          <span className="text-slate-700 dark:text-slate-300">Until</span>
-                          <input type="date" className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
-                            value={form.recurrence.endDate} onChange={e => set("recurrence", { ...form.recurrence, endDate: e.target.value })} />
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
+              )}
+              {network && network.kind === "in-network" && (
+                <div className="flex items-start gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-400">
+                  <ShieldCheck className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <span><strong>In-network</strong> for {network.payer} — standard copay applies.</span>
+                </div>
+              )}
+              {network && network.kind === "out-of-network" && (
+                <div className="flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+                  <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <span><strong>Out-of-network</strong> for {network.payer}. Confirm the patient accepts out-of-network costs before booking.</span>
+                </div>
+              )}
+              {network && network.kind === "unknown" && (
+                <div className="flex items-start gap-2 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 px-3 py-2 text-xs text-slate-500 dark:text-slate-400">
+                  <Shield className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <span>Network status unknown for this plan — verify eligibility before booking.</span>
+                </div>
+              )}
             </div>
           )}
 
-          {/* ── STEP 3: Scheduling ── */}
-          {step === 3 && (
-            <div className="space-y-5">
+          {/* 5 — Date & time */}
+          <Section n={5} title="Date & time" done={scheduleDone} locked={!patientDone}
+            summary={form.date && primarySlot && (
+              <span>{fmtDateMDY(form.date)} <span className="text-slate-400 font-normal">· {fmt12(primarySlot)}–{fmt12(slotEndTime!)} ({fmtDuration(duration)})</span></span>
+            )}
+            onChange={changeDateTime}>
+            <div className="space-y-4">
               {/* Schedule type */}
-              <div>
-                <label className={LABEL}>Schedule Type</label>
+              <div className="flex gap-2">
+                {(["appointment", "waitlist"] as ScheduleType[]).map((t) => (
+                  <button key={t} type="button" onClick={() => { set("scheduleType", t); if (t === "waitlist") set("appointmentType", "fixed"); }}
+                    className={cn("flex-1 py-1.5 rounded-lg border text-xs font-medium capitalize transition-colors",
+                      form.scheduleType === t ? "bg-brand-600 border-brand-600 text-white" : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-brand-400")}>
+                    {t === "appointment" ? "Appointment" : "Waitlist"}
+                  </button>
+                ))}
+              </div>
+
+              {isWaitlist && (
+                <div>
+                  <p className="text-xs text-slate-500 mb-1.5">Waitlist priority</p>
+                  <div className="flex gap-2">
+                    {([{ v: "crisis", c: "bg-red-600 border-red-600" }, { v: "urgent", c: "bg-amber-500 border-amber-500" }, { v: "routine", c: "bg-slate-500 border-slate-500" }] as const).map((opt) => (
+                      <button key={opt.v} type="button" onClick={() => set("waitlistPriority", opt.v)}
+                        className={cn("flex-1 py-1.5 rounded-lg border text-xs font-semibold capitalize transition-colors",
+                          form.waitlistPriority === opt.v ? `${opt.c} text-white` : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400")}>
+                        {opt.v}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!isWaitlist && (
                 <div className="flex gap-2">
-                  {(["appointment", "waitlist"] as ScheduleType[]).map(t => (
-                    <button key={t} onClick={() => {
-                      set("scheduleType", t);
-                      if (t === "waitlist") set("appointmentType", "fixed");
-                    }}
-                      className={cn("flex-1 py-2 rounded-lg border text-sm font-medium capitalize transition-colors",
-                        form.scheduleType === t ? "bg-brand-600 border-brand-600 text-white" : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-brand-400")}>
-                      {t === "appointment" ? "Appointment" : "Waitlist"}
+                  {(["fixed", "reserved"] as AppointmentType[]).map((t) => (
+                    <button key={t} type="button" onClick={() => { set("appointmentType", t); set("selectedSlots", []); }}
+                      className={cn("flex-1 py-1.5 rounded-lg border text-xs font-medium transition-colors",
+                        form.appointmentType === t ? "bg-brand-600 border-brand-600 text-white" : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-brand-400")}>
+                      {t === "fixed" ? "Fixed slot" : "Offer up to 3"}
                     </button>
                   ))}
                 </div>
-              </div>
-
-              {/* How the waitlist works */}
-              {isWaitlist && (
-                <div className="rounded-xl border border-brand-200 dark:border-brand-900 bg-brand-50/60 dark:bg-brand-950/20 p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Hourglass className="w-4 h-4 text-brand-600 dark:text-brand-400" />
-                    <p className="text-sm font-semibold text-brand-800 dark:text-brand-300">How the waitlist works</p>
-                  </div>
-                  <ol className="space-y-1.5 text-xs text-brand-800/90 dark:text-brand-300/90 list-decimal list-inside">
-                    <li>The patient joins {(provider?.displayName ?? "the provider")}&apos;s queue for a <strong>{form.visitType || "visit"}</strong> — no slot is held.</li>
-                    <li>Pick any <strong>preferred</strong> times below (optional). Booked slots are fine to pick — you&apos;re saying &quot;take this if it opens up.&quot;</li>
-                    <li>When a matching slot frees up (a cancellation or a schedule change), the coordinator offers it to the top of the queue.</li>
-                    <li>Queue order is <strong>Crisis → Urgent → Routine</strong>, then position within each tier.</li>
-                    <li>The patient has 24 hours to accept an offered slot before it passes to the next person.</li>
-                  </ol>
-                </div>
               )}
 
-              {/* Waitlist priority (only for waitlist schedule type) */}
-              {isWaitlist && (
-                <div>
-                  <label className={LABEL}>Waitlist Priority <span className="text-red-500">*</span></label>
-                  <div className="flex gap-2">
-                    {([
-                      { value: "crisis", label: "Crisis", desc: "Immediate clinical need", color: "bg-red-600 border-red-600" },
-                      { value: "urgent", label: "Urgent", desc: "High priority", color: "bg-amber-500 border-amber-500" },
-                      { value: "routine", label: "Routine", desc: "Standard queue", color: "bg-slate-500 border-slate-500" },
-                    ] as const).map(opt => (
-                      <button key={opt.value} type="button"
-                        onClick={() => set("waitlistPriority", opt.value)}
-                        className={cn("flex-1 py-2.5 px-3 rounded-lg border-2 text-xs font-semibold transition-all text-center",
-                          form.waitlistPriority === opt.value
-                            ? `${opt.color} text-white`
-                            : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600")}>
-                        {opt.label}
-                        <span className="block text-[10px] font-normal mt-0.5 opacity-80">{opt.desc}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Appointment type (not for waitlist) */}
-              {form.scheduleType === "appointment" && (
-                <div>
-                  <label className={LABEL}>Appointment Type</label>
-                  <div className="flex gap-2">
-                    {(["fixed", "reserved"] as AppointmentType[]).map(t => (
-                      <button key={t} onClick={() => { set("appointmentType", t); set("selectedSlots", []); }}
-                        className={cn("flex-1 py-2 rounded-lg border text-sm font-medium transition-colors",
-                          form.appointmentType === t ? "bg-brand-600 border-brand-600 text-white" : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-brand-400")}>
-                        {t === "fixed" ? "Fixed" : "Reserved"}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
-                    {form.appointmentType === "fixed" ? "Select one slot — confirmed immediately." : "Select up to 3 slots to send to patient for confirmation."}
-                  </p>
-                </div>
-              )}
-
-              {/* Date */}
-              <div>
-                <label className={LABEL}>Date</label>
-                <input type="date" className={INPUT} value={form.date}
-                  onChange={e => { set("date", e.target.value); set("selectedSlots", []); }} />
-              </div>
+              {/* Mini calendar */}
+              <MiniAvailabilityCalendar provider={provider} selectedDate={form.date}
+                onSelectDate={(d) => { set("date", d); set("selectedSlots", []); set("resourceId", null); set("resourceSkipped", false); }} />
 
               {/* Slot grid */}
-              {form.date && form.providerId && (
+              {form.date && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className={cn(LABEL, "mb-0")}>
-                      {isWaitlist ? "Preferred times (optional)" : `Select Time Slot${form.appointmentType === "reserved" ? "s" : ""}`}
-                    </label>
-                    <div className="flex items-center gap-3 text-xs text-slate-500">
-                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border border-slate-300 bg-white dark:bg-slate-800 inline-block" />Available</span>
-                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-brand-500 inline-block" />{isWaitlist ? "Preferred" : "Selected"}</span>
-                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-slate-200 dark:bg-slate-700 inline-block opacity-50" />Booked</span>
-                    </div>
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      {isWaitlist ? "Preferred times (optional)" : `Select time${form.appointmentType === "reserved" ? "s" : ""}`}
+                    </p>
+                    <span className="text-[11px] text-slate-400">{fmtDateMDY(form.date)}</span>
                   </div>
-                  <p className="text-xs text-slate-500 mb-3">
-                    {isWaitlist
-                      ? "Pick any times that work — including booked ones. Leave blank if the patient is flexible on timing."
-                      : form.appointmentType === "fixed"
-                        ? "Click a slot to select it (only one can be selected)."
-                        : "Click to select up to 3 slots for the patient to choose from."}
-                  </p>
-
                   {allSlots.length === 0 ? (
-                    <p className="text-sm text-slate-500 text-center py-6">Provider is not scheduled on this day.</p>
+                    <p className="text-sm text-slate-500 text-center py-4">Provider is not scheduled on this day.</p>
                   ) : (
                     <div className="grid grid-cols-4 gap-2">
-                      {allSlots.map(slot => {
+                      {allSlots.map((slot) => {
                         const isBooked = bookedSlots.includes(slot);
                         const isSelected = form.selectedSlots.includes(slot);
                         const disabled = isBooked && !isWaitlist;
                         return (
-                          <button key={slot} disabled={disabled}
-                            onClick={() => toggleSlot(slot)}
-                            className={cn(
-                              "py-2 px-1 rounded-lg text-xs font-medium transition-all border",
+                          <button key={slot} type="button" disabled={disabled} onClick={() => toggleSlot(slot)}
+                            className={cn("py-2 px-1 rounded-lg text-xs font-medium transition-all border",
                               disabled && "bg-slate-100 dark:bg-slate-800 text-slate-400 border-transparent cursor-not-allowed opacity-50",
                               isSelected && "bg-brand-500 border-brand-500 text-white shadow-sm",
-                              !disabled && !isSelected && isBooked && "bg-slate-50 dark:bg-slate-800/40 border-dashed border-slate-300 dark:border-slate-600 text-slate-500 hover:border-brand-400",
-                              !disabled && !isSelected && !isBooked && "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/30"
-                            )}>
+                              !disabled && !isSelected && "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/30")}>
                             {fmt12(slot)}
-                            {isBooked && !isSelected && <span className="block text-[10px] font-normal">{isWaitlist ? "booked" : "Booked"}</span>}
-                            {isSelected && <span className="block text-[10px] font-normal opacity-80">{isWaitlist ? "preferred" : "Selected"}</span>}
                           </button>
                         );
                       })}
                     </div>
                   )}
-                  {isWaitlist && (
-                    <div className="mt-3 flex items-center gap-2 text-xs text-brand-600 dark:text-brand-400">
-                      <Check className="w-3.5 h-3.5" />
-                      {form.selectedSlots.length === 0
-                        ? "No preferred times — patient is flexible."
-                        : `${form.selectedSlots.length} preferred time${form.selectedSlots.length > 1 ? "s" : ""} noted.`}
-                    </div>
-                  )}
-
-                  {/* Validation hints */}
-                  {form.scheduleType === "appointment" && form.appointmentType === "fixed" && form.selectedSlots.length === 0 && form.date && allSlots.length > 0 && (
-                    <div className="mt-3 flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
-                      <AlertCircle className="w-3.5 h-3.5" />
-                      Select one slot to confirm the appointment.
-                    </div>
-                  )}
-                  {form.scheduleType === "appointment" && form.appointmentType === "reserved" && form.selectedSlots.length === 0 && form.date && allSlots.length > 0 && (
-                    <div className="mt-3 flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
-                      <AlertCircle className="w-3.5 h-3.5" />
-                      Select 1–3 slots to offer the patient.
-                    </div>
-                  )}
-                  {form.scheduleType === "appointment" && form.appointmentType === "reserved" && form.selectedSlots.length > 0 && (
-                    <div className="mt-3 flex items-center gap-2 text-xs text-brand-600 dark:text-brand-400">
-                      <Check className="w-3.5 h-3.5" />
-                      {form.selectedSlots.length} slot{form.selectedSlots.length > 1 ? "s" : ""} selected
-                      {form.selectedSlots.length < 3 ? ` (up to ${3 - form.selectedSlots.length} more)` : " (maximum reached)"}
+                  {primarySlot && slotEndTime && (
+                    <div className="mt-3 flex items-center gap-2 text-xs text-brand-700 dark:text-brand-400 bg-brand-50 dark:bg-brand-950/20 rounded-lg px-3 py-2">
+                      <Clock className="w-3.5 h-3.5 shrink-0" />
+                      Start {fmt12(primarySlot)} · End {fmt12(slotEndTime)} · Duration {fmtDuration(duration)}
                     </div>
                   )}
                 </div>
               )}
             </div>
+          </Section>
+
+          {/* 6 — Resources (in-person only) */}
+          {needsResource && (
+            <Section n={6} title="Room & equipment" done={resourceDone} locked={!patientDone || !scheduleDone}
+              summary={form.resourceId
+                ? (() => { const r = clinicResources.find((x) => x.id === form.resourceId); return r && <span className="flex items-center gap-1.5"><DoorOpen className="w-3.5 h-3.5 text-slate-400" /> {r.name}</span>; })()
+                : <span className="text-slate-400 font-normal">Not assigned yet</span>}
+              onChange={() => { set("resourceId", null); set("resourceSkipped", false); }}>
+              {clinicResources.length === 0 ? (
+                <p className="text-sm text-slate-400 py-3">No rooms configured at this location.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {clinicResources.map((r) => {
+                    const free = resourceFree(r);
+                    return (
+                      <button key={r.id} type="button" disabled={!free} onClick={() => set("resourceId", r.id)}
+                        className={cn("w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border text-left transition-colors",
+                          !free ? "border-slate-100 dark:border-slate-800 opacity-50 cursor-not-allowed" : "border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/20")}>
+                        <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+                          <DoorOpen className="w-4 h-4 text-slate-500" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{r.name}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">{roomTypeLabel(r.roomType)} · Cap. {r.capacity}{r.equipment.length > 0 ? ` · ${r.equipment.join(", ")}` : ""}</p>
+                        </div>
+                        {!free && <span className="text-[10px] font-semibold uppercase text-red-500 shrink-0">Booked</span>}
+                      </button>
+                    );
+                  })}
+                  <button type="button" onClick={() => { set("resourceSkipped", true); set("resourceId", null); }}
+                    className="w-full text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 py-2 text-center">
+                    Skip — assign a room at check-in
+                  </button>
+                </div>
+              )}
+            </Section>
           )}
 
-          {/* ── STEP 4: Summary ── */}
-          {step === 4 && (
-            <div className="space-y-5">
-              {/* Summary card */}
-              <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 divide-y divide-slate-200 dark:divide-slate-700">
-                {[
-                  { label: "Patient", value: form.patient ? `${form.patient.displayName} (${form.patient.mrn})` : "—" },
-                  { label: "Provider", value: provider?.displayName ?? "—" },
-                  { label: "Visit Type", value: form.visitType || "—" },
-                  { label: "Mode", value: form.mode === "in-person" ? "In-Person" : form.mode === "telehealth" ? "Telehealth" : "Phone" },
-                  { label: "Date", value: form.date ? new Date(form.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }) : "—" },
-                  {
-                    label: form.appointmentType === "reserved" ? "Offered Slots" : "Time",
-                    value: form.selectedSlots.length > 0 ? form.selectedSlots.map(s => fmt12(s)).join(", ") : "—"
-                  },
-                  { label: "Schedule Type", value: form.scheduleType === "waitlist" ? "Waitlist" : `Appointment (${form.appointmentType})` },
-                  ...(form.scheduleType === "waitlist" ? [{ label: "WL Priority", value: form.waitlistPriority.charAt(0).toUpperCase() + form.waitlistPriority.slice(1) }] : []),
-                  ...(form.recurrence.type !== "none" ? [{ label: "Recurrence", value: `${form.recurrence.type.charAt(0).toUpperCase() + form.recurrence.type.slice(1)}, every ${form.recurrence.every} ${form.recurrence.type}(s)` }] : []),
-                ].map(row => (
-                  <div key={row.label} className="flex items-start gap-3 px-4 py-2.5">
-                    <span className="text-xs text-slate-500 dark:text-slate-400 w-28 shrink-0 pt-0.5">{row.label}</span>
-                    <span className="text-sm font-medium text-slate-800 dark:text-slate-200 flex-1">{row.value}</span>
+          {/* 7 — Forms, notes, recurrence (optional, always reachable once scheduling is done) */}
+          {patientDone && scheduleDone && resourceDone && (
+            <div className="pt-1">
+              <button type="button" onClick={() => setDetailsOpen((v) => !v)}
+                className="w-full flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 py-2">
+                <ChevronDown className={cn("w-4 h-4 transition-transform", detailsOpen && "rotate-180")} />
+                Forms, notes &amp; recurrence <span className="text-xs text-slate-400 font-normal">(optional)</span>
+              </button>
+              {detailsOpen && (
+                <div className="space-y-4 mt-1">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className={cn(LABEL, "mb-0")}>Auto-assign forms</label>
+                      <span className="text-xs text-slate-500">{form.forms.length} selected</span>
+                    </div>
+                    <div className="relative mb-2">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                      <input className="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                        placeholder="Search forms…" value={formSearch} onChange={(e) => setFormSearch(e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                      {FORMS_LIBRARY.filter((f) => f.toLowerCase().includes(formSearch.toLowerCase())).map((f) => (
+                        <label key={f} className="flex items-center gap-3 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
+                          <input type="checkbox" className="accent-brand-600 w-4 h-4"
+                            checked={form.forms.includes(f)} onChange={() => set("forms", form.forms.includes(f) ? form.forms.filter((x) => x !== f) : [...form.forms, f])} />
+                          <span className="text-sm text-slate-700 dark:text-slate-300">{f}</span>
+                        </label>
+                      ))}
+                    </div>
                   </div>
-                ))}
-              </div>
 
-              {/* Auto-assign forms */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className={cn(LABEL, "mb-0")}>Auto-Assign Forms</label>
-                  <span className="text-xs text-slate-500">{form.forms.length} selected</span>
-                </div>
-                <div className="relative mb-2">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                  <input className="w-full pl-8 pr-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
-                    placeholder="Search forms…" value={formSearch} onChange={e => setFormSearch(e.target.value)} />
-                </div>
-                <div className="space-y-1.5 max-h-36 overflow-y-auto">
-                  {FORMS_LIBRARY.filter(f => f.toLowerCase().includes(formSearch.toLowerCase())).map(f => (
-                    <label key={f} className="flex items-center gap-3 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
-                      <input type="checkbox" className="accent-brand-600 w-4 h-4"
-                        checked={form.forms.includes(f)} onChange={() => set("forms", form.forms.includes(f) ? form.forms.filter(x => x !== f) : [...form.forms, f])} />
-                      <span className="text-sm text-slate-700 dark:text-slate-300">{f}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
+                  <div>
+                    <label className={LABEL}>Recurrence</label>
+                    <div className="flex gap-2 flex-wrap">
+                      {(["none", "daily", "weekly", "monthly"] as RecurrenceType[]).map((r) => (
+                        <button key={r} type="button" onClick={() => set("recurrence", { ...form.recurrence, type: r })}
+                          className={cn("px-3 py-1.5 rounded-lg border text-xs font-medium capitalize transition-colors",
+                            form.recurrence.type === r ? "bg-brand-600 border-brand-600 text-white" : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-brand-400")}>
+                          {r === "none" ? "No repeat" : r}
+                        </button>
+                      ))}
+                    </div>
+                    {form.recurrence.type !== "none" && (
+                      <div className="mt-3 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-slate-600 dark:text-slate-400">Every</span>
+                          <input type="number" min={1} max={12} className="w-16 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-center bg-white dark:bg-slate-900"
+                            value={form.recurrence.every} onChange={(e) => set("recurrence", { ...form.recurrence, every: parseInt(e.target.value) || 1 })} />
+                          <span className="text-sm text-slate-600 dark:text-slate-400">{form.recurrence.type === "daily" ? "day(s)" : form.recurrence.type === "weekly" ? "week(s)" : "month(s)"}</span>
+                        </div>
+                        {form.recurrence.type === "weekly" && (
+                          <div className="flex gap-1 flex-wrap">
+                            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
+                              <button key={day} type="button" onClick={() => {
+                                const days = form.recurrence.daysOfWeek.includes(day) ? form.recurrence.daysOfWeek.filter((d) => d !== day) : [...form.recurrence.daysOfWeek, day];
+                                set("recurrence", { ...form.recurrence, daysOfWeek: days });
+                              }} className={cn("w-9 h-8 rounded-lg text-xs font-medium transition-colors",
+                                form.recurrence.daysOfWeek.includes(day) ? "bg-brand-600 text-white" : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400")}>
+                                {day}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <label className="flex items-center gap-2 text-sm cursor-pointer">
+                          <input type="radio" checked={form.recurrence.endMode === "occurrences"} onChange={() => set("recurrence", { ...form.recurrence, endMode: "occurrences" })} className="accent-brand-600" />
+                          <span className="text-slate-700 dark:text-slate-300">After</span>
+                          <input type="number" min={1} max={52} className="w-16 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-center bg-white dark:bg-slate-900"
+                            value={form.recurrence.occurrences} onChange={(e) => set("recurrence", { ...form.recurrence, occurrences: parseInt(e.target.value) || 1 })} />
+                          <span className="text-slate-600 dark:text-slate-400">sessions</span>
+                        </label>
+                      </div>
+                    )}
+                  </div>
 
-              {/* Internal notes */}
-              <div>
-                <label className={LABEL}>Internal Notes</label>
-                <textarea rows={3} className={cn(INPUT, "resize-none")} placeholder="Notes visible only to clinic staff…"
-                  value={form.notes} onChange={e => set("notes", e.target.value)} />
-              </div>
+                  <div>
+                    <label className={LABEL}>Internal notes</label>
+                    <textarea rows={3} className={cn(INPUT, "resize-none")} placeholder="Notes visible only to clinic staff…"
+                      value={form.notes} onChange={(e) => set("notes", e.target.value)} />
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        {/* Footer */}
+        {/* Footer — sticky summary + confirm */}
         <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 shrink-0">
-          <div className="flex items-center justify-between gap-3">
-            {step > 1 ? (
-              <button onClick={prevStep} className="px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800">
-                ← Back
-              </button>
-            ) : <div />}
-
-            {step < 4 ? (
-              <button onClick={nextStep} disabled={!canProceed}
-                className="flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors">
-                Continue →
-              </button>
-            ) : (
-              <button onClick={handleConfirmAppointment}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors">
-                <Check className="w-4 h-4" />
-                Confirm Appointment
-              </button>
-            )}
-          </div>
+          {!canConfirm ? (
+            <p className="text-xs text-slate-400 text-center py-1">Complete the steps above to create the appointment.</p>
+          ) : (
+            <div className="flex items-center gap-3 mb-3 text-xs text-slate-500 dark:text-slate-400">
+              <Building2 className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">{form.patient?.displayName} · {provider?.displayName} · {fmtDateMDY(form.date)} {primarySlot && `· ${fmt12(primarySlot)}`}</span>
+            </div>
+          )}
+          <button onClick={handleConfirmAppointment} disabled={!canConfirm}
+            className="w-full flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+            <Check className="w-4 h-4" />
+            {isWaitlist ? "Add to Waitlist" : "Confirm Appointment"}
+          </button>
         </div>
       </div>
     </>

@@ -2,11 +2,10 @@
 
 import { useState, useMemo } from "react";
 import { GripVertical, Clock, UserCheck, CalendarPlus, MoreHorizontal, Phone, Video, MapPin, X, Check, ChevronLeft, ChevronRight } from "lucide-react";
-import { getWaitlistedAppointments, getBookedSlots } from "@/data/cc-appointments";
+import { getWaitlistedAppointments } from "@/data/cc-appointments";
 import { CC_PATIENTS } from "@/data/cc-patients";
-import { PROVIDERS } from "@/data/providers";
-import { DAYS } from "@/data/clinics";
-import type { Provider } from "@/data/providers";
+import { PROVIDERS, type Provider } from "@/data/providers";
+import { generateDaySlots as generateSlots, getBookedSlots } from "@/lib/cc-availability";
 import { cn } from "@/lib/utils";
 
 function fmt12(t: string) {
@@ -17,31 +16,6 @@ function fmt12(t: string) {
 
 function fmtDateLong(iso: string) {
   return new Date(iso + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-}
-
-function addMinutes(time: string, mins: number): string {
-  const [h, m] = time.split(":").map(Number);
-  const t = h * 60 + m + mins;
-  return `${Math.floor(t / 60).toString().padStart(2, "0")}:${(t % 60).toString().padStart(2, "0")}`;
-}
-
-const SLOT_INTERVAL = 30;
-
-function generateSlots(provider: Provider | undefined, date: string): string[] {
-  if (!provider) return [];
-  const dayName = new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long" }) as typeof DAYS[number];
-  const wh = provider.workingHours.find(w => w.day === dayName);
-  if (!wh || !wh.isOpen) return [];
-  const slots: string[] = [];
-  let cur = wh.openTime;
-  const end = wh.closeTime;
-  while (cur < end) {
-    const next = addMinutes(cur, SLOT_INTERVAL);
-    if (next > end) break;
-    slots.push(cur);
-    cur = next;
-  }
-  return slots;
 }
 
 function getDates(count = 14): string[] {
