@@ -7,7 +7,6 @@ interface Props {
   hours: BusinessHour[];
   onChange: (hours: BusinessHour[]) => void;
   compact?: boolean;
-  mode?: "clinic" | "provider";
 }
 
 function fmt12(t: string) {
@@ -20,20 +19,16 @@ function fmt12(t: string) {
 
 const TIME_INPUT_CLS = "w-32 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500";
 
-export default function BusinessHoursGrid({ hours, onChange, compact = false, mode = "clinic" }: Props) {
-  const isProvider = mode === "provider";
-
+/** Clinic business hours only — provider working hours have their own shape
+ *  (location-tagged segments, see `WorkingHoursEditor`) and never used this
+ *  grid's "provider" mode in practice, so it's clinic-only now. */
+export default function BusinessHoursGrid({ hours, onChange, compact = false }: Props) {
   function update(index: number, field: keyof BusinessHour, value: string | boolean) {
     onChange(hours.map((h, i) => i === index ? { ...h, [field]: value } : h));
   }
 
-  const headers = isProvider
-    ? ["DAY", "ACTIVE", "START TIME", "END TIME"]
-    : ["DAY", "OPEN", "OPEN TIME", "CLOSE TIME", "BREAK START", "BREAK END"];
-
-  const timeFields: (keyof BusinessHour)[] = isProvider
-    ? ["openTime", "closeTime"]
-    : ["openTime", "closeTime", "breakStart", "breakEnd"];
+  const headers = ["DAY", "OPEN", "OPEN TIME", "CLOSE TIME", "BREAK START", "BREAK END"];
+  const timeFields: (keyof BusinessHour)[] = ["openTime", "closeTime", "breakStart", "breakEnd"];
 
   return (
     <div className="overflow-x-auto">
@@ -74,7 +69,7 @@ export default function BusinessHoursGrid({ hours, onChange, compact = false, mo
                     />
                   ) : (
                     <span className="text-slate-400 dark:text-slate-600 text-sm italic">
-                      {isProvider ? "Off" : "Closed"}
+                      Closed
                     </span>
                   )}
                 </td>

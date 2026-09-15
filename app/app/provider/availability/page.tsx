@@ -5,7 +5,8 @@ import ProviderLayout from "@/components/provider/layout/ProviderLayout";
 import { AvailabilityCalendar } from "@/components/provider/availability/AvailabilityCalendar";
 import { PROVIDERS } from "@/data/providers";
 import { CLINICS } from "@/data/clinics";
-import { DAYS, type DayName } from "@/data/clinics";
+import { DAYS } from "@/data/clinics";
+import WorkingHoursEditor from "@/components/ui/WorkingHoursEditor";
 import {
   useProviderAvailabilityStore, submitLeaveRequest, submitBlockTimeRequest, submitHoursChangeRequest,
   type AvailabilityRequest, type AvailabilityRequestType, type WorkingHoursDraftDay,
@@ -89,13 +90,9 @@ export default function ProviderAvailabilityPage() {
   const [blockReason, setBlockReason] = useState("");
 
   // Hours change form
-  const [draftHours, setDraftHours] = useState<WorkingHoursDraftDay[]>(() =>
-    DAYS.map((day) => {
-      const wh = provider.workingHours.find((w) => w.day === day);
-      return { day, isOpen: wh?.isOpen ?? false, openTime: wh?.openTime || "09:00", closeTime: wh?.closeTime || "17:00", breakStart: wh?.breakStart || "", breakEnd: wh?.breakEnd || "" };
-    })
-  );
+  const [draftHours, setDraftHours] = useState<WorkingHoursDraftDay[]>(() => provider.workingHours);
   const [hoursReason, setHoursReason] = useState("");
+  const myLocations = CLINICS.filter((c) => provider.clinicAccess.includes(c.id)).map((c) => ({ id: c.id, name: c.name }));
 
   function closeModal() {
     setModal(null);
@@ -120,10 +117,6 @@ export default function ProviderAvailabilityPage() {
   function handleApplyHoursChange() {
     submitHoursChangeRequest(CURRENT_PROVIDER_ID, ME, draftHours, hoursReason.trim() || "Requested working hours update");
     afterSubmit();
-  }
-
-  function updateDraftDay(day: DayName, changes: Partial<WorkingHoursDraftDay>) {
-    setDraftHours((prev) => prev.map((d) => (d.day === day ? { ...d, ...changes } : d)));
   }
 
   const actions: { type: AvailabilityRequestType; label: string; icon: React.ElementType; cfg: typeof store.leave }[] = [
@@ -186,19 +179,20 @@ export default function ProviderAvailabilityPage() {
             <div className="grid grid-cols-7 gap-2">
               {DAYS.map((day) => {
                 const hw = provider.workingHours.find((w) => w.day === day);
-                const isOpen = hw?.isOpen ?? false;
-                const hasBreak = hw?.breakStart && hw.breakEnd;
+                const isOpen = hw?.isWorking ?? false;
                 return (
                   <div key={day} className={cn("rounded-xl border p-3 text-center",
                     isOpen ? "bg-brand-50 dark:bg-brand-950/20 border-brand-200 dark:border-brand-800" : "bg-slate-50 dark:bg-slate-800/30 border-slate-200 dark:border-slate-700 opacity-60")}>
                     <p className={cn("text-[10px] font-bold uppercase tracking-wide mb-2", isOpen ? "text-brand-600 dark:text-brand-400" : "text-slate-400")}>{day}</p>
-                    {isOpen ? (
-                      <>
-                        <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">{fmt12(hw!.openTime!)}</p>
-                        <p className="text-[10px] text-slate-400">to</p>
-                        <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">{fmt12(hw!.closeTime!)}</p>
-                        {hasBreak && <p className="text-[9px] text-slate-400 mt-1.5">Break {fmt12(hw!.breakStart!)}–{fmt12(hw!.breakEnd!)}</p>}
-                      </>
+                    {isOpen && hw ? (
+                      <div className="space-y-1.5">
+                        {hw.segments.map((seg, i) => (
+                          <div key={i}>
+                            <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">{fmt12(seg.startTime)} – {fmt12(seg.endTime)}</p>
+                            <p className="text-[9px] text-slate-400">{CLINICS.find((c) => c.id === seg.clinicId)?.name ?? seg.clinicId}</p>
+                          </div>
+                        ))}
+                      </div>
                     ) : (
                       <p className="text-xs text-slate-400 font-medium">Off</p>
                     )}
@@ -297,30 +291,7 @@ export default function ProviderAvailabilityPage() {
             <button onClick={handleApplyHoursChange} className="flex-1 py-2.5 rounded-lg text-sm font-semibold practmd-gradient text-white transition-colors">Apply</button>
           </>}>
           {submitted ? <SubmittedState /> : <>
-            <div className="space-y-2.5">
-              {draftHours.map((d) => (
-                <div key={d.day} className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{d.day}</span>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <span className="text-[11px] text-slate-400">{d.isOpen ? "Open" : "Off"}</span>
-                      <div onClick={() => updateDraftDay(d.day, { isOpen: !d.isOpen })}
-                        className={cn("w-8 h-4.5 rounded-full transition-colors relative", d.isOpen ? "bg-brand-600" : "bg-slate-300 dark:bg-slate-600")}>
-                        <div className={cn("absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white shadow transition-transform", d.isOpen ? "translate-x-4" : "translate-x-0.5")} />
-                      </div>
-                    </label>
-                  </div>
-                  {d.isOpen && (
-                    <div className="grid grid-cols-2 gap-2">
-                      <input type="time" value={d.openTime} onChange={(e) => updateDraftDay(d.day, { openTime: e.target.value })} className={cn(fieldClass, "text-xs py-1.5")} />
-                      <input type="time" value={d.closeTime} onChange={(e) => updateDraftDay(d.day, { closeTime: e.target.value })} className={cn(fieldClass, "text-xs py-1.5")} />
-                      <input type="time" value={d.breakStart} placeholder="Break from" onChange={(e) => updateDraftDay(d.day, { breakStart: e.target.value })} className={cn(fieldClass, "text-xs py-1.5")} />
-                      <input type="time" value={d.breakEnd} placeholder="Break to" onChange={(e) => updateDraftDay(d.day, { breakEnd: e.target.value })} className={cn(fieldClass, "text-xs py-1.5")} />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+            <WorkingHoursEditor hours={draftHours} onChange={setDraftHours} locations={myLocations} />
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Reason (optional)</label>
               <input value={hoursReason} onChange={(e) => setHoursReason(e.target.value)} placeholder="Why are you requesting this change?" className={fieldClass} />
@@ -363,7 +334,7 @@ function RequestRow({ req }: { req: AvailabilityRequest }) {
             <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{fmtDate(req.blockDate)} · {fmt12(req.blockStart!)} – {fmt12(req.blockEnd!)}</p>
           )}
           {req.type === "hours-change" && (
-            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Proposed {req.proposedHours?.filter((d) => d.isOpen).length ?? 0} working days</p>
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Proposed {req.proposedHours?.filter((d) => d.isWorking).length ?? 0} working days</p>
           )}
           <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{req.reason}</p>
           {req.approverName && (

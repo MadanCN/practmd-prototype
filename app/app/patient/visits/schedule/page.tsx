@@ -32,18 +32,18 @@ function getDayName(iso: string) {
 }
 function generateSlots(provider: (typeof PROVIDERS)[0], date: string, duration: number): string[] {
   const wh = provider.workingHours.find(w => w.day === getDayName(date));
-  if (!wh || !wh.isOpen) return [];
+  if (!wh || !wh.isWorking) return [];
   const slots: string[] = [];
-  let cur = wh.openTime;
-  while (cur < wh.closeTime) {
-    const next = addMinutes(cur, duration);
-    if (next > wh.closeTime) break;
-    if (!(wh.breakStart && cur >= wh.breakStart && cur < wh.breakEnd!)) {
+  for (const seg of wh.segments) {
+    let cur = seg.startTime;
+    while (cur < seg.endTime) {
+      const next = addMinutes(cur, duration);
+      if (next > seg.endTime) break;
       slots.push(cur);
+      cur = next;
     }
-    cur = next;
   }
-  return slots;
+  return slots.sort();
 }
 function getNextAvailable(provider: (typeof PROVIDERS)[0], duration: number): string | null {
   for (let i = 1; i <= 14; i++) {

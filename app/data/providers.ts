@@ -2,14 +2,35 @@ import { DAYS, type BusinessHour, type DayName } from "./clinics";
 
 export { type BusinessHour };
 
-export type WorkingHour = BusinessHour;
+/** One contiguous block of a provider's working day, tied to the physical
+ *  location they're at for that block — a provider can split a day across
+ *  locations (e.g. Rochester mornings, Ithaca afternoons), and any gap
+ *  between two segments is implicitly a break with no separate field for it. */
+export interface WorkingHourSegment {
+  clinicId: string;
+  startTime: string;
+  endTime: string;
+}
 
+export interface WorkingHour {
+  day: DayName;
+  isWorking: boolean;
+  segments: WorkingHourSegment[];
+}
+
+/** Build a working day from either a single open/close range or an
+ *  open/close range split around a lunch break — both anchored to one
+ *  `clinicId`. Pass `isWorking: false` (clinicId irrelevant) for a day off. */
 function wh(
-  day: DayName, isOpen: boolean,
+  day: DayName, isWorking: boolean, clinicId = "",
   openTime = "09:00", closeTime = "17:00",
-  breakStart = "12:00", breakEnd = "13:00"
+  breakStart = "", breakEnd = ""
 ): WorkingHour {
-  return { day, isOpen, openTime, closeTime, breakStart, breakEnd };
+  if (!isWorking || !clinicId) return { day, isWorking: false, segments: [] };
+  const segments: WorkingHourSegment[] = breakStart && breakEnd
+    ? [{ clinicId, startTime: openTime, endTime: breakStart }, { clinicId, startTime: breakEnd, endTime: closeTime }]
+    : [{ clinicId, startTime: openTime, endTime: closeTime }];
+  return { day, isWorking: true, segments };
 }
 
 export interface Provider {
@@ -68,11 +89,13 @@ export interface StaffMember {
 
 export type TeamMember = Provider | StaffMember;
 
-const defaultWH: WorkingHour[] = [
-  wh("Monday", true), wh("Tuesday", true), wh("Wednesday", true),
-  wh("Thursday", true), wh("Friday", true),
-  wh("Saturday", false), wh("Sunday", false),
-];
+function defaultWH(clinicId: string): WorkingHour[] {
+  return [
+    wh("Monday", true, clinicId), wh("Tuesday", true, clinicId), wh("Wednesday", true, clinicId),
+    wh("Thursday", true, clinicId), wh("Friday", true, clinicId),
+    wh("Saturday", false), wh("Sunday", false),
+  ];
+}
 
 /** Hand-authored, richly-detailed providers — used across demo flows. */
 const HAND_AUTHORED_PROVIDERS: Provider[] = [
@@ -91,11 +114,11 @@ const HAND_AUTHORED_PROVIDERS: Provider[] = [
     telehealthEnabled: true, permissionRole: "Attending Physician",
     isActive: true, isDeleted: false,
     workingHours: [
-      wh("Monday", true, "09:00", "17:00", "12:00", "13:00"),
-      wh("Tuesday", true, "09:00", "17:00", "12:00", "13:00"),
+      wh("Monday", true, "penfield-psychiatry", "09:00", "17:00", "12:00", "13:00"),
+      wh("Tuesday", true, "penfield-psychiatry", "09:00", "17:00", "12:00", "13:00"),
       wh("Wednesday", false),
-      wh("Thursday", true, "09:00", "17:00", "12:00", "13:00"),
-      wh("Friday", true, "09:00", "15:00", "", ""),
+      wh("Thursday", true, "penfield-psychiatry", "09:00", "17:00", "12:00", "13:00"),
+      wh("Friday", true, "new-hartford", "09:00", "15:00"),
       wh("Saturday", false), wh("Sunday", false),
     ],
     yearsExperience: 15,
@@ -128,11 +151,11 @@ const HAND_AUTHORED_PROVIDERS: Provider[] = [
     acceptingNewPatients: true,
     isActive: true, isDeleted: false,
     workingHours: [
-      wh("Monday", true, "10:00", "18:00", "13:00", "14:00"),
+      wh("Monday", true, "penfield-psychiatry", "10:00", "18:00", "13:00", "14:00"),
       wh("Tuesday", false),
-      wh("Wednesday", true, "10:00", "18:00", "13:00", "14:00"),
+      wh("Wednesday", true, "penfield-psychiatry", "10:00", "18:00", "13:00", "14:00"),
       wh("Thursday", false),
-      wh("Friday", true, "10:00", "16:00", "", ""),
+      wh("Friday", true, "penfield-psychiatry", "10:00", "16:00"),
       wh("Saturday", false), wh("Sunday", false),
     ],
   },
@@ -154,10 +177,10 @@ const HAND_AUTHORED_PROVIDERS: Provider[] = [
     isActive: true, isDeleted: false,
     workingHours: [
       wh("Monday", false),
-      wh("Tuesday", true, "08:00", "16:00", "12:00", "13:00"),
-      wh("Wednesday", true, "08:00", "16:00", "12:00", "13:00"),
-      wh("Thursday", true, "08:00", "16:00", "12:00", "13:00"),
-      wh("Friday", true, "08:00", "14:00", "", ""),
+      wh("Tuesday", true, "new-hartford", "08:00", "16:00", "12:00", "13:00"),
+      wh("Wednesday", true, "new-hartford", "08:00", "16:00", "12:00", "13:00"),
+      wh("Thursday", true, "new-hartford", "08:00", "16:00", "12:00", "13:00"),
+      wh("Friday", true, "new-hartford", "08:00", "14:00"),
       wh("Saturday", false), wh("Sunday", false),
     ],
   },
@@ -177,7 +200,7 @@ const HAND_AUTHORED_PROVIDERS: Provider[] = [
     insuranceAccepted: ["Aetna", "Blue Cross Blue Shield", "Cigna", "Horizon NJ Health", "Medicaid"],
     acceptingNewPatients: false,
     isActive: true, isDeleted: false,
-    workingHours: defaultWH,
+    workingHours: defaultWH("rochester"),
   },
   {
     id: "p5", kind: "provider",
@@ -196,12 +219,12 @@ const HAND_AUTHORED_PROVIDERS: Provider[] = [
     acceptingNewPatients: true,
     isActive: true, isDeleted: false,
     workingHours: [
-      wh("Monday", true, "11:00", "19:00", "14:00", "15:00"),
-      wh("Tuesday", true, "11:00", "19:00", "14:00", "15:00"),
-      wh("Wednesday", true, "11:00", "19:00", "14:00", "15:00"),
+      wh("Monday", true, "penfield-psychiatry", "11:00", "19:00", "14:00", "15:00"),
+      wh("Tuesday", true, "penfield-psychiatry", "11:00", "19:00", "14:00", "15:00"),
+      wh("Wednesday", true, "penfield-psychiatry", "11:00", "19:00", "14:00", "15:00"),
       wh("Thursday", false),
       wh("Friday", false),
-      wh("Saturday", true, "09:00", "13:00", "", ""),
+      wh("Saturday", true, "rochester", "09:00", "13:00"),
       wh("Sunday", false),
     ],
   },
@@ -387,8 +410,12 @@ function generateAdditionalProviders(count: number): Provider[] {
       acceptingNewPatients: i % 6 !== 5,
       isActive: i % 17 !== 16,
       isDeleted: false,
+      // A provider with a second clinic works their last open day there —
+      // gives the generated roster real multi-location coverage to exercise
+      // location-filtered slot generation, not just a single-site schedule.
       workingHours: DAYS.map((day) => openDays.includes(day)
-        ? wh(day, true, `${startH.toString().padStart(2, "0")}:00`, `${endH.toString().padStart(2, "0")}:00`, "12:00", "13:00")
+        ? wh(day, true, secondClinic && day === openDays[openDays.length - 1] ? secondClinic : primaryClinic,
+            `${startH.toString().padStart(2, "0")}:00`, `${endH.toString().padStart(2, "0")}:00`, "12:00", "13:00")
         : wh(day, false)),
     });
   }

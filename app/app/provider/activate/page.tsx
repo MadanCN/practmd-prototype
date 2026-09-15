@@ -46,7 +46,10 @@ export default function ActivateWizardPage() {
   const [hours, setHours] = useState(
     DAYS.map((d) => {
       const wh = provider.workingHours.find((w) => w.day === d);
-      return { day: d, isOpen: wh?.isOpen ?? false, open: wh?.openTime ?? "09:00", close: wh?.closeTime ?? "17:00" };
+      const segs = wh?.segments ?? [];
+      const open = segs.length ? segs.reduce((min, s) => (s.startTime < min ? s.startTime : min), segs[0].startTime) : "09:00";
+      const close = segs.length ? segs.reduce((max, s) => (s.endTime > max ? s.endTime : max), segs[0].endTime) : "17:00";
+      return { day: d, isOpen: wh?.isWorking ?? false, open, close };
     }),
   );
 

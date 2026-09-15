@@ -62,7 +62,11 @@ export function AvailabilityCalendar() {
     const key = ymd(date);
     const wd = DAYS[(date.getDay() + 6) % 7];
     const wh = provider.workingHours.find((w) => w.day === wd);
-    const isOpen = wh?.isOpen ?? false;
+    const isOpen = wh?.isWorking ?? false;
+    const daySpan = wh && wh.segments.length > 0
+      ? { start: wh.segments.reduce((min, s) => (s.startTime < min ? s.startTime : min), wh.segments[0].startTime),
+          end: wh.segments.reduce((max, s) => (s.endTime > max ? s.endTime : max), wh.segments[0].endTime) }
+      : undefined;
 
     const leave = leaveRanges.find((r) => key >= r.start && key <= r.end);
     const block = blockDates.get(key);
@@ -76,7 +80,7 @@ export function AvailabilityCalendar() {
     cells.push({
       date,
       kind,
-      hours: isOpen && wh ? `${fmt12(wh.openTime!)}–${fmt12(wh.closeTime!)}` : undefined,
+      hours: isOpen && daySpan ? `${fmt12(daySpan.start)}–${fmt12(daySpan.end)}` : undefined,
       block,
       isToday: key === todayYmd,
     });

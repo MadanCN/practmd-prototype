@@ -2,17 +2,18 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CheckCircle2, ChevronRight, Upload, AlertCircle, X, Send, Plus } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ChevronRight, Upload, AlertCircle, Send } from "lucide-react";
 import {
   PROVIDER_TYPES, SPECIALIZATIONS_LIST, VISIT_TYPES_LIST, SERVICES_LIST,
-  PERMISSION_ROLES, PROVIDER_COLORS, PROVIDERS,
+  PERMISSION_ROLES, PROVIDER_COLORS, PROVIDERS, type WorkingHour,
 } from "@/data/providers";
-import { CLINICS } from "@/data/clinics";
+import { CLINICS, DAYS } from "@/data/clinics";
 import {
   providerTypeKey, defaultCapabilities, CAPABILITY_KEYS, CAPABILITY_META,
   type ProviderCapabilities,
 } from "@/data/provider-credentialing";
 import Toggle from "@/components/ui/Toggle";
+import WorkingHoursEditor from "@/components/ui/WorkingHoursEditor";
 import { cn } from "@/lib/utils";
 
 const US_STATES = ["New York", "New Jersey", "Connecticut", "Pennsylvania", "Massachusetts", "Florida", "California", "Texas"];
@@ -29,77 +30,13 @@ const TABS: { id: TabId; label: string }[] = [
 const GENDERS = ["Male", "Female", "Non-binary", "Prefer not to say", "Other"];
 const LANGUAGES_LIST = ["English", "Spanish", "French", "Mandarin", "Hindi", "Arabic", "Portuguese", "Vietnamese"];
 
-interface TimeBlock {
-  start: string;
-  end: string;
-}
-interface DaySchedule {
-  enabled: boolean;
-  blocks: TimeBlock[];
-}
-type WorkingHours = Record<string, DaySchedule>;
-
-function defaultWorkingHours(): WorkingHours {
-  return {
-    Monday:    { enabled: true,  blocks: [{ start: "09:00", end: "17:00" }] },
-    Tuesday:   { enabled: true,  blocks: [{ start: "09:00", end: "17:00" }] },
-    Wednesday: { enabled: true,  blocks: [{ start: "09:00", end: "17:00" }] },
-    Thursday:  { enabled: true,  blocks: [{ start: "09:00", end: "17:00" }] },
-    Friday:    { enabled: true,  blocks: [{ start: "09:00", end: "17:00" }] },
-    Saturday:  { enabled: false, blocks: [{ start: "09:00", end: "13:00" }] },
-    Sunday:    { enabled: false, blocks: [{ start: "09:00", end: "13:00" }] },
-  };
-}
-
-function WorkingHoursEditor({ hours, onChange }: { hours: WorkingHours; onChange: (h: WorkingHours) => void }) {
-  const DAYS_LIST = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-  return (
-    <div className="space-y-2">
-      {DAYS_LIST.map(day => {
-        const dayData = hours[day] || { enabled: false, blocks: [{ start: "09:00", end: "17:00" }] };
-        return (
-          <div key={day} className="flex items-start gap-3 py-2.5 border-b border-slate-100 dark:border-slate-800 last:border-0">
-            {/* Day toggle + label */}
-            <div className="w-28 flex items-center gap-2 pt-1 flex-shrink-0">
-              <input type="checkbox" checked={dayData.enabled}
-                onChange={e => onChange({ ...hours, [day]: { ...dayData, enabled: e.target.checked } })}
-                className="w-4 h-4 accent-blue-600 cursor-pointer" />
-              <span className={cn("text-sm font-medium", dayData.enabled ? "text-slate-800 dark:text-slate-200" : "text-slate-400")}>{day.slice(0, 3)}</span>
-            </div>
-            {/* Time blocks */}
-            {dayData.enabled ? (
-              <div className="flex-1 space-y-1.5">
-                {dayData.blocks.map((block, bi) => (
-                  <div key={bi} className="flex items-center gap-2">
-                    <input type="time" value={block.start}
-                      onChange={e => { const b = [...dayData.blocks]; b[bi] = { ...b[bi], start: e.target.value }; onChange({ ...hours, [day]: { ...dayData, blocks: b } }); }}
-                      className="px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                    <span className="text-slate-400 text-sm">–</span>
-                    <input type="time" value={block.end}
-                      onChange={e => { const b = [...dayData.blocks]; b[bi] = { ...b[bi], end: e.target.value }; onChange({ ...hours, [day]: { ...dayData, blocks: b } }); }}
-                      className="px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                    {dayData.blocks.length > 1 && (
-                      <button type="button" onClick={() => { const b = dayData.blocks.filter((_, i) => i !== bi); onChange({ ...hours, [day]: { ...dayData, blocks: b } }); }}
-                        className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors">
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-                <button type="button"
-                  onClick={() => { const b = [...dayData.blocks, { start: "09:00", end: "17:00" }]; onChange({ ...hours, [day]: { ...dayData, blocks: b } }); }}
-                  className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline mt-0.5">
-                  <Plus className="w-3 h-3" /> Add time block
-                </button>
-              </div>
-            ) : (
-              <span className="text-xs text-slate-400 pt-2">Off</span>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
+function defaultWorkingHours(clinicId: string): WorkingHour[] {
+  const loc = clinicId || CLINICS.find((c) => c.isActive)?.id || "";
+  return DAYS.map((day) => ({
+    day,
+    isWorking: day !== "Saturday" && day !== "Sunday",
+    segments: day !== "Saturday" && day !== "Sunday" && loc ? [{ clinicId: loc, startTime: "09:00", endTime: "17:00" }] : [],
+  }));
 }
 
 interface FormState {
@@ -107,7 +44,7 @@ interface FormState {
   color: string; street: string; city: string; state: string; zip: string;
   providerType: string; npi: string; licenseNumber: string; licenseState: string;
   specializations: string[]; clinicAccess: string[];
-  workingHours: WorkingHours;
+  workingHours: WorkingHour[];
   visitTypes: string[]; services: string[]; permissionRole: string; telehealthEnabled: boolean;
   displayName: string; credentials: string; bio: string; languages: string[];
   pronouns: string; licensedStates: string[];
@@ -117,7 +54,7 @@ interface FormState {
 const INITIAL: FormState = {
   firstName: "", lastName: "", gender: "", email: "", dob: "", phone: "", color: "", street: "", city: "", state: "", zip: "",
   providerType: "", npi: "", licenseNumber: "", licenseState: "", specializations: [], clinicAccess: [],
-  workingHours: defaultWorkingHours(),
+  workingHours: defaultWorkingHours(""),
   visitTypes: [], services: [], permissionRole: "", telehealthEnabled: false,
   displayName: "", credentials: "", bio: "", languages: [],
   pronouns: "", licensedStates: [],
@@ -140,7 +77,7 @@ export default function AddEditProviderScreen({ providerId }: Props) {
     city: existing.city, state: existing.state, zip: existing.zip, providerType: existing.providerType,
     npi: existing.npi, licenseNumber: existing.licenseNumber, licenseState: existing.licenseState,
     specializations: existing.specializations, clinicAccess: existing.clinicAccess,
-    workingHours: defaultWorkingHours(),
+    workingHours: existing.workingHours,
     visitTypes: existing.visitTypes, services: existing.services,
     permissionRole: existing.permissionRole, telehealthEnabled: existing.telehealthEnabled,
     displayName: existing.displayName, credentials: existing.credentials, bio: existing.bio, languages: existing.languages,
@@ -175,10 +112,21 @@ export default function AddEditProviderScreen({ providerId }: Props) {
   }
 
   function toggleArr<K extends "specializations" | "clinicAccess" | "visitTypes" | "services" | "languages" | "licensedStates">(key: K, val: string) {
-    setForm(f => ({
-      ...f,
-      [key]: (f[key] as string[]).includes(val) ? (f[key] as string[]).filter(x => x !== val) : [...(f[key] as string[]), val],
-    }));
+    setForm(f => {
+      const next = (f[key] as string[]).includes(val) ? (f[key] as string[]).filter(x => x !== val) : [...(f[key] as string[]), val];
+      if (key !== "clinicAccess") return { ...f, [key]: next };
+      // Dropping a location a provider no longer has access to: reassign any
+      // working-hours segment pointing at it to the new first location, or
+      // clear the day entirely if no location is left.
+      const fallback = next[0] ?? "";
+      const workingHours = f.workingHours.map(h => {
+        const segments = h.segments
+          .map(s => (next.includes(s.clinicId) ? s : fallback ? { ...s, clinicId: fallback } : null))
+          .filter((s): s is NonNullable<typeof s> => s !== null);
+        return { ...h, segments, isWorking: h.isWorking && segments.length > 0 };
+      });
+      return { ...f, clinicAccess: next, workingHours };
+    });
   }
 
   function tabDot(tab: TabId) {
@@ -451,7 +399,7 @@ export default function AddEditProviderScreen({ providerId }: Props) {
             <div>
               <label className={LABEL}>Clinic Access <span className="text-rose-500">*</span></label>
               <div className="space-y-2">
-                {CLINICS.map(c => (
+                {CLINICS.filter(c => c.isActive).map(c => (
                   <label key={c.id} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
                     <input type="checkbox" className="accent-blue-600 w-4 h-4"
                       checked={form.clinicAccess.includes(c.id)} onChange={() => toggleArr("clinicAccess", c.id)} />
@@ -467,8 +415,13 @@ export default function AddEditProviderScreen({ providerId }: Props) {
 
             <div className="pt-2">
               <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1 border-t border-slate-100 dark:border-slate-800 pt-4">Working Hours</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Provider-specific schedule. Can differ from clinic business hours and can include weekends.</p>
-              <WorkingHoursEditor hours={form.workingHours} onChange={wh => set("workingHours", wh)} />
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Provider-specific schedule. Each day can be split across locations — e.g. one site in the morning, another in the afternoon.</p>
+              {form.clinicAccess.length === 0 ? (
+                <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">Select Clinic Access above first — working hours are set per location.</p>
+              ) : (
+                <WorkingHoursEditor hours={form.workingHours} onChange={wh => set("workingHours", wh)}
+                  locations={CLINICS.filter(c => form.clinicAccess.includes(c.id)).map(c => ({ id: c.id, name: c.name }))} />
+              )}
             </div>
           </>
         )}

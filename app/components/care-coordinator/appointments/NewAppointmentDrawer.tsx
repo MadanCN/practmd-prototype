@@ -244,7 +244,7 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
   // ── Section 6: Date & time ───────────────────────────────────────────────
   const isWaitlist = form.scheduleType === "waitlist";
   const maxSelect = isWaitlist ? Infinity : form.appointmentType === "reserved" ? 3 : 1;
-  const allSlots = useMemo(() => generateDaySlots(provider, form.date), [provider, form.date]);
+  const allSlots = useMemo(() => generateDaySlots(provider, form.date, form.clinicId), [provider, form.date, form.clinicId]);
   const bookedSlots = useMemo(() => (form.providerId && form.date ? getBookedSlots(form.providerId, form.date) : []), [form.providerId, form.date]);
   const duration = form.visitType ? visitTypeDef(form.visitType).defaultDurationMin : 30;
 
@@ -564,7 +564,7 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
               {/* Calendar + slots, side by side once there's room */}
               <div className="flex flex-col md:flex-row gap-4 items-start">
                 <div className="w-full md:w-[300px] shrink-0">
-                  <MiniAvailabilityCalendar provider={provider} selectedDate={form.date}
+                  <MiniAvailabilityCalendar provider={provider} selectedDate={form.date} clinicId={form.clinicId}
                     onSelectDate={(d) => { set("date", d); set("selectedSlots", []); set("resourceId", null); set("resourceSkipped", false); }} />
                 </div>
 

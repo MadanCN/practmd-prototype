@@ -16,31 +16,32 @@ function toMin(t: string): number {
 }
 
 /** Every `SLOT_INTERVAL`-minute slot in a provider's working hours for one
- *  date, with any break window excluded (a slot overlapping breakStart–
- *  breakEnd is dropped, not just ones that start exactly on the break). */
-export function generateDaySlots(provider: Provider | undefined, date: string): string[] {
+ *  date. A provider's day is one or more location-tagged segments (see
+ *  `WorkingHourSegment`) — passing `clinicId` restricts slots to the
+ *  segment(s) at that location (the normal booking-flow case, since a
+ *  location is always chosen before a date); omitting it pools every
+ *  segment regardless of location. Any gap between segments (e.g. a lunch
+ *  break, or travel time between two sites) is excluded automatically
+ *  since slots are only generated within each segment's own range. */
+export function generateDaySlots(provider: Provider | undefined, date: string, clinicId?: string): string[] {
   if (!provider || !date) return [];
   const dayName = new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long" });
   const wh = provider.workingHours.find((w) => w.day === dayName);
-  if (!wh || !wh.isOpen) return [];
-
-  const hasBreak = !!(wh.breakStart && wh.breakEnd);
-  const breakStart = hasBreak ? toMin(wh.breakStart) : -1;
-  const breakEnd = hasBreak ? toMin(wh.breakEnd) : -1;
+  if (!wh || !wh.isWorking) return [];
+  const segments = clinicId ? wh.segments.filter((s) => s.clinicId === clinicId) : wh.segments;
 
   const slots: string[] = [];
-  let cur = wh.openTime;
-  const end = wh.closeTime;
-  while (cur < end) {
-    const next = addMinutes(cur, SLOT_INTERVAL);
-    if (next > end) break;
-    const curMin = toMin(cur);
-    const nextMin = toMin(next);
-    const overlapsBreak = hasBreak && curMin < breakEnd && nextMin > breakStart;
-    if (!overlapsBreak) slots.push(cur);
-    cur = next;
+  for (const seg of segments) {
+    let cur = seg.startTime;
+    const end = seg.endTime;
+    while (cur < end) {
+      const next = addMinutes(cur, SLOT_INTERVAL);
+      if (next > end) break;
+      slots.push(cur);
+      cur = next;
+    }
   }
-  return slots;
+  return slots.sort();
 }
 
 /** Confirmed/completed appointment start times for a provider on a date —
@@ -52,13 +53,13 @@ export function getBookedSlots(providerId: string, date: string): string[] {
     .map((a) => a.startTime);
 }
 
-export function getFreeSlots(provider: Provider | undefined, date: string): string[] {
+export function getFreeSlots(provider: Provider | undefined, date: string, clinicId?: string): string[] {
   const booked = provider ? getBookedSlots(provider.id, date) : [];
-  return generateDaySlots(provider, date).filter((s) => !booked.includes(s));
+  return generateDaySlots(provider, date, clinicId).filter((s) => !booked.includes(s));
 }
 
-export function hasAvailability(provider: Provider | undefined, date: string): boolean {
-  return getFreeSlots(provider, date).length > 0;
+export function hasAvailability(provider: Provider | undefined, date: string, clinicId?: string): boolean {
+  return getFreeSlots(provider, date, clinicId).length > 0;
 }
 
 function isoOf(d: Date): string {
@@ -75,7 +76,7 @@ function isoOf(d: Date): string {
  *  a day in positive-UTC-offset timezones), so today's own boundary is
  *  re-anchored via string comparison against todayIso() rather than assumed
  *  to be i=0. */
-export function getAvailableDates(provider: Provider | undefined, days = 60): Set<string> {
+export function getAvailableDates(provider: Provider | undefined, days = 60, clinicId?: string): Set<string> {
   const out = new Set<string>();
   if (!provider) return out;
   const start = new Date();
@@ -84,7 +85,7 @@ export function getAvailableDates(provider: Provider | undefined, days = 60): Se
     const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
     const iso = isoOf(d);
     if (iso < today) continue;
-    if (hasAvailability(provider, iso)) out.add(iso);
+    if (hasAvailability(provider, iso, clinicId)) out.add(iso);
   }
   return out;
 }

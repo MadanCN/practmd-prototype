@@ -7,19 +7,15 @@
 // governance-loop pattern as lib/onboarding-store.ts.
 
 import { useSyncExternalStore } from "react";
-import { DAYS, type DayName } from "@/data/clinics";
+import { DAYS } from "@/data/clinics";
+import type { WorkingHour } from "@/data/providers";
 
 export type AvailabilityRequestType = "leave" | "block-time" | "hours-change";
 export type AvailabilityRequestStatus = "pending" | "approved" | "auto-approved" | "rejected";
 
-export interface WorkingHoursDraftDay {
-  day: DayName;
-  isOpen: boolean;
-  openTime: string;
-  closeTime: string;
-  breakStart: string;
-  breakEnd: string;
-}
+/** A proposed working day in a hours-change request — same location-tagged-
+ *  segment shape as `Provider.workingHours` (see WorkingHoursEditor). */
+export type WorkingHoursDraftDay = WorkingHour;
 
 export interface AvailabilityRequest {
   id: string;

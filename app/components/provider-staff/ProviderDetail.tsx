@@ -9,7 +9,7 @@ import {
   buildClinicalProfile, credentialStatus, CAPABILITY_KEYS, CAPABILITY_META,
   STATUS_META, PROVIDER_TYPE_LABEL,
 } from "@/data/provider-credentialing";
-import { BusinessHoursReadOnly } from "@/components/ui/BusinessHoursGrid";
+import { WorkingHoursReadOnly } from "@/components/ui/WorkingHoursEditor";
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -222,7 +222,7 @@ export default function ProviderDetailScreen({ id }: { id: string }) {
                 <Pencil className="w-3.5 h-3.5" /> Edit Schedule
               </Link>
             </div>
-            <BusinessHoursReadOnly hours={provider.workingHours} />
+            <WorkingHoursReadOnly hours={provider.workingHours} locations={CLINICS.map((c) => ({ id: c.id, name: c.name }))} />
           </div>
         )}
 
