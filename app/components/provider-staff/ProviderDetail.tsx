@@ -222,7 +222,7 @@ export default function ProviderDetailScreen({ id }: { id: string }) {
                 <Pencil className="w-3.5 h-3.5" /> Edit Schedule
               </Link>
             </div>
-            <WorkingHoursReadOnly hours={provider.workingHours} locations={CLINICS.map((c) => ({ id: c.id, name: c.name }))} />
+            <WorkingHoursReadOnly hours={provider.workingHours} locations={CLINICS.flatMap((c) => c.locations)} />
           </div>
         )}
 

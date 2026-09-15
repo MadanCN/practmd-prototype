@@ -46,7 +46,7 @@ export default function WorkingHoursEditor({ hours, onChange, locations }: Props
     const h = dayOf(day);
     updateDay(day, {
       day, isWorking,
-      segments: isWorking ? (h.segments.length ? h.segments : [{ clinicId: defaultLocation, startTime: "09:00", endTime: "17:00" }]) : [],
+      segments: isWorking ? (h.segments.length ? h.segments : [{ locationId: defaultLocation, startTime: "09:00", endTime: "17:00" }]) : [],
     });
   }
   function updateSegment(day: DayName, idx: number, changes: Partial<WorkingHourSegment>) {
@@ -56,7 +56,7 @@ export default function WorkingHoursEditor({ hours, onChange, locations }: Props
   function addSegment(day: DayName) {
     const h = dayOf(day);
     const last = h.segments[h.segments.length - 1];
-    updateDay(day, { ...h, segments: [...h.segments, { clinicId: last?.clinicId ?? defaultLocation, startTime: last?.endTime ?? "09:00", endTime: "17:00" }] });
+    updateDay(day, { ...h, segments: [...h.segments, { locationId: last?.locationId ?? defaultLocation, startTime: last?.endTime ?? "09:00", endTime: "17:00" }] });
   }
   function removeSegment(day: DayName, idx: number) {
     const h = dayOf(day);
@@ -79,7 +79,7 @@ export default function WorkingHoursEditor({ hours, onChange, locations }: Props
               <div className="flex-1 space-y-1.5">
                 {h.segments.map((seg, i) => (
                   <div key={i} className="flex items-center gap-2 flex-wrap">
-                    <select value={seg.clinicId} onChange={(e) => updateSegment(day, i, { clinicId: e.target.value })} className={TIME_CLS}>
+                    <select value={seg.locationId} onChange={(e) => updateSegment(day, i, { locationId: e.target.value })} className={TIME_CLS}>
                       {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
                     </select>
                     <input type="time" value={seg.startTime} onChange={(e) => updateSegment(day, i, { startTime: e.target.value })} className={TIME_CLS} />
@@ -120,7 +120,7 @@ export function WorkingHoursReadOnly({ hours, locations }: { hours: WorkingHour[
             <div className="flex-1 text-right space-y-0.5">
               {h.segments.map((s, i) => (
                 <p key={i} className="text-slate-800 dark:text-slate-200 font-medium">
-                  {fmt12(s.startTime)} – {fmt12(s.endTime)} <span className="text-slate-400 font-normal">· {nameOf(s.clinicId)}</span>
+                  {fmt12(s.startTime)} – {fmt12(s.endTime)} <span className="text-slate-400 font-normal">· {nameOf(s.locationId)}</span>
                 </p>
               ))}
             </div>

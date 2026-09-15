@@ -17,18 +17,19 @@ function toMin(t: string): number {
 
 /** Every `SLOT_INTERVAL`-minute slot in a provider's working hours for one
  *  date. A provider's day is one or more location-tagged segments (see
- *  `WorkingHourSegment`) — passing `clinicId` restricts slots to the
- *  segment(s) at that location (the normal booking-flow case, since a
- *  location is always chosen before a date); omitting it pools every
- *  segment regardless of location. Any gap between segments (e.g. a lunch
- *  break, or travel time between two sites) is excluded automatically
- *  since slots are only generated within each segment's own range. */
-export function generateDaySlots(provider: Provider | undefined, date: string, clinicId?: string): string[] {
+ *  `WorkingHourSegment`) — passing `locationId` (a `ClinicLocation.id`, see
+ *  data/clinics.ts) restricts slots to the segment(s) at that location (the
+ *  normal booking-flow case, since a location is always chosen before a
+ *  date); omitting it pools every segment regardless of location. Any gap
+ *  between segments (e.g. a lunch break, or travel time between two sites)
+ *  is excluded automatically since slots are only generated within each
+ *  segment's own range. */
+export function generateDaySlots(provider: Provider | undefined, date: string, locationId?: string): string[] {
   if (!provider || !date) return [];
   const dayName = new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long" });
   const wh = provider.workingHours.find((w) => w.day === dayName);
   if (!wh || !wh.isWorking) return [];
-  const segments = clinicId ? wh.segments.filter((s) => s.clinicId === clinicId) : wh.segments;
+  const segments = locationId ? wh.segments.filter((s) => s.locationId === locationId) : wh.segments;
 
   const slots: string[] = [];
   for (const seg of segments) {
@@ -53,13 +54,13 @@ export function getBookedSlots(providerId: string, date: string): string[] {
     .map((a) => a.startTime);
 }
 
-export function getFreeSlots(provider: Provider | undefined, date: string, clinicId?: string): string[] {
+export function getFreeSlots(provider: Provider | undefined, date: string, locationId?: string): string[] {
   const booked = provider ? getBookedSlots(provider.id, date) : [];
-  return generateDaySlots(provider, date, clinicId).filter((s) => !booked.includes(s));
+  return generateDaySlots(provider, date, locationId).filter((s) => !booked.includes(s));
 }
 
-export function hasAvailability(provider: Provider | undefined, date: string, clinicId?: string): boolean {
-  return getFreeSlots(provider, date, clinicId).length > 0;
+export function hasAvailability(provider: Provider | undefined, date: string, locationId?: string): boolean {
+  return getFreeSlots(provider, date, locationId).length > 0;
 }
 
 function isoOf(d: Date): string {
@@ -76,7 +77,7 @@ function isoOf(d: Date): string {
  *  a day in positive-UTC-offset timezones), so today's own boundary is
  *  re-anchored via string comparison against todayIso() rather than assumed
  *  to be i=0. */
-export function getAvailableDates(provider: Provider | undefined, days = 60, clinicId?: string): Set<string> {
+export function getAvailableDates(provider: Provider | undefined, days = 60, locationId?: string): Set<string> {
   const out = new Set<string>();
   if (!provider) return out;
   const start = new Date();
@@ -85,7 +86,7 @@ export function getAvailableDates(provider: Provider | undefined, days = 60, cli
     const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
     const iso = isoOf(d);
     if (iso < today) continue;
-    if (hasAvailability(provider, iso, clinicId)) out.add(iso);
+    if (hasAvailability(provider, iso, locationId)) out.add(iso);
   }
   return out;
 }

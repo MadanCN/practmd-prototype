@@ -20,8 +20,8 @@ import {
 } from "lucide-react";
 import { CC_PATIENTS, type CcPatient } from "@/data/cc-patients";
 import { PROVIDERS, providerNetworkStatus } from "@/data/providers";
-import { CLINICS } from "@/data/clinics";
-import { getResourcesForClinic, type ClinicResource, roomTypeLabel } from "@/data/resources";
+import { getAllLocations, findLocation, locationsForClinics } from "@/data/clinics";
+import { getResourcesForLocation, type ClinicResource, roomTypeLabel } from "@/data/resources";
 import { getLastVisitForPatient, type CcAppointment, type AppointmentMode, type RecurrenceType, type ScheduleType, type AppointmentType } from "@/data/cc-appointments";
 import { visitTypeDef } from "@/lib/visit-types";
 import { getPrimaryPolicy, isSelfPay } from "@/lib/insurance-store";
@@ -55,7 +55,8 @@ interface RecurrenceConfig {
 }
 
 interface FormState {
-  clinicId: string;
+  /** Selected physical location — a `ClinicLocation.id` (see data/clinics.ts), not a `Clinic.id`. */
+  locationId: string;
   providerId: string;
   visitType: string;
   mode: AppointmentMode;
@@ -85,8 +86,10 @@ function genApptId(): string {
 function initialForm(prefilled?: PrefilledSlot | null): FormState {
   const provider = prefilled?.providerId ? PROVIDERS.find((p) => p.id === prefilled.providerId) : undefined;
   const patient = prefilled?.patientId ? CC_PATIENTS.find((p) => p.id === prefilled.patientId) ?? null : null;
+  const providerLocations = provider ? locationsForClinics(provider.clinicAccess) : [];
+  const providerPrimaryLocation = providerLocations.find((l) => l.isPrimary) ?? providerLocations[0];
   return {
-    clinicId: provider?.clinicAccess[0] ?? "",
+    locationId: providerPrimaryLocation?.id ?? "",
     providerId: prefilled?.providerId ?? "",
     visitType: "",
     mode: "in-person",
@@ -179,12 +182,16 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
     setForm((f) => ({ ...f, [key]: val }));
   }
 
-  const clinic = CLINICS.find((c) => c.id === form.clinicId);
+  const location = findLocation(form.locationId);
   const provider = PROVIDERS.find((p) => p.id === form.providerId);
 
+  // A provider has access at the clinic (practice) level; a location just
+  // narrows to one of that clinic's own sites (Clinic Management > Clinic >
+  // Locations), so "providers at this location" means providers whose
+  // clinicAccess includes the location's *owning* clinic.
   const providersAtLocation = useMemo(
-    () => (form.clinicId ? PROVIDERS.filter((p) => p.clinicAccess.includes(form.clinicId) && p.isActive) : []),
-    [form.clinicId],
+    () => (location ? PROVIDERS.filter((p) => p.clinicAccess.includes(location.clinicId) && p.isActive) : []),
+    [location],
   );
 
   const providerVisitTypes = useMemo(() => {
@@ -197,8 +204,8 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
   function changeLocation() {
     setForm((f) => ({ ...initialForm(null), patient: f.patient, patientSearch: f.patientSearch }));
   }
-  function pickLocation(clinicId: string) {
-    setForm((f) => ({ ...initialForm(null), clinicId, patient: f.patient, patientSearch: f.patientSearch }));
+  function pickLocation(locationId: string) {
+    setForm((f) => ({ ...initialForm(null), locationId, patient: f.patient, patientSearch: f.patientSearch }));
   }
 
   // ── Section 2: Provider ──────────────────────────────────────────────────
@@ -244,7 +251,7 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
   // ── Section 6: Date & time ───────────────────────────────────────────────
   const isWaitlist = form.scheduleType === "waitlist";
   const maxSelect = isWaitlist ? Infinity : form.appointmentType === "reserved" ? 3 : 1;
-  const allSlots = useMemo(() => generateDaySlots(provider, form.date, form.clinicId), [provider, form.date, form.clinicId]);
+  const allSlots = useMemo(() => generateDaySlots(provider, form.date, form.locationId), [provider, form.date, form.locationId]);
   const bookedSlots = useMemo(() => (form.providerId && form.date ? getBookedSlots(form.providerId, form.date) : []), [form.providerId, form.date]);
   const duration = form.visitType ? visitTypeDef(form.visitType).defaultDurationMin : 30;
 
@@ -267,7 +274,7 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
 
   // ── Section 7: Resources (in-person only) ────────────────────────────────
   const needsResource = form.mode === "in-person";
-  const clinicResources = useMemo(() => (form.clinicId ? getResourcesForClinic(form.clinicId) : []), [form.clinicId]);
+  const clinicResources = useMemo(() => (form.locationId ? getResourcesForLocation(form.locationId) : []), [form.locationId]);
   const primarySlot = form.selectedSlots[0];
   const slotEndTime = primarySlot ? addMinutes(primarySlot, duration) : undefined;
 
@@ -278,7 +285,7 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
   const resourceDone = !needsResource || !!form.resourceId || form.resourceSkipped;
 
   // ── Steps / gating ───────────────────────────────────────────────────────
-  const locationDone = !!form.clinicId;
+  const locationDone = !!form.locationId;
   const providerDone = !!form.providerId;
   const visitTypeDone = !!form.visitType;
   const patientDone = !!form.patient;
@@ -286,13 +293,14 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
   const canConfirm = locationDone && providerDone && visitTypeDone && patientDone && scheduleDone;
 
   function handleConfirmAppointment() {
-    if (!canConfirm || !form.patient || !provider) return;
+    if (!canConfirm || !form.patient || !provider || !location) return;
     const slot = form.selectedSlots[0] ?? (allSlots[0] ?? "09:00");
     const newAppt: CcAppointment = {
       id: genApptId(),
       patientId: form.patient.id,
       providerId: form.providerId,
-      clinicId: form.clinicId,
+      clinicId: location.clinicId,
+      locationId: location.id,
       visitType: form.visitType || "Follow-Up",
       mode: form.mode,
       date: form.date,
@@ -341,18 +349,18 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
 
           {/* 1 — Location */}
           <Section n={1} title="Location" done={locationDone}
-            summary={clinic && <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-slate-400" /> {clinic.name} <span className="text-slate-400 font-normal">· {clinic.city}, {clinic.state}</span></span>}
+            summary={location && <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-slate-400" /> {location.name} <span className="text-slate-400 font-normal">· {location.city}, {location.state}</span></span>}
             onChange={changeLocation}>
             <div className="grid grid-cols-2 gap-3">
-              {CLINICS.filter((c) => c.isActive).map((c) => (
-                <button key={c.id} type="button" onClick={() => pickLocation(c.id)}
+              {getAllLocations().map((l) => (
+                <button key={l.id} type="button" onClick={() => pickLocation(l.id)}
                   className="flex items-center gap-3 px-3.5 py-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/20 text-left transition-colors">
                   <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
                     <MapPin className="w-4 h-4 text-slate-500" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{c.name}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{c.address}, {c.city}, {c.state} {c.zip}</p>
+                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{l.name}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{l.address}, {l.city}, {l.state} {l.zip}</p>
                   </div>
                   <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
                 </button>
@@ -564,7 +572,7 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
               {/* Calendar + slots, side by side once there's room */}
               <div className="flex flex-col md:flex-row gap-4 items-start">
                 <div className="w-full md:w-[300px] shrink-0">
-                  <MiniAvailabilityCalendar provider={provider} selectedDate={form.date} clinicId={form.clinicId}
+                  <MiniAvailabilityCalendar provider={provider} selectedDate={form.date} locationId={form.locationId}
                     onSelectDate={(d) => { set("date", d); set("selectedSlots", []); set("resourceId", null); set("resourceSkipped", false); }} />
                 </div>
 

@@ -4,7 +4,7 @@ import { useState } from "react";
 import ProviderLayout from "@/components/provider/layout/ProviderLayout";
 import { AvailabilityCalendar } from "@/components/provider/availability/AvailabilityCalendar";
 import { PROVIDERS } from "@/data/providers";
-import { CLINICS } from "@/data/clinics";
+import { CLINICS, locationsForClinics, findLocation } from "@/data/clinics";
 import { DAYS } from "@/data/clinics";
 import WorkingHoursEditor from "@/components/ui/WorkingHoursEditor";
 import {
@@ -92,7 +92,7 @@ export default function ProviderAvailabilityPage() {
   // Hours change form
   const [draftHours, setDraftHours] = useState<WorkingHoursDraftDay[]>(() => provider.workingHours);
   const [hoursReason, setHoursReason] = useState("");
-  const myLocations = CLINICS.filter((c) => provider.clinicAccess.includes(c.id)).map((c) => ({ id: c.id, name: c.name }));
+  const myLocations = locationsForClinics(provider.clinicAccess);
 
   function closeModal() {
     setModal(null);
@@ -189,7 +189,7 @@ export default function ProviderAvailabilityPage() {
                         {hw.segments.map((seg, i) => (
                           <div key={i}>
                             <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">{fmt12(seg.startTime)} – {fmt12(seg.endTime)}</p>
-                            <p className="text-[9px] text-slate-400">{CLINICS.find((c) => c.id === seg.clinicId)?.name ?? seg.clinicId}</p>
+                            <p className="text-[9px] text-slate-400">{findLocation(seg.locationId)?.name ?? seg.locationId}</p>
                           </div>
                         ))}
                       </div>

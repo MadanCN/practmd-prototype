@@ -39,12 +39,12 @@ interface OfferDrawerProps {
   patientName: string;
   visitType: string;
   provider: Provider | undefined;
-  clinicId?: string;
+  locationId?: string;
   onClose: () => void;
   onOffer: (apptId: string, date: string, time: string) => void;
 }
 
-function OfferDrawer({ apptId, patientName, visitType, provider, clinicId, onClose, onOffer }: OfferDrawerProps) {
+function OfferDrawer({ apptId, patientName, visitType, provider, locationId, onClose, onOffer }: OfferDrawerProps) {
   const dates = useMemo(() => getDates(14), []);
   const [selectedDate, setSelectedDate] = useState<string>(dates[0]);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
@@ -52,10 +52,10 @@ function OfferDrawer({ apptId, patientName, visitType, provider, clinicId, onClo
 
   const slots = useMemo(() => {
     if (!selectedDate) return [];
-    const all = generateSlots(provider, selectedDate, clinicId);
+    const all = generateSlots(provider, selectedDate, locationId);
     const booked = getBookedSlots(provider?.id ?? "", selectedDate);
     return all.filter(s => !booked.includes(s));
-  }, [provider, selectedDate, clinicId]);
+  }, [provider, selectedDate, locationId]);
 
   function handleOffer() {
     if (!selectedDate || !selectedTime) return;
@@ -225,7 +225,7 @@ export default function WaitlistView({ onSchedule }: { onSchedule?: () => void }
           patientName={drawerPatient?.displayName ?? "Patient"}
           visitType={drawerAppt.visitType}
           provider={drawerProvider ?? undefined}
-          clinicId={drawerAppt.clinicId}
+          locationId={drawerAppt.locationId}
           onClose={() => setDrawerEntry(null)}
           onOffer={handleOffer}
         />

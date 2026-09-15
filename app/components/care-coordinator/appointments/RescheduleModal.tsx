@@ -47,7 +47,7 @@ export default function RescheduleModal({ appointment, patient, provider, allApp
   const [notifyPatient, setNotifyPatient] = useState(true);
   const [phase, setPhase] = useState<Phase>("form");
 
-  const allSlots = useMemo(() => (newDate ? generateDaySlots(provider, newDate, appointment.clinicId) : []), [provider, newDate, appointment.clinicId]);
+  const allSlots = useMemo(() => (newDate ? generateDaySlots(provider, newDate, appointment.locationId) : []), [provider, newDate, appointment.locationId]);
   const bookedSlots = useMemo(() => (newDate ? getBookedSlots(provider.id, newDate) : []), [provider.id, newDate]);
 
   // Waitlist entries for the OLD slot (freed by reschedule)

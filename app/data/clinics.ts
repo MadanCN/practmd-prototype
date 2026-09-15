@@ -19,6 +19,12 @@ export interface ClinicAdmin {
   isActive: boolean;
 }
 
+/** A physical site nested under a `Clinic` (business/billing entity) — see
+ *  Clinic Management > Clinic > Locations. This is the "location" a patient
+ *  is actually seen at, or a provider's working-hours segment is tied to;
+ *  it is a distinct identity from `Clinic`, which represents the practice
+ *  (NPI/TIN, admins, providers' clinic access) that owns one or more of
+ *  these locations. */
 export interface ClinicLocation {
   id: string;
   name: string;
@@ -67,53 +73,17 @@ function bh(
   return { day, isOpen, openTime, closeTime, breakStart, breakEnd };
 }
 
-// Six bookable locations (Utica, Ithaca, Penfield, Rochester, Farmington,
-// Albany) — physical places a patient is actually seen, all operating under
-// the same "Penfield Psychiatry, PC" practice/brand. `id`/`practice` are
-// left stable on the two original records (a lot of seed appointment data
-// and the CMS-1500 mapper's fallback reference these ids by string); only
-// their location-facing `name` changed to the city it actually is.
+// Two active practices (billing/business entities — NPI, TIN, admins) plus
+// one inactive legacy one. Each owns one or more physical locations
+// (ClinicLocation, in `.locations`) — the six bookable places (Utica,
+// Ithaca, Penfield, Rochester, Farmington, Albany) a patient is actually
+// seen at. A provider is given `clinicAccess` at the practice level; which
+// of that practice's locations they personally work at (and when) is set
+// per working-hours segment (see data/providers.ts).
 export const CLINICS: Clinic[] = [
   {
-    id: "new-hartford",
-    name: "Utica",
-    slug: "penfieldpsych-1-1-1",
-    practice: "Penfield Psychiatry, PC",
-    isActive: true,
-    phone: "+1 (315) 555-0100",
-    fax: "+1 (315) 555-0101",
-    email: "info@newhartfordpsych.com",
-    website: "https://newhartfordpsych.com",
-    npi: "1234567890",
-    tin: "12-3456789",
-    timezone: "America/New_York",
-    address: "2307 Genesee Street",
-    city: "Utica",
-    state: "New York",
-    zip: "13501",
-    staffCount: 12,
-    adminCount: 2,
-    providerCount: 6,
-    hasClinicApp: true,
-    hasOperationsApp: true,
-    hasPatientPortal: true,
-    logoEmoji: "🌿",
-    businessHours: [
-      bh("Monday", true), bh("Tuesday", true), bh("Wednesday", true),
-      bh("Thursday", true), bh("Friday", true),
-      bh("Saturday", false), bh("Sunday", false),
-    ],
-    admins: [
-      { id: "a1", name: "Jennifer Walsh", email: "j.walsh@newhartfordpsych.com", role: "Clinic Admin", phone: "+1 (315) 555-0110", isActive: true },
-      { id: "a2", name: "Robert Chen", email: "r.chen@newhartfordpsych.com", role: "Operations Admin", phone: "+1 (315) 555-0111", isActive: true },
-    ],
-    locations: [
-      { id: "l1", name: "Main Office", address: "2307 Genesee Street", city: "Utica", state: "New York", zip: "13501", phone: "+1 (315) 555-0100", isPrimary: true },
-    ],
-  },
-  {
     id: "penfield-psychiatry",
-    name: "Penfield",
+    name: "Penfield Psychiatry",
     slug: "penfield-psychiatry",
     practice: "Penfield Psychiatry",
     isActive: true,
@@ -149,19 +119,59 @@ export const CLINICS: Clinic[] = [
       { id: "a5", name: "Amanda Park", email: "a.park@penfieldpsych.com", role: "Super Admin", phone: "+1 (585) 388-6012", isActive: true },
     ],
     locations: [
-      { id: "l2", name: "Main Campus", address: "2060 Fairport Nine Mile Pt. Rd., Suite 400", city: "Penfield", state: "New York", zip: "14526", phone: "+1 (585) 388-6000", isPrimary: true },
-      { id: "l3", name: "Satellite Office", address: "100 White Spruce Blvd", city: "Rochester", state: "New York", zip: "14623", phone: "+1 (585) 388-6020", isPrimary: false },
+      { id: "penfield", name: "Penfield", address: "2060 Fairport Nine Mile Pt. Rd., Suite 400", city: "Penfield", state: "New York", zip: "14526", phone: "+1 (585) 388-6000", isPrimary: true },
+      { id: "rochester", name: "Rochester", address: "100 White Spruce Blvd", city: "Rochester", state: "New York", zip: "14623", phone: "+1 (585) 388-6020", isPrimary: false },
+      { id: "ithaca", name: "Ithaca", address: "301 East State Street", city: "Ithaca", state: "New York", zip: "14850", phone: "+1 (607) 555-0130", isPrimary: false },
+      { id: "farmington", name: "Farmington", address: "1000 County Road 8", city: "Farmington", state: "New York", zip: "14425", phone: "+1 (585) 421-0140", isPrimary: false },
+      { id: "albany", name: "Albany", address: "40 North Pearl Street", city: "Albany", state: "New York", zip: "12207", phone: "+1 (518) 555-0150", isPrimary: false },
+    ],
+  },
+  {
+    id: "new-hartford",
+    name: "New Hartford Psychological Services",
+    slug: "penfieldpsych-1-1-1",
+    practice: "New Hartford Psychological Services",
+    isActive: true,
+    phone: "+1 (315) 555-0100",
+    fax: "+1 (315) 555-0101",
+    email: "info@newhartfordpsych.com",
+    website: "https://newhartfordpsych.com",
+    npi: "1234567890",
+    tin: "12-3456789",
+    timezone: "America/New_York",
+    address: "2307 Genesee Street",
+    city: "Utica",
+    state: "New York",
+    zip: "13501",
+    staffCount: 12,
+    adminCount: 2,
+    providerCount: 6,
+    hasClinicApp: true,
+    hasOperationsApp: true,
+    hasPatientPortal: true,
+    logoEmoji: "🌿",
+    businessHours: [
+      bh("Monday", true), bh("Tuesday", true), bh("Wednesday", true),
+      bh("Thursday", true), bh("Friday", true),
+      bh("Saturday", false), bh("Sunday", false),
+    ],
+    admins: [
+      { id: "a1", name: "Jennifer Walsh", email: "j.walsh@newhartfordpsych.com", role: "Clinic Admin", phone: "+1 (315) 555-0110", isActive: true },
+      { id: "a2", name: "Robert Chen", email: "r.chen@newhartfordpsych.com", role: "Operations Admin", phone: "+1 (315) 555-0111", isActive: true },
+    ],
+    locations: [
+      { id: "utica", name: "Utica", address: "2307 Genesee Street", city: "Utica", state: "New York", zip: "13501", phone: "+1 (315) 555-0100", isPrimary: true },
     ],
   },
   {
     id: "shore-counseling",
     name: "Shore Counseling",
     slug: "shore-counseling",
-    practice: "Penfield Psychiatry",
-    // Not one of the six active locations (Utica, Ithaca, Penfield,
-    // Rochester, Farmington, Albany) — kept only so pre-existing seed data
-    // referencing this id (a couple of providers/appointments) still
-    // resolves; excluded from the booking flow's location picker.
+    practice: "Shore Counseling",
+    // Legacy practice, not one of the six active locations — kept only so
+    // pre-existing seed data referencing this id (a couple of
+    // providers/appointments) still resolves; excluded from the booking
+    // flow's location picker (getAllLocations() only flattens active clinics).
     isActive: false,
     phone: "+1 (609) 555-0200",
     fax: "+1 (609) 555-0201",
@@ -193,168 +203,41 @@ export const CLINICS: Clinic[] = [
       { id: "a6", name: "Lisa Martinez", email: "l.martinez@shorecounseling.com", role: "Clinic Admin", phone: "+1 (609) 555-0210", isActive: true },
     ],
     locations: [
-      { id: "l4", name: "Main Office", address: "701 West Ave, STE 202", city: "Ocean City", state: "New Jersey", zip: "08226", phone: "+1 (609) 555-0200", isPrimary: true },
-    ],
-  },
-  {
-    id: "rochester",
-    name: "Rochester",
-    slug: "rochester",
-    practice: "Penfield Psychiatry, PC",
-    isActive: true,
-    phone: "+1 (585) 388-6020",
-    fax: "+1 (585) 388-6021",
-    email: "info@penfieldpsych.com",
-    website: "https://penfieldpsych.com",
-    npi: "1922334455",
-    tin: "16-2233445",
-    timezone: "America/New_York",
-    address: "100 White Spruce Blvd",
-    city: "Rochester",
-    state: "New York",
-    zip: "14623",
-    staffCount: 7,
-    adminCount: 1,
-    providerCount: 4,
-    hasClinicApp: false,
-    hasOperationsApp: true,
-    hasPatientPortal: true,
-    logoEmoji: "🌳",
-    businessHours: [
-      bh("Monday", true, "08:00", "17:00", "12:00", "13:00"),
-      bh("Tuesday", true, "08:00", "17:00", "12:00", "13:00"),
-      bh("Wednesday", true, "08:00", "17:00", "12:00", "13:00"),
-      bh("Thursday", true, "08:00", "17:00", "12:00", "13:00"),
-      bh("Friday", true, "08:00", "15:00", "", ""),
-      bh("Saturday", false), bh("Sunday", false),
-    ],
-    admins: [
-      { id: "a7", name: "Denise Ford", email: "d.ford@penfieldpsych.com", role: "Clinic Admin", phone: "+1 (585) 388-6020", isActive: true },
-    ],
-    locations: [
-      { id: "l5", name: "Main Office", address: "100 White Spruce Blvd", city: "Rochester", state: "New York", zip: "14623", phone: "+1 (585) 388-6020", isPrimary: true },
-    ],
-  },
-  {
-    id: "ithaca",
-    name: "Ithaca",
-    slug: "ithaca",
-    practice: "Penfield Psychiatry, PC",
-    isActive: true,
-    phone: "+1 (607) 555-0130",
-    fax: "+1 (607) 555-0131",
-    email: "info@penfieldpsych.com",
-    website: "https://penfieldpsych.com",
-    npi: "1933445566",
-    tin: "16-3344556",
-    timezone: "America/New_York",
-    address: "301 East State Street",
-    city: "Ithaca",
-    state: "New York",
-    zip: "14850",
-    staffCount: 5,
-    adminCount: 1,
-    providerCount: 3,
-    hasClinicApp: false,
-    hasOperationsApp: true,
-    hasPatientPortal: true,
-    logoEmoji: "🌳",
-    businessHours: [
-      bh("Monday", true, "08:00", "17:00", "12:00", "13:00"),
-      bh("Tuesday", true, "08:00", "17:00", "12:00", "13:00"),
-      bh("Wednesday", true, "08:00", "17:00", "12:00", "13:00"),
-      bh("Thursday", true, "08:00", "17:00", "12:00", "13:00"),
-      bh("Friday", true, "08:00", "15:00", "", ""),
-      bh("Saturday", false), bh("Sunday", false),
-    ],
-    admins: [
-      { id: "a8", name: "Marcus Diaz", email: "m.diaz@penfieldpsych.com", role: "Clinic Admin", phone: "+1 (607) 555-0130", isActive: true },
-    ],
-    locations: [
-      { id: "l6", name: "Main Office", address: "301 East State Street", city: "Ithaca", state: "New York", zip: "14850", phone: "+1 (607) 555-0130", isPrimary: true },
-    ],
-  },
-  {
-    id: "farmington",
-    name: "Farmington",
-    slug: "farmington",
-    practice: "Penfield Psychiatry, PC",
-    isActive: true,
-    phone: "+1 (585) 421-0140",
-    fax: "+1 (585) 421-0141",
-    email: "info@penfieldpsych.com",
-    website: "https://penfieldpsych.com",
-    npi: "1944556677",
-    tin: "16-4455667",
-    timezone: "America/New_York",
-    address: "1000 County Road 8",
-    city: "Farmington",
-    state: "New York",
-    zip: "14425",
-    staffCount: 4,
-    adminCount: 1,
-    providerCount: 3,
-    hasClinicApp: false,
-    hasOperationsApp: true,
-    hasPatientPortal: true,
-    logoEmoji: "🌳",
-    businessHours: [
-      bh("Monday", true, "08:00", "17:00", "12:00", "13:00"),
-      bh("Tuesday", true, "08:00", "17:00", "12:00", "13:00"),
-      bh("Wednesday", true, "08:00", "17:00", "12:00", "13:00"),
-      bh("Thursday", true, "08:00", "17:00", "12:00", "13:00"),
-      bh("Friday", true, "08:00", "15:00", "", ""),
-      bh("Saturday", false), bh("Sunday", false),
-    ],
-    admins: [
-      { id: "a9", name: "Rebecca Shaw", email: "r.shaw@penfieldpsych.com", role: "Clinic Admin", phone: "+1 (585) 421-0140", isActive: true },
-    ],
-    locations: [
-      { id: "l7", name: "Main Office", address: "1000 County Road 8", city: "Farmington", state: "New York", zip: "14425", phone: "+1 (585) 421-0140", isPrimary: true },
-    ],
-  },
-  {
-    id: "albany",
-    name: "Albany",
-    slug: "albany",
-    practice: "Penfield Psychiatry, PC",
-    isActive: true,
-    phone: "+1 (518) 555-0150",
-    fax: "+1 (518) 555-0151",
-    email: "info@penfieldpsych.com",
-    website: "https://penfieldpsych.com",
-    npi: "1955667788",
-    tin: "16-5566778",
-    timezone: "America/New_York",
-    address: "40 North Pearl Street",
-    city: "Albany",
-    state: "New York",
-    zip: "12207",
-    staffCount: 6,
-    adminCount: 1,
-    providerCount: 3,
-    hasClinicApp: false,
-    hasOperationsApp: true,
-    hasPatientPortal: true,
-    logoEmoji: "🌳",
-    businessHours: [
-      bh("Monday", true, "08:00", "17:00", "12:00", "13:00"),
-      bh("Tuesday", true, "08:00", "17:00", "12:00", "13:00"),
-      bh("Wednesday", true, "08:00", "17:00", "12:00", "13:00"),
-      bh("Thursday", true, "08:00", "17:00", "12:00", "13:00"),
-      bh("Friday", true, "08:00", "15:00", "", ""),
-      bh("Saturday", false), bh("Sunday", false),
-    ],
-    admins: [
-      { id: "a10", name: "Victor Nguyen", email: "v.nguyen@penfieldpsych.com", role: "Clinic Admin", phone: "+1 (518) 555-0150", isActive: true },
-    ],
-    locations: [
-      { id: "l8", name: "Main Office", address: "40 North Pearl Street", city: "Albany", state: "New York", zip: "12207", phone: "+1 (518) 555-0150", isPrimary: true },
+      { id: "shore-counseling", name: "Shore Counseling", address: "701 West Ave, STE 202", city: "Ocean City", state: "New Jersey", zip: "08226", phone: "+1 (609) 555-0200", isPrimary: true },
     ],
   },
 ];
 
 export const PRACTICES = [...new Set(CLINICS.map(c => c.practice))];
+
+/** Every location under `clinicId`, tagged with which clinic and locations owns it —
+ *  the shape a location-picker or a name-resolver needs. */
+export type ResolvedLocation = ClinicLocation & { clinicId: string; clinicName: string };
+
+/** Flattened list of every location under every active clinic — this is the
+ *  actual "six bookable locations" list (booking flow's Location step, and
+ *  the fallback option set for a not-yet-clinic-scoped working-hours row). */
+export function getAllLocations(): ResolvedLocation[] {
+  return CLINICS.filter(c => c.isActive).flatMap(c => c.locations.map(l => ({ ...l, clinicId: c.id, clinicName: c.name })));
+}
+
+/** Locations under exactly the given clinics — what a working-hours location
+ *  dropdown should offer once a provider has clinic access, per Clinic
+ *  Management > Clinic > Locations. */
+export function locationsForClinics(clinicIds: string[]): ClinicLocation[] {
+  return CLINICS.filter(c => clinicIds.includes(c.id)).flatMap(c => c.locations);
+}
+
+/** Resolve a location id to its record + owning clinic, searching every
+ *  clinic (not just active ones) so legacy references still resolve. */
+export function findLocation(locationId: string | undefined): ResolvedLocation | undefined {
+  if (!locationId) return undefined;
+  for (const c of CLINICS) {
+    const loc = c.locations.find(l => l.id === locationId);
+    if (loc) return { ...loc, clinicId: c.id, clinicName: c.name };
+  }
+  return undefined;
+}
 
 export const TIMEZONES = [
   { label: "America/New_York (EST/EDT)", value: "America/New_York" },

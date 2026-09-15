@@ -7,7 +7,7 @@ import {
   PROVIDER_TYPES, SPECIALIZATIONS_LIST, VISIT_TYPES_LIST, SERVICES_LIST,
   PERMISSION_ROLES, PROVIDER_COLORS, PROVIDERS, type WorkingHour,
 } from "@/data/providers";
-import { CLINICS, DAYS } from "@/data/clinics";
+import { CLINICS, DAYS, getAllLocations, locationsForClinics } from "@/data/clinics";
 import {
   providerTypeKey, defaultCapabilities, CAPABILITY_KEYS, CAPABILITY_META,
   type ProviderCapabilities,
@@ -30,12 +30,12 @@ const TABS: { id: TabId; label: string }[] = [
 const GENDERS = ["Male", "Female", "Non-binary", "Prefer not to say", "Other"];
 const LANGUAGES_LIST = ["English", "Spanish", "French", "Mandarin", "Hindi", "Arabic", "Portuguese", "Vietnamese"];
 
-function defaultWorkingHours(clinicId: string): WorkingHour[] {
-  const loc = clinicId || CLINICS.find((c) => c.isActive)?.id || "";
+function defaultWorkingHours(locationId: string): WorkingHour[] {
+  const loc = locationId || getAllLocations()[0]?.id || "";
   return DAYS.map((day) => ({
     day,
     isWorking: day !== "Saturday" && day !== "Sunday",
-    segments: day !== "Saturday" && day !== "Sunday" && loc ? [{ clinicId: loc, startTime: "09:00", endTime: "17:00" }] : [],
+    segments: day !== "Saturday" && day !== "Sunday" && loc ? [{ locationId: loc, startTime: "09:00", endTime: "17:00" }] : [],
   }));
 }
 
@@ -115,13 +115,14 @@ export default function AddEditProviderScreen({ providerId }: Props) {
     setForm(f => {
       const next = (f[key] as string[]).includes(val) ? (f[key] as string[]).filter(x => x !== val) : [...(f[key] as string[]), val];
       if (key !== "clinicAccess") return { ...f, [key]: next };
-      // Dropping a location a provider no longer has access to: reassign any
-      // working-hours segment pointing at it to the new first location, or
-      // clear the day entirely if no location is left.
-      const fallback = next[0] ?? "";
+      // Dropping a clinic a provider no longer has access to: reassign any
+      // working-hours segment pointing at one of its locations to the new
+      // first available location, or clear the day entirely if none is left.
+      const validLocationIds = locationsForClinics(next).map(l => l.id);
+      const fallback = validLocationIds[0] ?? "";
       const workingHours = f.workingHours.map(h => {
         const segments = h.segments
-          .map(s => (next.includes(s.clinicId) ? s : fallback ? { ...s, clinicId: fallback } : null))
+          .map(s => (validLocationIds.includes(s.locationId) ? s : fallback ? { ...s, locationId: fallback } : null))
           .filter((s): s is NonNullable<typeof s> => s !== null);
         return { ...h, segments, isWorking: h.isWorking && segments.length > 0 };
       });
@@ -420,7 +421,7 @@ export default function AddEditProviderScreen({ providerId }: Props) {
                 <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">Select Clinic Access above first — working hours are set per location.</p>
               ) : (
                 <WorkingHoursEditor hours={form.workingHours} onChange={wh => set("workingHours", wh)}
-                  locations={CLINICS.filter(c => form.clinicAccess.includes(c.id)).map(c => ({ id: c.id, name: c.name }))} />
+                  locations={locationsForClinics(form.clinicAccess).map(l => ({ id: l.id, name: l.name }))} />
               )}
             </div>
           </>

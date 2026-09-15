@@ -25,7 +25,11 @@ export interface CcAppointment {
   id: string;
   patientId: string;
   providerId: string;
+  /** Billing/practice entity — a real `Clinic.id` (see data/clinics.ts), always the parent clinic of `locationId`. */
   clinicId: string;
+  /** Physical site the visit happens at — a `ClinicLocation.id` nested under `clinicId`. Optional: undefined on
+   *  legacy seed appointments predating the location model; slot/resource logic treats a missing value as "any". */
+  locationId?: string;
   visitType: string;
   mode: AppointmentMode;
   date: string;

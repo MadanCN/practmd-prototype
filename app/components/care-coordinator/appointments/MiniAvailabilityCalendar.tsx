@@ -40,15 +40,15 @@ interface Props {
   onSelectDate: (date: string) => void;
   /** Which month to open on — defaults to the selected date's month, or today's. */
   initialMonth?: string;
-  /** Restrict "has openings" dots to segments at this location. */
-  clinicId?: string;
+  /** Restrict "has openings" dots to segments at this location (a `ClinicLocation.id`). */
+  locationId?: string;
 }
 
-export default function MiniAvailabilityCalendar({ provider, selectedDate, onSelectDate, initialMonth, clinicId }: Props) {
+export default function MiniAvailabilityCalendar({ provider, selectedDate, onSelectDate, initialMonth, locationId }: Props) {
   const anchor = initialMonth || selectedDate || todayIso();
   const [month, setMonth] = useState(() => new Date(anchor + "T12:00:00"));
 
-  const availableDates = useMemo(() => getAvailableDates(provider, 60, clinicId), [provider, clinicId]);
+  const availableDates = useMemo(() => getAvailableDates(provider, 60, locationId), [provider, locationId]);
   const grid = useMemo(() => buildMonthGrid(month), [month]);
   const today = todayIso();
   const monthLabel = month.toLocaleDateString("en-US", { month: "long", year: "numeric" });

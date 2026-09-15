@@ -1,13 +1,15 @@
-import { DAYS, type BusinessHour, type DayName } from "./clinics";
+import { DAYS, type BusinessHour, type DayName, locationsForClinics } from "./clinics";
 
 export { type BusinessHour };
 
 /** One contiguous block of a provider's working day, tied to the physical
- *  location they're at for that block — a provider can split a day across
- *  locations (e.g. Rochester mornings, Ithaca afternoons), and any gap
- *  between two segments is implicitly a break with no separate field for it. */
+ *  location (a `ClinicLocation.id`, see data/clinics.ts — NOT a `Clinic.id`)
+ *  they're at for that block. A provider can split a day across locations
+ *  under the clinic(s) they have access to (e.g. Rochester mornings, Ithaca
+ *  afternoons), and any gap between two segments is implicitly a break with
+ *  no separate field for it. */
 export interface WorkingHourSegment {
-  clinicId: string;
+  locationId: string;
   startTime: string;
   endTime: string;
 }
@@ -20,16 +22,16 @@ export interface WorkingHour {
 
 /** Build a working day from either a single open/close range or an
  *  open/close range split around a lunch break — both anchored to one
- *  `clinicId`. Pass `isWorking: false` (clinicId irrelevant) for a day off. */
+ *  `locationId`. Pass `isWorking: false` (locationId irrelevant) for a day off. */
 function wh(
-  day: DayName, isWorking: boolean, clinicId = "",
+  day: DayName, isWorking: boolean, locationId = "",
   openTime = "09:00", closeTime = "17:00",
   breakStart = "", breakEnd = ""
 ): WorkingHour {
-  if (!isWorking || !clinicId) return { day, isWorking: false, segments: [] };
+  if (!isWorking || !locationId) return { day, isWorking: false, segments: [] };
   const segments: WorkingHourSegment[] = breakStart && breakEnd
-    ? [{ clinicId, startTime: openTime, endTime: breakStart }, { clinicId, startTime: breakEnd, endTime: closeTime }]
-    : [{ clinicId, startTime: openTime, endTime: closeTime }];
+    ? [{ locationId, startTime: openTime, endTime: breakStart }, { locationId, startTime: breakEnd, endTime: closeTime }]
+    : [{ locationId, startTime: openTime, endTime: closeTime }];
   return { day, isWorking: true, segments };
 }
 
@@ -114,11 +116,11 @@ const HAND_AUTHORED_PROVIDERS: Provider[] = [
     telehealthEnabled: true, permissionRole: "Attending Physician",
     isActive: true, isDeleted: false,
     workingHours: [
-      wh("Monday", true, "penfield-psychiatry", "09:00", "17:00", "12:00", "13:00"),
-      wh("Tuesday", true, "penfield-psychiatry", "09:00", "17:00", "12:00", "13:00"),
+      wh("Monday", true, "penfield", "09:00", "17:00", "12:00", "13:00"),
+      wh("Tuesday", true, "penfield", "09:00", "17:00", "12:00", "13:00"),
       wh("Wednesday", false),
-      wh("Thursday", true, "penfield-psychiatry", "09:00", "17:00", "12:00", "13:00"),
-      wh("Friday", true, "new-hartford", "09:00", "15:00"),
+      wh("Thursday", true, "penfield", "09:00", "17:00", "12:00", "13:00"),
+      wh("Friday", true, "utica", "09:00", "15:00"),
       wh("Saturday", false), wh("Sunday", false),
     ],
     yearsExperience: 15,
@@ -151,11 +153,11 @@ const HAND_AUTHORED_PROVIDERS: Provider[] = [
     acceptingNewPatients: true,
     isActive: true, isDeleted: false,
     workingHours: [
-      wh("Monday", true, "penfield-psychiatry", "10:00", "18:00", "13:00", "14:00"),
+      wh("Monday", true, "penfield", "10:00", "18:00", "13:00", "14:00"),
       wh("Tuesday", false),
-      wh("Wednesday", true, "penfield-psychiatry", "10:00", "18:00", "13:00", "14:00"),
+      wh("Wednesday", true, "penfield", "10:00", "18:00", "13:00", "14:00"),
       wh("Thursday", false),
-      wh("Friday", true, "penfield-psychiatry", "10:00", "16:00"),
+      wh("Friday", true, "penfield", "10:00", "16:00"),
       wh("Saturday", false), wh("Sunday", false),
     ],
   },
@@ -177,10 +179,10 @@ const HAND_AUTHORED_PROVIDERS: Provider[] = [
     isActive: true, isDeleted: false,
     workingHours: [
       wh("Monday", false),
-      wh("Tuesday", true, "new-hartford", "08:00", "16:00", "12:00", "13:00"),
-      wh("Wednesday", true, "new-hartford", "08:00", "16:00", "12:00", "13:00"),
-      wh("Thursday", true, "new-hartford", "08:00", "16:00", "12:00", "13:00"),
-      wh("Friday", true, "new-hartford", "08:00", "14:00"),
+      wh("Tuesday", true, "utica", "08:00", "16:00", "12:00", "13:00"),
+      wh("Wednesday", true, "utica", "08:00", "16:00", "12:00", "13:00"),
+      wh("Thursday", true, "utica", "08:00", "16:00", "12:00", "13:00"),
+      wh("Friday", true, "utica", "08:00", "14:00"),
       wh("Saturday", false), wh("Sunday", false),
     ],
   },
@@ -191,7 +193,7 @@ const HAND_AUTHORED_PROVIDERS: Provider[] = [
     dob: "1980-11-30", providerType: "Psychiatrist", npi: "1234500004",
     licenseNumber: "PN-44556", licenseState: "New York",
     specializations: ["Child & Adolescent Psychiatry", "Autism Spectrum", "ADHD"],
-    clinicAccess: ["rochester"],
+    clinicAccess: ["penfield-psychiatry"],
     color: "#f59e0b", credentials: "MD", bio: "Dr. Reid is a child and adolescent psychiatrist with expertise in neurodevelopmental conditions.",
     languages: ["English"], street: "88 Shore Drive", city: "Rochester", state: "New York", zip: "14623",
     visitTypes: ["Initial Consultation", "Follow-Up", "Medication Check"],
@@ -209,7 +211,7 @@ const HAND_AUTHORED_PROVIDERS: Provider[] = [
     dob: "1990-06-14", providerType: "Licensed Professional Counselor", npi: "1234500005",
     licenseNumber: "LPC-77889", licenseState: "New York",
     specializations: ["Substance Use", "Motivational Interviewing", "CBT"],
-    clinicAccess: ["penfield-psychiatry", "rochester"],
+    clinicAccess: ["penfield-psychiatry"],
     color: "#ec4899", credentials: "LPC, CADC", bio: "Amara Johnson specializes in substance use recovery and motivational approaches to behavioral change.",
     languages: ["English"], street: "310 Elmwood Ave", city: "Rochester", state: "New York", zip: "14610",
     visitTypes: ["Therapy Session", "Group Session"],
@@ -219,9 +221,9 @@ const HAND_AUTHORED_PROVIDERS: Provider[] = [
     acceptingNewPatients: true,
     isActive: true, isDeleted: false,
     workingHours: [
-      wh("Monday", true, "penfield-psychiatry", "11:00", "19:00", "14:00", "15:00"),
-      wh("Tuesday", true, "penfield-psychiatry", "11:00", "19:00", "14:00", "15:00"),
-      wh("Wednesday", true, "penfield-psychiatry", "11:00", "19:00", "14:00", "15:00"),
+      wh("Monday", true, "penfield", "11:00", "19:00", "14:00", "15:00"),
+      wh("Tuesday", true, "penfield", "11:00", "19:00", "14:00", "15:00"),
+      wh("Wednesday", true, "penfield", "11:00", "19:00", "14:00", "15:00"),
       wh("Thursday", false),
       wh("Friday", false),
       wh("Saturday", true, "rochester", "09:00", "13:00"),
@@ -347,21 +349,26 @@ const GEN_LAST_NAMES = [
 ];
 const GEN_LANGUAGE_SETS = [["English"], ["English", "Spanish"], ["English", "Mandarin"], ["English", "French"], ["English", "Portuguese"], ["English", "Hindi"], ["English", "Vietnamese"], ["English", "Arabic"]];
 const GEN_STREETS = ["14 Cobblestone Way", "220 Harborview Ln", "77 Aspen Grove Rd", "5 Lakeshore Dr", "312 Chestnut St", "89 Wintergreen Ave", "460 Birchcrest Blvd", "18 Foxglove Ct"];
-// One entry per active location (data/clinics.ts) — a generated provider's
-// own home address is drawn from here, biased toward the city their
-// clinicAccess location is actually in.
-const GEN_CITIES: Record<string, { city: string; state: string; zip: string }[]> = {
-  "penfield-psychiatry": [{ city: "Penfield", state: "New York", zip: "14526" }, { city: "Pittsford", state: "New York", zip: "14534" }],
-  "new-hartford": [{ city: "Utica", state: "New York", zip: "13501" }, { city: "New Hartford", state: "New York", zip: "13413" }],
-  "rochester": [{ city: "Rochester", state: "New York", zip: "14618" }, { city: "Brighton", state: "New York", zip: "14610" }],
-  "ithaca": [{ city: "Ithaca", state: "New York", zip: "14850" }, { city: "Lansing", state: "New York", zip: "14882" }],
-  "farmington": [{ city: "Farmington", state: "New York", zip: "14425" }, { city: "Canandaigua", state: "New York", zip: "14424" }],
-  "albany": [{ city: "Albany", state: "New York", zip: "12207" }, { city: "Schenectady", state: "New York", zip: "12305" }],
-};
+// A generated provider's own home address is drawn from this pool — one
+// entry per active physical location (data/clinics.ts) plus a nearby town,
+// independent of which clinic(s) they have access to (that's a separate,
+// coarser business-entity concept — see clinicAccess/GEN_CLINIC_IDS below).
+const GEN_HOME_CITIES: { city: string; state: string; zip: string }[] = [
+  { city: "Penfield", state: "New York", zip: "14526" }, { city: "Pittsford", state: "New York", zip: "14534" },
+  { city: "Rochester", state: "New York", zip: "14618" }, { city: "Brighton", state: "New York", zip: "14610" },
+  { city: "Ithaca", state: "New York", zip: "14850" }, { city: "Lansing", state: "New York", zip: "14882" },
+  { city: "Farmington", state: "New York", zip: "14425" }, { city: "Canandaigua", state: "New York", zip: "14424" },
+  { city: "Albany", state: "New York", zip: "12207" }, { city: "Schenectady", state: "New York", zip: "12305" },
+  { city: "Utica", state: "New York", zip: "13501" }, { city: "New Hartford", state: "New York", zip: "13413" },
+];
 const GEN_INSURERS = ["Aetna", "Blue Cross Blue Shield", "Cigna", "UnitedHealthcare", "Medicare", "Medicaid", "Optum Behavioral Health", "Excellus", "Fidelis Care", "Horizon NJ Health"];
+// Only the two active practices — clinicAccess is clinic-level (matches
+// Clinic Management's Clinic/Location split); which of that clinic's own
+// locations a provider actually works at is decided per working-hours
+// segment below, not here.
+const GEN_CLINIC_IDS = ["penfield-psychiatry", "new-hartford"];
 
 function generateAdditionalProviders(count: number): Provider[] {
-  const clinicIds = Object.keys(GEN_CITIES);
   const out: Provider[] = [];
   for (let i = 0; i < count; i++) {
     const n = i + HAND_AUTHORED_PROVIDERS.length + 1; // continues p6, p7, ...
@@ -370,9 +377,9 @@ function generateAdditionalProviders(count: number): Provider[] {
     const last = GEN_LAST_NAMES[(i * 7 + 3) % GEN_LAST_NAMES.length];
     const providerType = PROVIDER_TYPES[i % PROVIDER_TYPES.length];
     const credentials = CREDENTIALS_BY_TYPE[providerType];
-    const primaryClinic = clinicIds[i % clinicIds.length];
-    const secondClinic = i % 5 === 0 ? clinicIds[(i + 1) % clinicIds.length] : undefined;
-    const loc = GEN_CITIES[primaryClinic][i % GEN_CITIES[primaryClinic].length];
+    const primaryClinic = GEN_CLINIC_IDS[i % GEN_CLINIC_IDS.length];
+    const secondClinic = i % 5 === 0 ? GEN_CLINIC_IDS[(i + 1) % GEN_CLINIC_IDS.length] : undefined;
+    const loc = GEN_HOME_CITIES[i % GEN_HOME_CITIES.length];
     const color = PROVIDER_COLORS[i % PROVIDER_COLORS.length].value;
     const specs = [SPECIALIZATIONS_LIST[i % SPECIALIZATIONS_LIST.length], SPECIALIZATIONS_LIST[(i + 5) % SPECIALIZATIONS_LIST.length]];
     const visitTypes = [VISIT_TYPES_LIST[i % VISIT_TYPES_LIST.length], VISIT_TYPES_LIST[(i + 2) % VISIT_TYPES_LIST.length]];
@@ -386,6 +393,11 @@ function generateAdditionalProviders(count: number): Provider[] {
         : ["Monday", "Wednesday", "Friday", "Saturday"];
     const startH = 8 + (i % 3); // 8, 9, or 10 AM start
     const endH = i % 4 === 0 ? 20 : 17; // one in four runs an evening clinic (up to 8 PM)
+    // Every location under whichever clinic(s) this provider has access to —
+    // cycled across their open days for real multi-site coverage (matches
+    // Clinic Management > Clinic > Locations, not the flat old clinic list).
+    const accessibleClinics = secondClinic ? [primaryClinic, secondClinic] : [primaryClinic];
+    const workLocations = locationsForClinics(accessibleClinics).map((l) => l.id);
 
     out.push({
       id: `p${n}`, kind: "provider",
@@ -398,7 +410,7 @@ function generateAdditionalProviders(count: number): Provider[] {
       licenseNumber: `${providerType === "Psychiatrist" ? "PN" : providerType === "Psychologist" ? "PY" : "LC"}-${(20000 + n * 13).toString()}`,
       licenseState: loc.state,
       specializations: specs,
-      clinicAccess: secondClinic ? [primaryClinic, secondClinic] : [primaryClinic],
+      clinicAccess: accessibleClinics,
       color, credentials,
       bio: `${first} ${last} provides ${specs[0].toLowerCase()} and ${specs[1].toLowerCase()} care${secondClinic ? " across multiple clinic sites" : ""}.`,
       languages: GEN_LANGUAGE_SETS[i % GEN_LANGUAGE_SETS.length],
@@ -410,11 +422,8 @@ function generateAdditionalProviders(count: number): Provider[] {
       acceptingNewPatients: i % 6 !== 5,
       isActive: i % 17 !== 16,
       isDeleted: false,
-      // A provider with a second clinic works their last open day there —
-      // gives the generated roster real multi-location coverage to exercise
-      // location-filtered slot generation, not just a single-site schedule.
-      workingHours: DAYS.map((day) => openDays.includes(day)
-        ? wh(day, true, secondClinic && day === openDays[openDays.length - 1] ? secondClinic : primaryClinic,
+      workingHours: DAYS.map((day, di) => openDays.includes(day)
+        ? wh(day, true, workLocations[di % workLocations.length],
             `${startH.toString().padStart(2, "0")}:00`, `${endH.toString().padStart(2, "0")}:00`, "12:00", "13:00")
         : wh(day, false)),
     });
