@@ -34,6 +34,8 @@ export interface PrefilledSlot {
   date?: string;
   startTime?: string;
   providerId?: string;
+  /** Landed here from a patient's chart ("Book appointment" / "New Appointment") — preselect them. */
+  patientId?: string;
 }
 
 interface DrawerProps {
@@ -82,12 +84,13 @@ function genApptId(): string {
 
 function initialForm(prefilled?: PrefilledSlot | null): FormState {
   const provider = prefilled?.providerId ? PROVIDERS.find((p) => p.id === prefilled.providerId) : undefined;
+  const patient = prefilled?.patientId ? CC_PATIENTS.find((p) => p.id === prefilled.patientId) ?? null : null;
   return {
     clinicId: provider?.clinicAccess[0] ?? "",
     providerId: prefilled?.providerId ?? "",
     visitType: "",
     mode: "in-person",
-    patient: null, patientSearch: "",
+    patient, patientSearch: "",
     scheduleType: "appointment", appointmentType: "fixed", waitlistPriority: "routine",
     date: prefilled?.date ?? "",
     selectedSlots: prefilled?.startTime ? [prefilled.startTime] : [],
@@ -321,7 +324,7 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
     <>
       {open && <div className="fixed inset-0 bg-black/30 z-40" onClick={handleClose} />}
       <div className={cn(
-        "fixed top-0 right-0 h-full w-[520px] bg-white dark:bg-slate-900 z-50 shadow-2xl flex flex-col transition-transform duration-300",
+        "fixed top-0 right-0 h-full w-[760px] max-w-[92vw] bg-white dark:bg-slate-900 z-50 shadow-2xl flex flex-col transition-transform duration-300",
         open ? "translate-x-0" : "translate-x-full",
       )}>
         <div className="px-6 pt-5 pb-4 border-b border-slate-200 dark:border-slate-800 shrink-0 flex items-center justify-between">
@@ -340,14 +343,16 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
           <Section n={1} title="Location" done={locationDone}
             summary={clinic && <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-slate-400" /> {clinic.name} <span className="text-slate-400 font-normal">· {clinic.city}, {clinic.state}</span></span>}
             onChange={changeLocation}>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-2 gap-3">
               {CLINICS.filter((c) => c.isActive).map((c) => (
                 <button key={c.id} type="button" onClick={() => pickLocation(c.id)}
                   className="flex items-center gap-3 px-3.5 py-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/20 text-left transition-colors">
-                  <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-lg shrink-0">{c.logoEmoji}</div>
+                  <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+                    <MapPin className="w-4 h-4 text-slate-500" />
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{c.name}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">{c.address}, {c.city}, {c.state} {c.zip}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{c.address}, {c.city}, {c.state} {c.zip}</p>
                   </div>
                   <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
                 </button>
@@ -362,7 +367,7 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
             {providersAtLocation.length === 0 ? (
               <p className="text-sm text-slate-400 py-3">No active providers at this location.</p>
             ) : (
-              <div className="grid gap-1.5 max-h-72 overflow-y-auto pr-1">
+              <div className="grid grid-cols-2 gap-2 max-h-80 overflow-y-auto pr-1">
                 {providersAtLocation.map((p) => (
                   <button key={p.id} type="button" onClick={() => pickProvider(p.id)}
                     className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/20 text-left transition-colors">
@@ -512,7 +517,7 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
           )}
 
           {/* 5 — Date & time */}
-          <Section n={5} title="Date & time" done={scheduleDone} locked={!patientDone}
+          <Section n={5} title="Date & time" done={scheduleDone} locked={!patientDone || !visitTypeDone}
             summary={form.date && primarySlot && (
               <span>{fmtDateMDY(form.date)} <span className="text-slate-400 font-normal">· {fmt12(primarySlot)}–{fmt12(slotEndTime!)} ({fmtDuration(duration)})</span></span>
             )}
@@ -556,47 +561,51 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
                 </div>
               )}
 
-              {/* Mini calendar */}
-              <MiniAvailabilityCalendar provider={provider} selectedDate={form.date}
-                onSelectDate={(d) => { set("date", d); set("selectedSlots", []); set("resourceId", null); set("resourceSkipped", false); }} />
-
-              {/* Slot grid */}
-              {form.date && (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                      {isWaitlist ? "Preferred times (optional)" : `Select time${form.appointmentType === "reserved" ? "s" : ""}`}
-                    </p>
-                    <span className="text-[11px] text-slate-400">{fmtDateMDY(form.date)}</span>
-                  </div>
-                  {allSlots.length === 0 ? (
-                    <p className="text-sm text-slate-500 text-center py-4">Provider is not scheduled on this day.</p>
-                  ) : (
-                    <div className="grid grid-cols-4 gap-2">
-                      {allSlots.map((slot) => {
-                        const isBooked = bookedSlots.includes(slot);
-                        const isSelected = form.selectedSlots.includes(slot);
-                        const disabled = isBooked && !isWaitlist;
-                        return (
-                          <button key={slot} type="button" disabled={disabled} onClick={() => toggleSlot(slot)}
-                            className={cn("py-2 px-1 rounded-lg text-xs font-medium transition-all border",
-                              disabled && "bg-slate-100 dark:bg-slate-800 text-slate-400 border-transparent cursor-not-allowed opacity-50",
-                              isSelected && "bg-brand-500 border-brand-500 text-white shadow-sm",
-                              !disabled && !isSelected && "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/30")}>
-                            {fmt12(slot)}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                  {primarySlot && slotEndTime && (
-                    <div className="mt-3 flex items-center gap-2 text-xs text-brand-700 dark:text-brand-400 bg-brand-50 dark:bg-brand-950/20 rounded-lg px-3 py-2">
-                      <Clock className="w-3.5 h-3.5 shrink-0" />
-                      Start {fmt12(primarySlot)} · End {fmt12(slotEndTime)} · Duration {fmtDuration(duration)}
-                    </div>
-                  )}
+              {/* Calendar + slots, side by side once there's room */}
+              <div className="flex flex-col md:flex-row gap-4 items-start">
+                <div className="w-full md:w-[300px] shrink-0">
+                  <MiniAvailabilityCalendar provider={provider} selectedDate={form.date}
+                    onSelectDate={(d) => { set("date", d); set("selectedSlots", []); set("resourceId", null); set("resourceSkipped", false); }} />
                 </div>
-              )}
+
+                {/* Slot grid */}
+                {form.date && (
+                  <div className="flex-1 min-w-0 w-full">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                        {isWaitlist ? "Preferred times (optional)" : `Select time${form.appointmentType === "reserved" ? "s" : ""}`}
+                      </p>
+                      <span className="text-[11px] text-slate-400">{fmtDateMDY(form.date)}</span>
+                    </div>
+                    {allSlots.length === 0 ? (
+                      <p className="text-sm text-slate-500 text-center py-4">Provider is not scheduled on this day.</p>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-2 max-h-72 overflow-y-auto pr-1">
+                        {allSlots.map((slot) => {
+                          const isBooked = bookedSlots.includes(slot);
+                          const isSelected = form.selectedSlots.includes(slot);
+                          const disabled = isBooked && !isWaitlist;
+                          return (
+                            <button key={slot} type="button" disabled={disabled} onClick={() => toggleSlot(slot)}
+                              className={cn("py-2 px-1 rounded-lg text-xs font-medium transition-all border",
+                                disabled && "bg-slate-100 dark:bg-slate-800 text-slate-400 border-transparent cursor-not-allowed opacity-50",
+                                isSelected && "bg-brand-500 border-brand-500 text-white shadow-sm",
+                                !disabled && !isSelected && "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/30")}>
+                              {fmt12(slot)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {primarySlot && slotEndTime && (
+                      <div className="mt-3 flex items-center gap-2 text-xs text-brand-700 dark:text-brand-400 bg-brand-50 dark:bg-brand-950/20 rounded-lg px-3 py-2">
+                        <Clock className="w-3.5 h-3.5 shrink-0" />
+                        Start {fmt12(primarySlot)} · End {fmt12(slotEndTime)} · Duration {fmtDuration(duration)}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </Section>
 
@@ -610,26 +619,28 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
               {clinicResources.length === 0 ? (
                 <p className="text-sm text-slate-400 py-3">No rooms configured at this location.</p>
               ) : (
-                <div className="space-y-1.5">
-                  {clinicResources.map((r) => {
-                    const free = resourceFree(r);
-                    return (
-                      <button key={r.id} type="button" disabled={!free} onClick={() => set("resourceId", r.id)}
-                        className={cn("w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border text-left transition-colors",
-                          !free ? "border-slate-100 dark:border-slate-800 opacity-50 cursor-not-allowed" : "border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/20")}>
-                        <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
-                          <DoorOpen className="w-4 h-4 text-slate-500" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{r.name}</p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">{roomTypeLabel(r.roomType)} · Cap. {r.capacity}{r.equipment.length > 0 ? ` · ${r.equipment.join(", ")}` : ""}</p>
-                        </div>
-                        {!free && <span className="text-[10px] font-semibold uppercase text-red-500 shrink-0">Booked</span>}
-                      </button>
-                    );
-                  })}
+                <div>
+                  <div className="grid grid-cols-2 gap-2 max-h-80 overflow-y-auto pr-1">
+                    {clinicResources.map((r) => {
+                      const free = resourceFree(r);
+                      return (
+                        <button key={r.id} type="button" disabled={!free} onClick={() => set("resourceId", r.id)}
+                          className={cn("flex items-center gap-3 px-3.5 py-2.5 rounded-xl border text-left transition-colors",
+                            !free ? "border-slate-100 dark:border-slate-800 opacity-50 cursor-not-allowed" : "border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/20")}>
+                          <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+                            <DoorOpen className="w-4 h-4 text-slate-500" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{r.name}</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{roomTypeLabel(r.roomType)} · Cap. {r.capacity}{r.equipment.length > 0 ? ` · ${r.equipment.join(", ")}` : ""}</p>
+                          </div>
+                          {!free && <span className="text-[10px] font-semibold uppercase text-red-500 shrink-0">Booked</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
                   <button type="button" onClick={() => { set("resourceSkipped", true); set("resourceId", null); }}
-                    className="w-full text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 py-2 text-center">
+                    className="w-full text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 py-2 mt-2 text-center">
                     Skip — assign a room at check-in
                   </button>
                 </div>

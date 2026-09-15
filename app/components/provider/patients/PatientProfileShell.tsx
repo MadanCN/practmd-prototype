@@ -145,7 +145,7 @@ export function PatientProfileShell({ id }: { id: string }) {
               <>
                 <BarButton onClick={() => setFollowUpOpen(true)} icon={CalendarClock} label="Recommend follow-up" />
                 {session.capabilities.can_book ? (
-                  <Link href="/care-coordinator/appointments/calendar" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold practmd-gradient text-white">
+                  <Link href={`/care-coordinator/appointments/calendar?newApptPatientId=${p.id}`} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold practmd-gradient text-white">
                     <CalendarPlus className="w-3.5 h-3.5" /> Book appointment
                   </Link>
                 ) : null}
@@ -155,7 +155,7 @@ export function PatientProfileShell({ id }: { id: string }) {
                 <BarButton onClick={() => { selectSection("overview"); setEditing(true); }} icon={Pencil} label="Edit" />
                 <BarButton onClick={() => setConfirm("deactivate")} icon={Ban} label="Deactivate" disabled={p.status === "inactive"} />
                 <BarButton onClick={() => setConfirm("reset")} icon={KeyRound} label="Send password reset email" compact />
-                <Link href="/care-coordinator/appointments/calendar" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold practmd-gradient text-white">
+                <Link href={`/care-coordinator/appointments/calendar?newApptPatientId=${p.id}`} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold practmd-gradient text-white">
                   <CalendarPlus className="w-3.5 h-3.5" /> New Appointment
                 </Link>
               </>

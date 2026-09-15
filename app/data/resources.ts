@@ -45,10 +45,30 @@ export const CLINIC_RESOURCES: ClinicResource[] = [
   { id: "res_nh_g1", clinicId: "new-hartford", name: "Group Therapy Room", roomType: "group-therapy", capacity: 10, equipment: [], isActive: true },
   { id: "res_nh_a1", clinicId: "new-hartford", name: "Assessment Room", roomType: "assessment", capacity: 2, equipment: ["Biofeedback Device"], isActive: true },
 
-  // ── Shore Counseling ──────────────────────────────────────────────────────
+  // ── Shore Counseling (inactive location — kept only for legacy seed data) ──
   { id: "res_sc_c1", clinicId: "shore-counseling", name: "Consultation Room 1", roomType: "consultation", capacity: 3, equipment: [], isActive: true },
   { id: "res_sc_t1", clinicId: "shore-counseling", name: "Therapy Room 1", roomType: "therapy", capacity: 2, equipment: [], isActive: true },
   { id: "res_sc_g1", clinicId: "shore-counseling", name: "Group Therapy Room", roomType: "group-therapy", capacity: 8, equipment: [], isActive: true },
+
+  // ── Rochester ────────────────────────────────────────────────────────────
+  { id: "res_ro_c1", clinicId: "rochester", name: "Consultation Room 1", roomType: "consultation", capacity: 3, equipment: [], isActive: true },
+  { id: "res_ro_t1", clinicId: "rochester", name: "Therapy Room 1", roomType: "therapy", capacity: 2, equipment: [], isActive: true },
+  { id: "res_ro_g1", clinicId: "rochester", name: "Group Therapy Room", roomType: "group-therapy", capacity: 10, equipment: [], isActive: true },
+  { id: "res_ro_a1", clinicId: "rochester", name: "Assessment Room", roomType: "assessment", capacity: 2, equipment: ["Digital Scale"], isActive: true },
+
+  // ── Ithaca ───────────────────────────────────────────────────────────────
+  { id: "res_it_c1", clinicId: "ithaca", name: "Consultation Room 1", roomType: "consultation", capacity: 3, equipment: [], isActive: true },
+  { id: "res_it_t1", clinicId: "ithaca", name: "Therapy Room 1", roomType: "therapy", capacity: 2, equipment: [], isActive: true },
+  { id: "res_it_g1", clinicId: "ithaca", name: "Group Therapy Room", roomType: "group-therapy", capacity: 8, equipment: [], isActive: true },
+
+  // ── Farmington ───────────────────────────────────────────────────────────
+  { id: "res_fa_c1", clinicId: "farmington", name: "Consultation Room 1", roomType: "consultation", capacity: 3, equipment: [], isActive: true },
+  { id: "res_fa_t1", clinicId: "farmington", name: "Therapy Room 1", roomType: "therapy", capacity: 2, equipment: [], isActive: true },
+
+  // ── Albany ───────────────────────────────────────────────────────────────
+  { id: "res_al_c1", clinicId: "albany", name: "Consultation Room 1", roomType: "consultation", capacity: 3, equipment: [], isActive: true },
+  { id: "res_al_t1", clinicId: "albany", name: "Therapy Room 1", roomType: "therapy", capacity: 2, equipment: [], isActive: true },
+  { id: "res_al_g1", clinicId: "albany", name: "Group Therapy Room", roomType: "group-therapy", capacity: 10, equipment: ["Video Conferencing Unit"], isActive: true },
 ];
 
 export function getResourcesForClinic(clinicId: string): ClinicResource[] {

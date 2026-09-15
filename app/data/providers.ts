@@ -164,13 +164,13 @@ const HAND_AUTHORED_PROVIDERS: Provider[] = [
   {
     id: "p4", kind: "provider",
     firstName: "Marcus", lastName: "Reid", displayName: "Dr. Marcus Reid",
-    gender: "Male", email: "m.reid@shorecounseling.com", phone: "+1 (609) 555-0220",
+    gender: "Male", email: "m.reid@penfieldpsych.com", phone: "+1 (585) 388-6220",
     dob: "1980-11-30", providerType: "Psychiatrist", npi: "1234500004",
-    licenseNumber: "PN-44556", licenseState: "New Jersey",
+    licenseNumber: "PN-44556", licenseState: "New York",
     specializations: ["Child & Adolescent Psychiatry", "Autism Spectrum", "ADHD"],
-    clinicAccess: ["shore-counseling"],
+    clinicAccess: ["rochester"],
     color: "#f59e0b", credentials: "MD", bio: "Dr. Reid is a child and adolescent psychiatrist with expertise in neurodevelopmental conditions.",
-    languages: ["English"], street: "88 Shore Drive", city: "Ocean City", state: "New Jersey", zip: "08226",
+    languages: ["English"], street: "88 Shore Drive", city: "Rochester", state: "New York", zip: "14623",
     visitTypes: ["Initial Consultation", "Follow-Up", "Medication Check"],
     services: ["Child Psychiatry", "Adolescent Psychiatry"],
     telehealthEnabled: true, permissionRole: "Attending Physician",
@@ -186,7 +186,7 @@ const HAND_AUTHORED_PROVIDERS: Provider[] = [
     dob: "1990-06-14", providerType: "Licensed Professional Counselor", npi: "1234500005",
     licenseNumber: "LPC-77889", licenseState: "New York",
     specializations: ["Substance Use", "Motivational Interviewing", "CBT"],
-    clinicAccess: ["penfield-psychiatry", "shore-counseling"],
+    clinicAccess: ["penfield-psychiatry", "rochester"],
     color: "#ec4899", credentials: "LPC, CADC", bio: "Amara Johnson specializes in substance use recovery and motivational approaches to behavioral change.",
     languages: ["English"], street: "310 Elmwood Ave", city: "Rochester", state: "New York", zip: "14610",
     visitTypes: ["Therapy Session", "Group Session"],
@@ -324,10 +324,16 @@ const GEN_LAST_NAMES = [
 ];
 const GEN_LANGUAGE_SETS = [["English"], ["English", "Spanish"], ["English", "Mandarin"], ["English", "French"], ["English", "Portuguese"], ["English", "Hindi"], ["English", "Vietnamese"], ["English", "Arabic"]];
 const GEN_STREETS = ["14 Cobblestone Way", "220 Harborview Ln", "77 Aspen Grove Rd", "5 Lakeshore Dr", "312 Chestnut St", "89 Wintergreen Ave", "460 Birchcrest Blvd", "18 Foxglove Ct"];
+// One entry per active location (data/clinics.ts) — a generated provider's
+// own home address is drawn from here, biased toward the city their
+// clinicAccess location is actually in.
 const GEN_CITIES: Record<string, { city: string; state: string; zip: string }[]> = {
-  "penfield-psychiatry": [{ city: "Penfield", state: "New York", zip: "14526" }, { city: "Rochester", state: "New York", zip: "14618" }, { city: "Pittsford", state: "New York", zip: "14534" }],
+  "penfield-psychiatry": [{ city: "Penfield", state: "New York", zip: "14526" }, { city: "Pittsford", state: "New York", zip: "14534" }],
   "new-hartford": [{ city: "Utica", state: "New York", zip: "13501" }, { city: "New Hartford", state: "New York", zip: "13413" }],
-  "shore-counseling": [{ city: "Ocean City", state: "New Jersey", zip: "08226" }, { city: "Somers Point", state: "New Jersey", zip: "08244" }],
+  "rochester": [{ city: "Rochester", state: "New York", zip: "14618" }, { city: "Brighton", state: "New York", zip: "14610" }],
+  "ithaca": [{ city: "Ithaca", state: "New York", zip: "14850" }, { city: "Lansing", state: "New York", zip: "14882" }],
+  "farmington": [{ city: "Farmington", state: "New York", zip: "14425" }, { city: "Canandaigua", state: "New York", zip: "14424" }],
+  "albany": [{ city: "Albany", state: "New York", zip: "12207" }, { city: "Schenectady", state: "New York", zip: "12305" }],
 };
 const GEN_INSURERS = ["Aetna", "Blue Cross Blue Shield", "Cigna", "UnitedHealthcare", "Medicare", "Medicaid", "Optum Behavioral Health", "Excellus", "Fidelis Care", "Horizon NJ Health"];
 
@@ -349,7 +355,7 @@ function generateAdditionalProviders(count: number): Provider[] {
     const visitTypes = [VISIT_TYPES_LIST[i % VISIT_TYPES_LIST.length], VISIT_TYPES_LIST[(i + 2) % VISIT_TYPES_LIST.length]];
     const services = [SERVICES_LIST[i % SERVICES_LIST.length], SERVICES_LIST[(i + 3) % SERVICES_LIST.length]];
     const insuranceAccepted = [GEN_INSURERS[i % GEN_INSURERS.length], GEN_INSURERS[(i + 4) % GEN_INSURERS.length], GEN_INSURERS[(i + 7) % GEN_INSURERS.length]];
-    const domain = primaryClinic === "penfield-psychiatry" ? "penfieldpsych.com" : primaryClinic === "new-hartford" ? "newhartfordpsych.com" : "shorecounseling.com";
+    const domain = primaryClinic === "new-hartford" ? "newhartfordpsych.com" : "penfieldpsych.com";
     const openDays: DayName[] = i % 3 === 0
       ? ["Monday", "Tuesday", "Wednesday", "Thursday"]
       : i % 3 === 1

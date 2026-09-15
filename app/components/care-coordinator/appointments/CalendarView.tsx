@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight, Plus, Check, Video, Phone, Clock, Users, Eye, EyeOff, CalendarDays } from "lucide-react";
 import { CC_APPOINTMENTS, type CcAppointment } from "@/data/cc-appointments";
 import { CC_PATIENTS } from "@/data/cc-patients";
@@ -436,12 +437,31 @@ function MonthView({ date, selectedProviderIds, appointments, showWaitlisted, sh
 
 // ── Main CalendarView ────────────────────────────────────────────────────────
 export default function CalendarView() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [viewMode, setViewMode] = useState<ViewMode>("day");
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedProviderIds, setSelectedProviderIds] = useState<string[]>(["p1", "p2", "p3"]);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [prefilled, setPrefilled] = useState<PrefilledSlot | null>(null);
   const [showProviderPicker, setShowProviderPicker] = useState(false);
+
+  // Arriving from a patient's chart ("Book appointment") — open the drawer
+  // with that patient preselected. The "adjust state during render" pattern
+  // (not an effect body, so no cascading-render lint) consumes the param
+  // exactly once; a separate effect then strips it from the URL, since that
+  // touches the browser location, not React state.
+  const newApptPatientId = searchParams.get("newApptPatientId");
+  const [consumedPatientParam, setConsumedPatientParam] = useState(false);
+  if (newApptPatientId && !consumedPatientParam) {
+    setConsumedPatientParam(true);
+    setPrefilled({ patientId: newApptPatientId });
+    setDrawerOpen(true);
+  }
+  useEffect(() => {
+    if (consumedPatientParam) router.replace("/care-coordinator/appointments/calendar");
+  }, [consumedPatientParam, router]);
+
   const [providerQuery, setProviderQuery] = useState("");
   const [appointments, setAppointments] = useState<CcAppointment[]>(CC_APPOINTMENTS);
   const [selectedAppt, setSelectedAppt] = useState<CcAppointment | null>(null);
