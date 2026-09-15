@@ -159,6 +159,8 @@ function Section({ n, title, done, summary, onChange, locked, children }: {
 export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAppointment }: DrawerProps) {
   const [form, setForm] = useState<FormState>(() => initialForm(prefilled));
   const [formSearch, setFormSearch] = useState("");
+  const [locationSearch, setLocationSearch] = useState("");
+  const [providerSearch, setProviderSearch] = useState("");
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   // The drawer is mounted once for the page's lifetime (it just slides in/out
@@ -174,6 +176,8 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
     if (open) {
       setForm(initialForm(prefilled));
       setFormSearch("");
+      setLocationSearch("");
+      setProviderSearch("");
       setDetailsOpen(false);
     }
   }
@@ -203,18 +207,47 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
   // ── Section 1: Location ──────────────────────────────────────────────────
   function changeLocation() {
     setForm((f) => ({ ...initialForm(null), patient: f.patient, patientSearch: f.patientSearch }));
+    setLocationSearch("");
+    setProviderSearch("");
   }
   function pickLocation(locationId: string) {
     setForm((f) => ({ ...initialForm(null), locationId, patient: f.patient, patientSearch: f.patientSearch }));
+    setProviderSearch("");
   }
+
+  // Filtered by name/city/state/owning-clinic, then grouped by clinic so a
+  // roster spanning many locations across many clinics still reads as
+  // organized sections rather than one long undifferentiated list.
+  const locationGroups = useMemo(() => {
+    const q = locationSearch.trim().toLowerCase();
+    const matches = getAllLocations().filter((l) => !q
+      || l.name.toLowerCase().includes(q) || l.city.toLowerCase().includes(q)
+      || l.state.toLowerCase().includes(q) || l.clinicName.toLowerCase().includes(q));
+    const byClinic = new Map<string, { clinicName: string; locations: typeof matches }>();
+    for (const l of matches) {
+      if (!byClinic.has(l.clinicId)) byClinic.set(l.clinicId, { clinicName: l.clinicName, locations: [] });
+      byClinic.get(l.clinicId)!.locations.push(l);
+    }
+    return Array.from(byClinic.values());
+  }, [locationSearch]);
+  const locationCount = useMemo(() => locationGroups.reduce((n, g) => n + g.locations.length, 0), [locationGroups]);
 
   // ── Section 2: Provider ──────────────────────────────────────────────────
   function changeProvider() {
     setForm((f) => ({ ...f, providerId: "", visitType: "", mode: "in-person", date: "", selectedSlots: [], resourceId: null, resourceSkipped: false }));
+    setProviderSearch("");
   }
   function pickProvider(id: string) {
     setForm((f) => ({ ...f, providerId: id, visitType: "", date: "", selectedSlots: [], resourceId: null, resourceSkipped: false }));
   }
+
+  const filteredProviders = useMemo(() => {
+    const q = providerSearch.trim().toLowerCase();
+    if (!q) return providersAtLocation;
+    return providersAtLocation.filter((p) =>
+      p.displayName.toLowerCase().includes(q) || p.providerType.toLowerCase().includes(q)
+      || p.specializations.some((s) => s.toLowerCase().includes(q)));
+  }, [providersAtLocation, providerSearch]);
 
   // ── Section 3: Visit type (+ mode) ───────────────────────────────────────
   function changeVisitType() {
@@ -351,20 +384,38 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
           <Section n={1} title="Location" done={locationDone}
             summary={location && <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-slate-400" /> {location.name} <span className="text-slate-400 font-normal">· {location.city}, {location.state}</span></span>}
             onChange={changeLocation}>
-            <div className="grid grid-cols-2 gap-3">
-              {getAllLocations().map((l) => (
-                <button key={l.id} type="button" onClick={() => pickLocation(l.id)}
-                  className="flex items-center gap-3 px-3.5 py-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/20 text-left transition-colors">
-                  <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
-                    <MapPin className="w-4 h-4 text-slate-500" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">{l.name}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{l.address}, {l.city}, {l.state} {l.zip}</p>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
-                </button>
-              ))}
+            <div className="space-y-2.5">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input className={cn(INPUT, "pl-9")} placeholder="Search locations by name or city…"
+                  value={locationSearch} onChange={(e) => setLocationSearch(e.target.value)} />
+              </div>
+              {locationCount === 0 ? (
+                <p className="text-sm text-slate-500 text-center py-4">No locations found matching &quot;{locationSearch}&quot;</p>
+              ) : (
+                <div className="border border-slate-200 dark:border-slate-700 rounded-xl max-h-72 overflow-y-auto">
+                  {locationGroups.map((g) => (
+                    <div key={g.clinicName}>
+                      {locationGroups.length > 1 && (
+                        <p className="px-3.5 pt-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400 bg-slate-50 dark:bg-slate-800/50">{g.clinicName}</p>
+                      )}
+                      <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {g.locations.map((l) => (
+                          <button key={l.id} type="button" onClick={() => pickLocation(l.id)}
+                            className="w-full flex items-center gap-3 px-3.5 py-2.5 hover:bg-brand-50 dark:hover:bg-brand-950/20 text-left transition-colors">
+                            <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{l.name}</p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{l.city}, {l.state}</p>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </Section>
 
@@ -375,20 +426,31 @@ export default function NewAppointmentDrawer({ open, onClose, prefilled, onNewAp
             {providersAtLocation.length === 0 ? (
               <p className="text-sm text-slate-400 py-3">No active providers at this location.</p>
             ) : (
-              <div className="grid grid-cols-2 gap-2 max-h-80 overflow-y-auto pr-1">
-                {providersAtLocation.map((p) => (
-                  <button key={p.id} type="button" onClick={() => pickProvider(p.id)}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/20 text-left transition-colors">
-                    <span className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ backgroundColor: p.color }}>
-                      {p.firstName[0]}{p.lastName[0]}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{p.displayName}</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{p.providerType} · {p.specializations.slice(0, 2).join(", ")}</p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
-                  </button>
-                ))}
+              <div className="space-y-2.5">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input className={cn(INPUT, "pl-9")} placeholder="Search providers by name, type, or specialty…"
+                    value={providerSearch} onChange={(e) => setProviderSearch(e.target.value)} />
+                </div>
+                {filteredProviders.length === 0 ? (
+                  <p className="text-sm text-slate-500 text-center py-4">No providers found matching &quot;{providerSearch}&quot;</p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
+                    {filteredProviders.map((p) => (
+                      <button key={p.id} type="button" onClick={() => pickProvider(p.id)}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/20 text-left transition-colors">
+                        <span className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ backgroundColor: p.color }}>
+                          {p.firstName[0]}{p.lastName[0]}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate">{p.displayName}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{p.providerType} · {p.specializations.slice(0, 2).join(", ")}</p>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </Section>
