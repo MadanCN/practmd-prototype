@@ -293,8 +293,8 @@ function ProviderFormScreen({ original }: { original?: ProviderRecord }) {
       {/* Unsaved-changes prompt */}
       <Modal open={guard.pending !== null} onClose={guard.stay} title="Discard unsaved changes?" description="You have edits on this form that haven't been saved."
         footer={<>
-          <button onClick={guard.stay} className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800">Keep editing</button>
-          <button onClick={guard.confirmLeave} className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold">Discard changes</button>
+          <button onClick={guard.stay} className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800">Keep editing</button>
+          <button onClick={guard.confirmLeave} className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold">Discard changes</button>
         </>}>
         <p>Leaving now throws them away.</p>
       </Modal>
@@ -305,8 +305,8 @@ function ProviderFormScreen({ original }: { original?: ProviderRecord }) {
           {impacts.map((i, n) => <li key={n}><Callout tone={i.tone}>{i.text}</Callout></li>)}
         </ul>
         <div className="flex justify-end gap-2 pt-4">
-          <button onClick={() => setReviewOpen(false)} className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800">Go back</button>
-          <button onClick={persistEdit} className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold">Confirm &amp; save</button>
+          <button onClick={() => setReviewOpen(false)} className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800">Go back</button>
+          <button onClick={persistEdit} className="px-4 py-2 rounded-xl practmd-gradient text-white text-sm font-semibold">Confirm &amp; save</button>
         </div>
       </Modal>
 

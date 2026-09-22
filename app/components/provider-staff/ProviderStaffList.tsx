@@ -8,9 +8,9 @@ import {
 } from "lucide-react";
 import { STAFF, type StaffMember } from "@/data/providers";
 import { CLINICS } from "@/data/clinics";
-import { STATUS_META } from "@/data/provider-credentialing";
 import { providerDisplayName, type ProviderRecord } from "@/data/provider-record";
 import { selectRecords, useProviderStore } from "@/lib/provider-store";
+import { StatusBadge } from "./StatusBadge";
 import { cn } from "@/lib/utils";
 
 type Mode = "provider" | "staff";
@@ -223,14 +223,7 @@ export default function ProviderStaffListScreen() {
                       </div>
                     </td>
                     <td className="py-3 px-3">
-                      {(() => {
-                        const r = item as ProviderRecord;
-                        const tone = !r.isActive ? "bg-slate-100 dark:bg-slate-800 text-slate-500"
-                          : r.status === "clinically-active" ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400"
-                          : r.status === "suspended" || r.status === "offboarded" ? "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400"
-                          : "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400";
-                        return <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap", tone)}>{r.isActive ? STATUS_META[r.status].label : "Deactivated"}</span>;
-                      })()}
+                      <StatusBadge status={(item as ProviderRecord).status} deactivated={!(item as ProviderRecord).isActive} />
                     </td>
                     <td className="py-3 px-3 relative">
                       <button onClick={() => setOpenActions(openActions === item.id ? null : item.id)}

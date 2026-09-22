@@ -20,7 +20,7 @@ export const fmtDate = (iso: string) => new Date(iso).toLocaleDateString("en-US"
 export const fmtDateTime = (iso: string) => new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
 const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
-const BTN = "px-4 py-2 rounded-lg text-sm font-medium border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50";
+const BTN = "px-4 py-2 rounded-xl text-sm font-medium border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50";
 const BTN_PRIMARY = "inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold practmd-gradient text-white disabled:opacity-40 disabled:cursor-not-allowed";
 
 /* ── Resend / send invitation ─────────────────────────────────────────── */
@@ -229,7 +229,7 @@ function ChangeStatusBody({ open, onClose, provider, onDone }: StatusProps) {
           {CLINICAL_STATUS_ORDER.map((s) => <option key={s} value={s}>{STATUS_META[s].label}</option>)}
         </select>
         <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Reason (optional — recorded in the audit log)" className={cn(INPUT, "resize-none")} />
-        <Callout tone="info">Status-based permissions and transition rules arrive with the status-lifecycle work — for now any status can be set and it is logged.</Callout>
+        <Callout tone="info">Each status controls what {providerDisplayName(provider)} can do in the portal — see the status list for what changes. Any status can be set from any other; there&apos;s no transition-order check yet, so double-check before saving.</Callout>
       </div>
     </Modal>
   );
@@ -242,7 +242,7 @@ export function ActiveToggleDialog({ open, onClose, provider, onDone }: { open: 
       footer={<>
         <button onClick={onClose} className={BTN}>Cancel</button>
         <button onClick={() => { setProviderActive(provider.id, !provider.isActive); onDone(); onClose(); }}
-          className={cn("px-4 py-2 rounded-lg text-sm font-semibold text-white", deactivating ? "bg-rose-600 hover:bg-rose-700" : "bg-emerald-600 hover:bg-emerald-700")}>
+          className={cn("px-4 py-2 rounded-xl text-sm font-semibold text-white", deactivating ? "bg-rose-600 hover:bg-rose-700" : "bg-emerald-600 hover:bg-emerald-700")}>
           {deactivating ? "Deactivate" : "Reactivate"}
         </button>
       </>}>
@@ -262,6 +262,7 @@ const EVENT_LABEL: Record<AuditEntry["event"], string> = {
   invite_failed: "Invitation delivery failed", invite_expired: "Invitation expired", invite_invalidated: "Invitation link invalidated",
   invite_accepted: "Invitation accepted", email_changed: "Email changed", email_reverification_sent: "Email re-verification sent",
   verification_bypassed: "Verification bypassed", correction_submitted: "Provider corrected a pre-filled field",
+  correction_approved: "Correction approved", correction_denied: "Correction denied",
 };
 
 const INVITE_EVENTS: AuditEntry["event"][] = [

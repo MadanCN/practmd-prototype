@@ -4,6 +4,75 @@ Scope of this pass: the schema, the full-page Add/Edit form, the View page, and 
 **Not in this pass** (next work): configurable capabilities / permission overrides, dependent master
 updates, full offboarding panel-resolution.
 
+## Real activation-wizard corrections + admin approval, UI uniformity, MFA step (added)
+
+The user gave the exact post-invitation sequence (Welcome+password → MFA skip → provider reviews and
+can correct the admin-entered profile/hours → no change leads straight to the portal, a change raises
+an approval task) and asked for a real Approve/Deny/Revise workflow in the admin app, plus a UI pass on
+Add/Edit/View for uniformity, plus a wording recheck. This pass:
+
+- **MFA step**: `InviteLanding.tsx` gained an actual "Set up two-factor authentication" screen between
+  password and policies (previously `enrol-mfa` was marked done silently, with no screen). Always
+  skippable — there's no per-clinic "MFA required" flag in this prototype, unlike the terms step.
+- **Real correction/approval data model** (`lib/provider-store.ts`): a `Correction` — provider id,
+  source (`profile`/`hours`), a list of human-readable field diffs, a forward `patch` and a `revertPatch`.
+  `submitCorrection()` applies the patch immediately (so the provider isn't blocked on their own edit)
+  and raises the correction as `pending`. `resolveCorrection(id, "approve"|"deny")`: approve is a no-op
+  besides marking it resolved (the value's already live); deny re-applies `revertPatch`, restoring what
+  the admin originally entered. `markCorrectionForRevision()` closes the task out when the admin instead
+  chooses to set their own value from the Edit page. This replaces the earlier, simpler "apply + just log
+  it" approach from the previous pass.
+- **`app/provider/activate/page.tsx` "Confirm profile" step, rebuilt**: previously only 4 fields
+  (display name, preferred name, suffix, NPI, bio). Now shows and lets the provider correct the *actual*
+  `ProviderRecord` — photo, name parts, suffix, phone, DOB, every credential row (NPI + licenses),
+  provider type, visit types, specializations, and (when self-scheduling is on) bio/education/years/
+  services — matching the field list the spec calls out for this step. Email, clinic access are shown
+  read-only (the provider's login and admin-owned access grants, not theirs to edit here). EIN, fax,
+  taxonomy code and capabilities are **not shown at all** — clinic-billing/permission fields a provider
+  has no reason to see. On Continue, every changed field is diffed against the record snapshot taken
+  when the wizard loaded and submitted as one `Correction`.
+- **"Confirm working hours" step**: now uses the shared `WorkingHoursEditor` (multi-location, multi-
+  segment — the real schema) instead of the wizard's old single-segment-per-day stand-in, so what the
+  provider confirms is what the admin actually entered. (It doesn't have the admin Edit form's one-click
+  "Add break" / "Copy to all days" shortcuts — same underlying data, less polish; see below.)
+- **Admin approval UI** (`components/provider-staff/CorrectionsPanel.tsx`, wired into `ProviderDetail.tsx`):
+  a "N changes from the provider need review" panel showing the exact field-by-field diffs (the same
+  values the provider saw and edited), with Approve / Revise / Deny per correction. Revise links to the
+  Edit page and closes the task (the admin's own save is the resolution). Resolved corrections move to a
+  quieter list near the full audit history.
+- **"Active — Limited" status**: already existed in the data (`STATUS_META`), but every status badge in
+  the app (`ProviderStaffList`, `ProviderDetail` header) rendered it in the same amber bucket as the
+  pending/in-progress statuses, so a bookable-but-scope-restricted provider looked identical to one still
+  going through verification. New shared `components/provider-staff/StatusBadge.tsx`, driven by a `tone`
+  field added to `STATUS_META`, gives every clinical status its own accurate color (active-limited and
+  offboarding both read as a distinct "limited" navy tone, separate from full-amber "pending" and
+  full-emerald "active").
+- **UI uniformity pass**: the View page's primary "Edit" action, the Add/Edit form's "Save", and every
+  dialog's primary button (Resend, Change status, Deactivate/Reactivate, the email-changed prompt) now
+  share the same brand-gradient treatment and `rounded-xl` corners — previously View used plain
+  `blue-600` while the invite dialogs used the brand gradient, so the three screens didn't visually agree
+  on what a "primary action" looks like.
+- **Wording recheck**: the Change-status dialog's info callout was still describing status permissions as
+  future work ("arrive with the status-lifecycle work") — stale, since that lifecycle is now real
+  (`STATUS_META.permits` gates the portal). Reworded to state what's actually true: status controls
+  portal access now, but transition *order* still isn't validated. Also fixed a "not required by [clinic]
+  yet" on the MFA screen that implied a future requirement that isn't tracked anywhere.
+
+**Scoping decisions (please review):**
+- `submitCorrection`/`resolveCorrection` don't distinguish a Credentialing-Admin queue from a Clinic-Admin
+  queue — reference.md calls out NPI/licence corrections as going to Credentialing specifically. This
+  prototype has one admin persona, so all corrections land in one queue on the provider's page.
+- The confirm-hours step uses the generic `WorkingHoursEditor` rather than the admin Edit form's richer,
+  purpose-built `ScheduleSection` editor (one-click break insertion, copy-to-all-days, per-clinic
+  optgroups, overlap validation) — same `WorkingHour`/segment data, so nothing is lost, just less editing
+  polish. `WorkingHoursEditor`'s own doc comment already named this exact reuse as its purpose.
+- The UI-uniformity pass targeted the highest-visibility shared elements (status badges, primary-action
+  buttons, corner radii) across Add/Edit/View and the invite dialogs specifically — it did not recolor
+  the rest of the admin app (Global Masters, Clinic Management, etc.), which still uses plain `blue-600`
+  throughout. Making Provider screens match the *rest of the admin app* and making them match *the new
+  brand-gradient invite/onboarding screens* are two different, mutually exclusive "uniformity" goals; this
+  pass chose the latter since that's where all the new work in this feature actually lives.
+
 ## Visual rebuild to the "Provider Invitation — Email & Link States" design (added)
 
 The user shared a Claude Design-canvas artifact (12 artboards: the invitation email + its resend

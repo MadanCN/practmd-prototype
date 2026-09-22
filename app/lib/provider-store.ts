@@ -49,7 +49,8 @@ export interface Invitation {
 export type AuditEvent =
   | "provider_created" | "provider_updated" | "status_changed" | "deactivated" | "reactivated"
   | "invite_sent" | "invite_resent" | "invite_failed" | "invite_expired" | "invite_invalidated" | "invite_accepted"
-  | "email_changed" | "email_reverification_sent" | "verification_bypassed" | "correction_submitted";
+  | "email_changed" | "email_reverification_sent" | "verification_bypassed"
+  | "correction_submitted" | "correction_approved" | "correction_denied";
 
 export interface AuditEntry {
   id: string;
@@ -61,11 +62,33 @@ export interface AuditEntry {
   note?: string;
 }
 
+/* ── Corrections — a provider's edit to a pre-filled field during activation ──
+ * Applied immediately (so the provider isn't blocked or shown a stale value the
+ * moment after they typed it), but raised to the Clinic Admin as a reviewable
+ * task: Approve leaves it, Deny reverts to what the admin originally entered,
+ * Revise sends the admin to the Edit page to set their own value. */
+
+export interface CorrectionFieldDiff { field: string; from: string; to: string }
+
+export interface Correction {
+  id: string;
+  providerId: string;
+  source: "profile" | "hours";
+  fields: CorrectionFieldDiff[];
+  patch: Partial<ProviderRecord>;
+  revertPatch: Partial<ProviderRecord>;
+  submittedAt: string;
+  status: "pending" | "approved" | "denied";
+  resolvedAt?: string;
+  resolvedBy?: string;
+}
+
 export interface ProviderStoreState {
   overrides: Record<string, ProviderRecord>;
   created: ProviderRecord[];
   invitations: Invitation[];
   audit: AuditEntry[];
+  corrections: Correction[];
 }
 type State = ProviderStoreState;
 
@@ -108,7 +131,7 @@ function demoState(): State {
   push("p8", at(1), "deactivated", undefined, CURRENT_ADMIN.name, "Deactivated before accepting the invitation");
   push("p9", at(5), "invite_sent", emailOf("p9"));
   push("p9", at(4, 14), "invite_accepted", emailOf("p9"), "Provider");
-  return { overrides: {}, created: [], invitations, audit };
+  return { overrides: {}, created: [], invitations, audit, corrections: [] };
 }
 
 const store = createPersistedStore<State>({
@@ -121,6 +144,7 @@ const store = createPersistedStore<State>({
       created: r.created ?? initial.created,
       invitations: r.invitations ?? initial.invitations,
       audit: r.audit ?? initial.audit,
+      corrections: r.corrections ?? initial.corrections,
     };
   },
 });
@@ -168,6 +192,10 @@ export const invitationsFor = (s: State, id: string) =>
   s.invitations.filter((i) => i.providerId === id).sort((a, b) => b.sentAt.localeCompare(a.sentAt));
 export const auditFor = (s: State, id: string) =>
   s.audit.filter((a) => a.providerId === id).sort((a, b) => b.at.localeCompare(a.at));
+export const correctionsFor = (s: State, id: string) =>
+  s.corrections.filter((c) => c.providerId === id).sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
+export const pendingCorrectionsFor = (s: State, id: string) =>
+  correctionsFor(s, id).filter((c) => c.status === "pending");
 
 /** The most recent invitation for a provider (whatever its state). */
 export const latestInvite = (s: State, id: string) => invitationsFor(s, id)[0];
@@ -476,9 +504,47 @@ export function saveProvider(next: ProviderRecord): SaveResult {
  *  corrections raise a task to the Clinic Admin rather than silently overwriting; NPI/licence
  *  corrections also go to Credentialing). The value is applied immediately (prototype: no
  *  separate approve/deny queue) and logged here so the admin sees it on the provider's audit trail. */
-export function logCorrection(providerId: string, field: string, from: string, to: string) {
+/** The provider changed one or more pre-filled fields at activation. Applied immediately (`patch`)
+ *  so the provider isn't blocked on their own edit, and raised to the Clinic Admin as a task —
+ *  `revertPatch` is what Deny restores. No-op (and no task raised) if nothing actually changed. */
+export function submitCorrection(providerId: string, source: Correction["source"], fields: CorrectionFieldDiff[], patch: Partial<ProviderRecord>, revertPatch: Partial<ProviderRecord>) {
+  if (!fields.length) return;
   let s = store.get();
-  s = audit(s, { providerId, event: "correction_submitted", actor: "Provider", note: `${field}: "${from}" → "${to}"` });
+  const rec = selectRecord(s, providerId);
+  if (!rec) return;
+  s = putRecord(s, { ...rec, ...patch });
+  const correction: Correction = { id: nextId("corr"), providerId, source, fields, patch, revertPatch, submittedAt: nowIso(), status: "pending" };
+  s = { ...s, corrections: [...s.corrections, correction] };
+  s = audit(s, { providerId, event: "correction_submitted", actor: "Provider", note: fields.map((f) => f.field).join(", ") });
+  store.set(() => s);
+  const saved = selectRecord(s, providerId);
+  if (saved) syncLegacy(saved);
+}
+
+/** Approve leaves the provider's value in place; Deny restores what the admin originally entered. */
+export function resolveCorrection(id: string, action: "approve" | "deny") {
+  let s = store.get();
+  const c = s.corrections.find((x) => x.id === id);
+  if (!c || c.status !== "pending") return;
+  if (action === "deny") {
+    const rec = selectRecord(s, c.providerId);
+    if (rec) s = putRecord(s, { ...rec, ...c.revertPatch });
+  }
+  s = { ...s, corrections: s.corrections.map((x) => (x.id === id ? { ...x, status: action === "approve" ? "approved" as const : "denied" as const, resolvedAt: nowIso(), resolvedBy: CURRENT_ADMIN.name } : x)) };
+  s = audit(s, { providerId: c.providerId, event: action === "approve" ? "correction_approved" : "correction_denied", note: c.fields.map((f) => f.field).join(", ") });
+  store.set(() => s);
+  const saved = selectRecord(s, c.providerId);
+  if (saved) syncLegacy(saved);
+}
+
+/** "Revise": the admin is about to set their own value from the Edit page — close out the task
+ *  without touching the record (their upcoming save is the resolution). */
+export function markCorrectionForRevision(id: string) {
+  let s = store.get();
+  const c = s.corrections.find((x) => x.id === id);
+  if (!c || c.status !== "pending") return;
+  s = { ...s, corrections: s.corrections.map((x) => (x.id === id ? { ...x, status: "denied" as const, resolvedAt: nowIso(), resolvedBy: CURRENT_ADMIN.name } : x)) };
+  s = audit(s, { providerId: c.providerId, event: "correction_denied", note: `${c.fields.map((f) => f.field).join(", ")} — admin revising directly` });
   store.set(() => s);
 }
 

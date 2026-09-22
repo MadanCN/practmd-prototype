@@ -14,8 +14,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft, Calendar, Check, CheckCircle2, Clock, Eye, EyeOff, FileText, Mail, MessageSquare,
-  Phone, ShieldCheck, UserX, Users, ClipboardList,
+  ArrowLeft, Calendar, Check, CheckCircle2, Clock, Eye, EyeOff, FileText, KeySquare, Mail, MessageSquare,
+  Phone, QrCode, ShieldCheck, Smartphone, UserX, Users, ClipboardList,
 } from "lucide-react";
 import { PractMdLockup } from "@/components/brand/PractMdLogo";
 import { CLINICS } from "@/data/clinics";
@@ -25,7 +25,7 @@ import { setSessionProvider } from "@/lib/provider-session";
 import { acceptInvitation, completeAccountStep } from "@/lib/provider-activation";
 import { cn } from "@/lib/utils";
 
-type Step = "account" | "terms" | "ready" | "not-active";
+type Step = "account" | "mfa" | "terms" | "ready" | "not-active";
 
 const RULES: { label: string; test: (p: string) => boolean }[] = [
   { label: "At least 8 characters", test: (p) => p.length >= 8 },
@@ -240,6 +240,9 @@ export default function InviteLanding({ token }: { token: string }) {
   const match = pw.length > 0 && pw === pw2;
 
   function finishAccountSetup() {
+    setStep("mfa");
+  }
+  function finishMfa() {
     if (CLINIC_TERMS_REQUIRED) { setStep("terms"); return; }
     finish();
   }
@@ -292,6 +295,35 @@ export default function InviteLanding({ token }: { token: string }) {
           </div>
           <button type="button" onClick={() => router.push("/provider/activate")} className="mt-6 w-full h-12 rounded-xl practmd-gradient text-white text-sm font-semibold">Continue to activation</button>
         </div>
+      </CenteredCard>
+    );
+  }
+
+  /* ── Two-factor authentication (always skippable in this prototype) ── */
+  if (step === "mfa") {
+    return (
+      <CenteredCard>
+        <ResolutionIcon><ShieldCheck className="w-6 h-6" /></ResolutionIcon>
+        <h1 className="mt-4 text-xl font-bold tracking-tight text-navy-900 dark:text-slate-100">Set up two-factor authentication</h1>
+        <p className="mt-2 text-sm leading-relaxed text-slate-500 dark:text-slate-400">This account will hold clinical records, so we recommend adding a second step to sign-in. You can turn it on any time from Settings.</p>
+        <div className="mt-5 space-y-2">
+          <button type="button" disabled className="w-full flex items-center gap-3 p-3.5 rounded-xl border border-slate-200 dark:border-navy-800 text-left opacity-60 cursor-not-allowed">
+            <div className="w-9 h-9 rounded-lg bg-navy-50 dark:bg-navy-950 text-navy-800 dark:text-navy-200 flex items-center justify-center shrink-0"><QrCode className="w-4 h-4" /></div>
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold text-slate-900 dark:text-slate-100">Authenticator app</span>
+              <span className="block text-xs text-slate-500 dark:text-slate-400">Scan a QR code with an app like Google Authenticator</span>
+            </span>
+          </button>
+          <button type="button" disabled className="w-full flex items-center gap-3 p-3.5 rounded-xl border border-slate-200 dark:border-navy-800 text-left opacity-60 cursor-not-allowed">
+            <div className="w-9 h-9 rounded-lg bg-navy-50 dark:bg-navy-950 text-navy-800 dark:text-navy-200 flex items-center justify-center shrink-0"><Smartphone className="w-4 h-4" /></div>
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold text-slate-900 dark:text-slate-100">Text message</span>
+              <span className="block text-xs text-slate-500 dark:text-slate-400">Get a code by SMS each time you sign in</span>
+            </span>
+          </button>
+        </div>
+        <button type="button" onClick={finishMfa} className="mt-5 w-full h-12 rounded-xl practmd-gradient text-white text-sm font-semibold">Skip for now</button>
+        <p className="mt-3 flex items-center gap-1.5 justify-center text-xs text-slate-400"><KeySquare className="w-3.5 h-3.5" /> {clinic?.name ?? "Your clinic"} hasn&apos;t made this required</p>
       </CenteredCard>
     );
   }

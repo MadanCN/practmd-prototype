@@ -9,32 +9,10 @@ import {
 } from "@/data/provider-record";
 import { ADDRESS_MAX, NPI_ROW_ID } from "@/lib/provider-form";
 import { expiryState, formatEin, formatFax, formatPhone, formatZip, onlyDigits } from "@/lib/provider-validation";
+import { readPhoto } from "@/lib/photo";
 import { cn } from "@/lib/utils";
 import { Field, INPUT, INPUT_ERR, SectionCard } from "./fields";
 import type { SectionProps } from "./types";
-
-/** Downscale an uploaded image to ≤256px JPEG so it fits comfortably in localStorage. */
-function readPhoto(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const fr = new FileReader();
-    fr.onerror = () => reject(new Error("read failed"));
-    fr.onload = () => {
-      const img = new Image();
-      img.onerror = () => reject(new Error("decode failed"));
-      img.onload = () => {
-        const max = 256;
-        const scale = Math.min(1, max / Math.max(img.width, img.height));
-        const c = document.createElement("canvas");
-        c.width = Math.round(img.width * scale);
-        c.height = Math.round(img.height * scale);
-        c.getContext("2d")?.drawImage(img, 0, 0, c.width, c.height);
-        resolve(c.toDataURL("image/jpeg", 0.85));
-      };
-      img.src = String(fr.result);
-    };
-    fr.readAsDataURL(file);
-  });
-}
 
 export default function IdentitySection(p: SectionProps) {
   const { form, set, err, touch, mode, original } = p;

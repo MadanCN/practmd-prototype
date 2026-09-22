@@ -105,51 +105,64 @@ export interface StatusPermits {
   portal: "none" | "activation-wizard" | "limited" | "full" | "read-only";
 }
 
-export const STATUS_META: Record<ClinicalStatus, { label: string; permits: StatusPermits; banner?: string }> = {
+/** A coarse semantic bucket for status badges/colors — shared by every screen that shows a status chip. */
+export type StatusTone = "neutral" | "pending" | "active" | "limited" | "negative";
+
+export const STATUS_META: Record<ClinicalStatus, { label: string; permits: StatusPermits; tone: StatusTone; banner?: string }> = {
   invited: {
     label: "Invited",
+    tone: "neutral",
     permits: { login: false, bookable: false, openEncounter: false, signNotes: false, portal: "none" },
   },
   "account-setup": {
     label: "Account Setup",
+    tone: "pending",
     permits: { login: true, bookable: false, openEncounter: false, signNotes: false, portal: "activation-wizard" },
     banner: "Finish setting up your account to continue.",
   },
   "under-verification": {
     label: "Under Verification",
+    tone: "pending",
     permits: { login: true, bookable: false, openEncounter: false, signNotes: false, portal: "limited" },
     banner: "Your credentials are with the Credentialing team. You'll have full access once verification completes.",
   },
   "pending-review": {
     label: "Pending Review",
+    tone: "pending",
     permits: { login: true, bookable: false, openEncounter: false, signNotes: false, portal: "limited" },
     banner: "Your account is in final review. A few items still need to clear before you can see patients.",
   },
   "clinically-active": {
     label: "Clinically Active",
+    tone: "active",
     permits: { login: true, bookable: true, openEncounter: true, signNotes: true, portal: "full" },
   },
   "active-limited": {
     label: "Active — Limited",
+    tone: "limited",
     permits: { login: true, bookable: "telehealth-only", openEncounter: true, signNotes: true, portal: "full" },
     banner: "In-person visit types are hidden while your in-person credentialing completes. Telehealth is fully available.",
   },
   suspended: {
     label: "Suspended",
+    tone: "negative",
     permits: { login: true, bookable: false, openEncounter: false, signNotes: "drafts-only", portal: "read-only" },
     banner: "Your clinical access is suspended. You can review existing drafts but cannot see patients or sign notes. Contact your Clinic Admin.",
   },
   offboarding: {
     label: "Offboarding",
+    tone: "limited",
     permits: { login: true, bookable: false, openEncounter: true, signNotes: true, portal: "full" },
     banner: "You are offboarding. No new appointments will be booked — please resolve your open encounters, unsigned notes and future appointments.",
   },
   offboarded: {
     label: "Offboarded",
+    tone: "neutral",
     permits: { login: false, bookable: false, openEncounter: false, signNotes: false, portal: "none" },
   },
   rejected: {
     label: "Rejected",
+    tone: "negative",
     permits: { login: false, bookable: false, openEncounter: false, signNotes: false, portal: "none" },
   },
 };

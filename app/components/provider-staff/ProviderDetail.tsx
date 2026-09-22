@@ -13,13 +13,15 @@ import {
 } from "@/data/provider-record";
 import { PROVIDER_COLORS } from "@/data/providers";
 import {
-  auditFor, inviteStateOf, inviteUrl, invitationsFor, isInviteAccepted, selectRecord, sweepExpiries, telehealthLicensesUsed,
-  useProviderStore, REMINDER_DAYS,
+  auditFor, correctionsFor, inviteStateOf, inviteUrl, invitationsFor, isInviteAccepted, pendingCorrectionsFor, selectRecord,
+  sweepExpiries, telehealthLicensesUsed, useProviderStore, REMINDER_DAYS,
 } from "@/lib/provider-store";
 import { expiryState, formatEin, formatFax } from "@/lib/provider-validation";
 import { WorkingHoursReadOnly } from "@/components/ui/WorkingHoursEditor";
 import { cn } from "@/lib/utils";
 import { Callout } from "./form/fields";
+import { StatusBadge } from "./StatusBadge";
+import { CorrectionsPanel, ResolvedCorrectionsList } from "./CorrectionsPanel";
 import {
   ActiveToggleDialog, AuditList, ChangeStatusDialog, InviteEmailPreview, InviteHistoryTable, ResendInviteDialog, fmtDate, fmtDateTime,
 } from "./InviteDialogs";
@@ -105,6 +107,8 @@ export default function ProviderDetailScreen({ id, flash = {} }: { id: string; f
   const locations = CLINICS.flatMap((c) => c.locations);
   const profileOn = p.capabilities.include_for_self_scheduling;
   const used = telehealthLicensesUsed(store);
+  const corrections = correctionsFor(store, p.id);
+  const pendingCorrections = pendingCorrectionsFor(store, p.id);
 
   async function copyLink() {
     if (!latest) return;
@@ -129,8 +133,8 @@ export default function ProviderDetailScreen({ id, flash = {} }: { id: string; f
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{providerDisplayName(p)}</h1>
-              <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">{STATUS_META[p.status].label}</span>
-              {!p.isActive && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-900">Deactivated</span>}
+              <StatusBadge status={p.status} />
+              {!p.isActive && <StatusBadge status={p.status} deactivated />}
               {!p.emailVerified && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900">Email unverified</span>}
             </div>
             <div className="flex items-center gap-x-4 gap-y-1 mt-1 text-sm text-slate-500 dark:text-slate-400 flex-wrap">
@@ -145,21 +149,23 @@ export default function ProviderDetailScreen({ id, flash = {} }: { id: string; f
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Link href={`/provider-staff/${p.id}/edit`} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium"><Pencil className="w-4 h-4" /> Edit</Link>
+          <Link href={`/provider-staff/${p.id}/edit`} className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl practmd-gradient text-white text-sm font-semibold"><Pencil className="w-4 h-4" /> Edit</Link>
           {!accepted && (
-            <button onClick={() => setResendOpen(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
+            <button onClick={() => setResendOpen(true)} className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
               <Send className="w-4 h-4" /> {latest ? "Resend invite" : "Send invite"}
             </button>
           )}
-          <button onClick={() => setStatusOpen(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"><UserCog className="w-4 h-4" /> Change status</button>
+          <button onClick={() => setStatusOpen(true)} className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"><UserCog className="w-4 h-4" /> Change status</button>
           <button onClick={() => setActiveOpen(true)}
-            className={cn("flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium", p.isActive ? "border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30" : "border-emerald-200 dark:border-emerald-900 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30")}>
+            className={cn("flex items-center gap-1.5 px-3.5 py-2 rounded-xl border text-sm font-medium", p.isActive ? "border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30" : "border-emerald-200 dark:border-emerald-900 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30")}>
             <Power className="w-4 h-4" /> {p.isActive ? "Deactivate" : "Reactivate"}
           </button>
         </div>
       </div>
 
       {shownNote && <Callout tone={shownNote.tone} className="mb-4 flex items-start gap-2">{shownNote.tone === "ok" ? <CheckCircle2 className="w-4 h-4 shrink-0 mt-px" /> : shownNote.tone === "error" ? <MailWarning className="w-4 h-4 shrink-0 mt-px" /> : <Clock className="w-4 h-4 shrink-0 mt-px" />}<span>{shownNote.text}</span></Callout>}
+
+      <CorrectionsPanel providerName={providerDisplayName(p)} editHref={`/provider-staff/${p.id}/edit`} corrections={pendingCorrections} />
 
       {/* Invitation status */}
       {!accepted && (
@@ -409,6 +415,7 @@ export default function ProviderDetailScreen({ id, flash = {} }: { id: string; f
         <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
           <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200 mt-6 mb-4">Full audit history</h2>
           <AuditList entries={auditFor(store, p.id)} />
+          <ResolvedCorrectionsList corrections={corrections} />
         </div>
       </div>
 
