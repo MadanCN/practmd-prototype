@@ -8,11 +8,12 @@ import {
 import { PractMdLogo } from "@/components/brand/PractMdLogo";
 import { cn } from "@/lib/utils";
 import { DAYS } from "@/data/clinics";
-import { useProviderSession, setSessionStatus } from "@/lib/provider-session";
+import { useProviderSession } from "@/lib/provider-session";
 import {
   useActivation, completeActivationStep, recordCorrection, submitCredentials, finishActivation, ACTIVATION_STEPS,
 } from "@/lib/provider-activation";
 import { markProviderOnboarded } from "@/lib/provider-onboarding";
+import { changeStatus, logCorrection } from "@/lib/provider-store";
 
 type StepId = (typeof ACTIVATION_STEPS)[number];
 
@@ -58,15 +59,27 @@ export default function ActivateWizardPage() {
 
   function next() {
     if (step === "confirm-profile") {
-      if (displayName !== original.displayName) recordCorrection("Display name", original.displayName, displayName);
-      if (suffix !== original.suffix) recordCorrection("Credentials suffix", original.suffix, suffix);
-      if (npi !== original.npi) recordCorrection("NPI", original.npi, npi);
+      if (displayName !== original.displayName) {
+        recordCorrection("Display name", original.displayName, displayName);
+        logCorrection(provider.id, "Display name", original.displayName, displayName);
+      }
+      if (suffix !== original.suffix) {
+        recordCorrection("Credentials suffix", original.suffix, suffix);
+        logCorrection(provider.id, "Credentials suffix", original.suffix, suffix);
+      }
+      if (npi !== original.npi) {
+        recordCorrection("NPI", original.npi, npi);
+        logCorrection(provider.id, "NPI", original.npi, npi);
+      }
       completeActivationStep("confirm-profile");
     }
     if (step === "confirm-hours") {
       completeActivationStep("confirm-hours");
       submitCredentials();
-      setSessionStatus("under-verification");
+      // Activation wizard complete → status moves from Account Setup to Under
+      // Verification (PRD "Activation Wizard completion"); Credentialing then
+      // reviews before Clinic Admin approval moves it to Clinically Active.
+      changeStatus(provider.id, "under-verification", "Activation wizard completed — credentials submitted for verification");
     }
     if (step === "notification-prefs") completeActivationStep("notification-prefs");
     if (step === "tour") completeActivationStep("tour");

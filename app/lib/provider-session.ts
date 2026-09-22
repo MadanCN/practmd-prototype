@@ -18,6 +18,7 @@ import {
   type ProviderClinicalProfile,
   type ProviderTypeKey,
 } from "@/data/provider-credentialing";
+import { getProviderStore, getRecord, subscribeProviderStore } from "@/lib/provider-store";
 
 export interface ProviderSessionState {
   providerId: string;
@@ -80,7 +81,12 @@ function deriveSession(s: ProviderSessionState): ProviderSession {
 
   const capabilities: ProviderCapabilities = { ...typeDefaults, ...s.capabilityOverrides };
 
-  const clinicalStatus = s.statusOverride ?? base.clinicalStatus;
+  // Clinical status lives on the provider record (lib/provider-store) once the
+  // provider has been through Add/invite — that's the admin- and provider-side
+  // source of truth. The dev switcher's statusOverride still wins, for demoing
+  // any status on any provider; CLINICAL_PROFILES is only the last-resort seed.
+  const liveRecord = getRecord(s.providerId);
+  const clinicalStatus = s.statusOverride ?? liveRecord?.status ?? base.clinicalStatus;
 
   return {
     raw: s,
@@ -95,17 +101,28 @@ function deriveSession(s: ProviderSessionState): ProviderSession {
   };
 }
 
-let cached: { input: ProviderSessionState; value: ProviderSession } | null = null;
+let cached: { input: ProviderSessionState; providerState: unknown; value: ProviderSession } | null = null;
 function currentSession(): ProviderSession {
   const input = store.get();
-  if (!cached || cached.input !== input) cached = { input, value: deriveSession(input) };
+  const providerState = getProviderStore();
+  if (!cached || cached.input !== input || cached.providerState !== providerState) {
+    cached = { input, providerState, value: deriveSession(input) };
+  }
   return cached.value;
 }
 
 const SERVER_SESSION = deriveSession(INITIAL);
 
+/** Re-render session consumers on either the session store or the provider
+ *  record store changing (e.g. an activation-wizard status transition). */
+function subscribeSession(l: () => void) {
+  const unsub1 = store.subscribe(l);
+  const unsub2 = subscribeProviderStore(l);
+  return () => { unsub1(); unsub2(); };
+}
+
 export function useProviderSession(): ProviderSession {
-  return useSyncExternalStore(store.subscribe, currentSession, () => SERVER_SESSION);
+  return useSyncExternalStore(subscribeSession, currentSession, () => SERVER_SESSION);
 }
 
 /** Non-hook read for stores / event handlers. */

@@ -6,12 +6,15 @@ import {
   Search, Plus, ChevronDown, ChevronUp, ChevronsUpDown,
   MoreHorizontal, Settings2, Columns3, Filter, RotateCcw, Pencil, Trash2, Eye
 } from "lucide-react";
-import { PROVIDERS, STAFF, type Provider, type StaffMember } from "@/data/providers";
+import { STAFF, type StaffMember } from "@/data/providers";
 import { CLINICS } from "@/data/clinics";
+import { STATUS_META } from "@/data/provider-credentialing";
+import { providerDisplayName, type ProviderRecord } from "@/data/provider-record";
+import { selectRecords, useProviderStore } from "@/lib/provider-store";
 import { cn } from "@/lib/utils";
 
 type Mode = "provider" | "staff";
-type SubTab = "active" | "deleted";
+type SubTab = "active" | "inactive";
 
 function initials(first: string, last: string) { return `${first[0] ?? ""}${last[0] ?? ""}`.toUpperCase(); }
 
@@ -61,8 +64,9 @@ export default function ProviderStaffListScreen() {
     setSort(s => s.field === field ? { field, dir: s.dir === "asc" ? "desc" : s.dir === "desc" ? null : "asc" } : { field, dir: "asc" });
   }
 
+  const store = useProviderStore();
   const providers = useMemo(() => {
-    let list = PROVIDERS.filter(p => (subTab === "active" ? !p.isDeleted && p.isActive : p.isDeleted));
+    let list = selectRecords(store).filter(p => (subTab === "active" ? p.isActive : !p.isActive));
     if (search) list = list.filter(p => `${p.firstName} ${p.lastName} ${p.email}`.toLowerCase().includes(search.toLowerCase()));
     if (sort.field && sort.dir) {
       list = [...list].sort((a, b) => {
@@ -72,7 +76,7 @@ export default function ProviderStaffListScreen() {
       });
     }
     return list;
-  }, [search, sort, subTab]);
+  }, [search, sort, subTab, store]);
 
   const staff = useMemo(() => {
     let list = STAFF.filter(s => (subTab === "active" ? !s.isDeleted && s.isActive : s.isDeleted));
@@ -109,7 +113,7 @@ export default function ProviderStaffListScreen() {
         </div>
 
         <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
-          {(["active", "deleted"] as SubTab[]).map(t => (
+          {(["active", "inactive"] as SubTab[]).map(t => (
             <button key={t} onClick={() => { setSubTab(t); setPage(1); }}
               className={cn("px-3 py-1 rounded-md text-xs font-medium capitalize transition-colors",
                 subTab === t ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm" : "text-slate-500 dark:text-slate-400")}>
@@ -160,7 +164,7 @@ export default function ProviderStaffListScreen() {
                     <ColHeader label="Email" field="email" sort={sort} onSort={toggleSort} />
                     <ColHeader label="Phone" field="phone" sort={sort} onSort={toggleSort} />
                     <ColHeader label="Clinic Access" field="clinicAccess" sort={sort} onSort={toggleSort} />
-                    <ColHeader label="Status" field="isActive" sort={sort} onSort={toggleSort} />
+                    <ColHeader label="Status" field="status" sort={sort} onSort={toggleSort} />
                     <th className="py-2.5 px-3 w-10" />
                   </>
                 ) : (
@@ -200,29 +204,33 @@ export default function ProviderStaffListScreen() {
                     <td className="py-3 px-3">
                       <Link href={`/provider-staff/${item.id}`} className="flex items-center gap-2.5 hover:underline">
                         <Avatar first={item.firstName} last={item.lastName} id={item.id} />
-                        <span className="font-medium text-slate-800 dark:text-slate-200">{(item as Provider).displayName}</span>
+                        <span className="font-medium text-slate-800 dark:text-slate-200">{providerDisplayName(item as ProviderRecord)}</span>
                       </Link>
                     </td>
-                    <td className="py-3 px-3 text-slate-600 dark:text-slate-400 text-xs">{(item as Provider).providerType}</td>
+                    <td className="py-3 px-3 text-slate-600 dark:text-slate-400 text-xs">{(item as ProviderRecord).providerType}</td>
                     <td className="py-3 px-3 text-slate-600 dark:text-slate-400 font-mono text-xs truncate max-w-[180px]">{item.email}</td>
                     <td className="py-3 px-3 text-slate-600 dark:text-slate-400 text-xs">{item.phone || "—"}</td>
                     <td className="py-3 px-3">
                       <div className="flex flex-wrap gap-1">
-                        {(item as Provider).clinicAccess.slice(0, 2).map(id => (
+                        {(item as ProviderRecord).clinicAccess.slice(0, 2).map(id => (
                           <span key={id} className="px-1.5 py-0.5 rounded text-xs bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border border-blue-100 dark:border-blue-900">
                             {clinicName(id).split(" ").slice(0, 2).join(" ")}
                           </span>
                         ))}
-                        {(item as Provider).clinicAccess.length > 2 && (
-                          <span className="px-1.5 py-0.5 rounded text-xs bg-slate-100 dark:bg-slate-800 text-slate-500">+{(item as Provider).clinicAccess.length - 2}</span>
+                        {(item as ProviderRecord).clinicAccess.length > 2 && (
+                          <span className="px-1.5 py-0.5 rounded text-xs bg-slate-100 dark:bg-slate-800 text-slate-500">+{(item as ProviderRecord).clinicAccess.length - 2}</span>
                         )}
                       </div>
                     </td>
                     <td className="py-3 px-3">
-                      <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium",
-                        item.isActive ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400" : "bg-slate-100 dark:bg-slate-800 text-slate-500")}>
-                        {item.isActive ? "Active" : "Inactive"}
-                      </span>
+                      {(() => {
+                        const r = item as ProviderRecord;
+                        const tone = !r.isActive ? "bg-slate-100 dark:bg-slate-800 text-slate-500"
+                          : r.status === "clinically-active" ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400"
+                          : r.status === "suspended" || r.status === "offboarded" ? "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400"
+                          : "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400";
+                        return <span className={cn("px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap", tone)}>{r.isActive ? STATUS_META[r.status].label : "Deactivated"}</span>;
+                      })()}
                     </td>
                     <td className="py-3 px-3 relative">
                       <button onClick={() => setOpenActions(openActions === item.id ? null : item.id)}
@@ -234,7 +242,7 @@ export default function ProviderStaffListScreen() {
                           <Link href={`/provider-staff/${item.id}`} className="flex items-center gap-2 px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
                             <Eye className="w-3.5 h-3.5" /> View
                           </Link>
-                          <Link href={`/provider-staff/${item.id}?edit=true`} className="flex items-center gap-2 px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
+                          <Link href={`/provider-staff/${item.id}/edit`} className="flex items-center gap-2 px-3 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">
                             <Pencil className="w-3.5 h-3.5" /> Edit
                           </Link>
                           <button className="flex items-center gap-2 px-3 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 w-full text-left">

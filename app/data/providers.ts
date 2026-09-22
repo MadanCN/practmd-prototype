@@ -1,4 +1,5 @@
 import { DAYS, type BusinessHour, type DayName, locationsForClinics } from "./clinics";
+import { makeNpi } from "@/lib/provider-validation";
 
 export { type BusinessHour };
 
@@ -105,7 +106,7 @@ const HAND_AUTHORED_PROVIDERS: Provider[] = [
     id: "p1", kind: "provider",
     firstName: "Sarah", lastName: "Mitchell", displayName: "Dr. Sarah Mitchell",
     gender: "Female", email: "s.mitchell@penfieldpsych.com", phone: "+1 (585) 388-6101",
-    dob: "1978-04-15", providerType: "Psychiatrist", npi: "1234500001",
+    dob: "1978-04-15", providerType: "Psychiatrist", npi: makeNpi("123450001"),
     licenseNumber: "PN-12345", licenseState: "New York",
     specializations: ["Adult Psychiatry", "Mood Disorders", "Anxiety"],
     clinicAccess: ["penfield-psychiatry", "new-hartford"],
@@ -140,7 +141,7 @@ const HAND_AUTHORED_PROVIDERS: Provider[] = [
     id: "p2", kind: "provider",
     firstName: "James", lastName: "O'Brien", displayName: "Dr. James O'Brien",
     gender: "Male", email: "j.obrien@penfieldpsych.com", phone: "+1 (585) 388-6102",
-    dob: "1975-09-22", providerType: "Psychologist", npi: "1234500002",
+    dob: "1975-09-22", providerType: "Psychologist", npi: makeNpi("123450002"),
     licenseNumber: "PY-67890", licenseState: "New York",
     specializations: ["Cognitive Behavioral Therapy", "Trauma", "ADHD"],
     clinicAccess: ["penfield-psychiatry"],
@@ -165,7 +166,7 @@ const HAND_AUTHORED_PROVIDERS: Provider[] = [
     id: "p3", kind: "provider",
     firstName: "Lisa", lastName: "Nguyen", displayName: "Lisa Nguyen, LCSW",
     gender: "Female", email: "l.nguyen@newhartfordpsych.com", phone: "+1 (315) 555-0120",
-    dob: "1985-02-08", providerType: "Licensed Clinical Social Worker", npi: "1234500003",
+    dob: "1985-02-08", providerType: "Licensed Clinical Social Worker", npi: makeNpi("123450003"),
     licenseNumber: "SW-11223", licenseState: "New York",
     specializations: ["Depression", "Grief & Loss", "Family Therapy"],
     clinicAccess: ["new-hartford"],
@@ -190,7 +191,7 @@ const HAND_AUTHORED_PROVIDERS: Provider[] = [
     id: "p4", kind: "provider",
     firstName: "Marcus", lastName: "Reid", displayName: "Dr. Marcus Reid",
     gender: "Male", email: "m.reid@penfieldpsych.com", phone: "+1 (585) 388-6220",
-    dob: "1980-11-30", providerType: "Psychiatrist", npi: "1234500004",
+    dob: "1980-11-30", providerType: "Psychiatrist", npi: makeNpi("123450004"),
     licenseNumber: "PN-44556", licenseState: "New York",
     specializations: ["Child & Adolescent Psychiatry", "Autism Spectrum", "ADHD"],
     clinicAccess: ["penfield-psychiatry"],
@@ -208,7 +209,7 @@ const HAND_AUTHORED_PROVIDERS: Provider[] = [
     id: "p5", kind: "provider",
     firstName: "Amara", lastName: "Johnson", displayName: "Amara Johnson, LPC",
     gender: "Female", email: "a.johnson@penfieldpsych.com", phone: "+1 (585) 388-6103",
-    dob: "1990-06-14", providerType: "Licensed Professional Counselor", npi: "1234500005",
+    dob: "1990-06-14", providerType: "Licensed Professional Counselor", npi: makeNpi("123450005"),
     licenseNumber: "LPC-77889", licenseState: "New York",
     specializations: ["Substance Use", "Motivational Interviewing", "CBT"],
     clinicAccess: ["penfield-psychiatry"],
@@ -406,7 +407,7 @@ function generateAdditionalProviders(count: number): Provider[] {
       email: `${first.toLowerCase()}.${last.toLowerCase()}@${domain}`,
       phone: `+1 (585) ${(400 + i).toString()}-${(1000 + i * 3).toString().slice(-4)}`,
       dob: `${1965 + (i % 30)}-${((i % 12) + 1).toString().padStart(2, "0")}-${((i % 27) + 1).toString().padStart(2, "0")}`,
-      providerType, npi: `12345${(10000 + n).toString().slice(-5)}`,
+      providerType, npi: makeNpi(`1234${(10000 + n).toString().slice(-5)}`),
       licenseNumber: `${providerType === "Psychiatrist" ? "PN" : providerType === "Psychologist" ? "PY" : "LC"}-${(20000 + n * 13).toString()}`,
       licenseState: loc.state,
       specializations: specs,

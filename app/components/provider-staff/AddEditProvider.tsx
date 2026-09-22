@@ -1,575 +1,325 @@
 "use client";
 
-import { useState } from "react";
+// Add / Edit Provider — one full-page form, one schema (PRM-105). Add and Edit
+// share every section; Add alone shows the invite / Clinically Active options
+// above the footer, Edit alone runs the "changes that affect live work"
+// guardrails before it saves.
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CheckCircle2, ChevronRight, Upload, AlertCircle, Send } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, Lock, Send } from "lucide-react";
+import { STATUS_META } from "@/data/provider-credentialing";
+import { providerDisplayName, type ProviderRecord } from "@/data/provider-record";
 import {
-  PROVIDER_TYPES, SPECIALIZATIONS_LIST, VISIT_TYPES_LIST, SERVICES_LIST,
-  PERMISSION_ROLES, PROVIDER_COLORS, PROVIDERS, type WorkingHour,
-} from "@/data/providers";
-import { CLINICS, DAYS, getAllLocations, locationsForClinics } from "@/data/clinics";
+  SECTIONS, defaultHoursFromClinics, emptyForm, formFromRecord, stripFormMeta, validateForm,
+  type ProviderForm, type SectionId,
+} from "@/lib/provider-form";
 import {
-  providerTypeKey, defaultCapabilities, CAPABILITY_KEYS, CAPABILITY_META,
-  type ProviderCapabilities,
-} from "@/data/provider-credentialing";
-import Toggle from "@/components/ui/Toggle";
-import WorkingHoursEditor from "@/components/ui/WorkingHoursEditor";
+  createProvider, isInviteAccepted, saveProvider, selectRecord, sendInvite, sweepExpiries, useProviderStore, useProviderStoreReady,
+} from "@/lib/provider-store";
+import { todayIso } from "@/lib/provider-validation";
+import { useUnsavedGuard } from "@/lib/use-unsaved-guard";
+import { CURRENT_ADMIN } from "@/data/provider-record";
+import Modal from "@/components/ui/Modal";
 import { cn } from "@/lib/utils";
-
-const US_STATES = ["New York", "New Jersey", "Connecticut", "Pennsylvania", "Massachusetts", "Florida", "California", "Texas"];
-
-type TabId = "overview" | "professional" | "access" | "bio";
-
-const TABS: { id: TabId; label: string }[] = [
-  { id: "overview", label: "Overview" },
-  { id: "professional", label: "Professional" },
-  { id: "access", label: "Access & Services" },
-  { id: "bio", label: "Bio & Profile" },
-];
-
-const GENDERS = ["Male", "Female", "Non-binary", "Prefer not to say", "Other"];
-const LANGUAGES_LIST = ["English", "Spanish", "French", "Mandarin", "Hindi", "Arabic", "Portuguese", "Vietnamese"];
-
-function defaultWorkingHours(locationId: string): WorkingHour[] {
-  const loc = locationId || getAllLocations()[0]?.id || "";
-  return DAYS.map((day) => ({
-    day,
-    isWorking: day !== "Saturday" && day !== "Sunday",
-    segments: day !== "Saturday" && day !== "Sunday" && loc ? [{ locationId: loc, startTime: "09:00", endTime: "17:00" }] : [],
-  }));
-}
-
-interface FormState {
-  firstName: string; lastName: string; gender: string; email: string; dob: string; phone: string;
-  color: string; street: string; city: string; state: string; zip: string;
-  providerType: string; npi: string; licenseNumber: string; licenseState: string;
-  specializations: string[]; clinicAccess: string[];
-  workingHours: WorkingHour[];
-  visitTypes: string[]; services: string[]; permissionRole: string; telehealthEnabled: boolean;
-  displayName: string; credentials: string; bio: string; languages: string[];
-  pronouns: string; licensedStates: string[];
-  capabilities: ProviderCapabilities; capabilityOverrides: (keyof ProviderCapabilities)[];
-}
-
-const INITIAL: FormState = {
-  firstName: "", lastName: "", gender: "", email: "", dob: "", phone: "", color: "", street: "", city: "", state: "", zip: "",
-  providerType: "", npi: "", licenseNumber: "", licenseState: "", specializations: [], clinicAccess: [],
-  workingHours: defaultWorkingHours(""),
-  visitTypes: [], services: [], permissionRole: "", telehealthEnabled: false,
-  displayName: "", credentials: "", bio: "", languages: [],
-  pronouns: "", licensedStates: [],
-  capabilities: defaultCapabilities("therapist"), capabilityOverrides: [],
-};
-
-const INPUT = "w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500";
-const LABEL = "block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5";
+import { Callout } from "./form/fields";
+import IdentitySection from "./form/IdentitySection";
+import AccessSection from "./form/AccessSection";
+import ScheduleSection from "./form/ScheduleSection";
+import ProfileSection from "./form/ProfileSection";
+import type { SectionProps } from "./form/types";
 
 interface Props { providerId?: string }
 
 export default function AddEditProviderScreen({ providerId }: Props) {
+  const store = useProviderStore();
+  // The persisted store hydrates client-side after mount; hold the form back until it has,
+  // so Edit pre-fills from the saved record rather than the seed.
+  const ready = useProviderStoreReady();
+  const original = providerId ? selectRecord(store, providerId) : undefined;
+
+  if (!ready) return <div className="py-20 text-center text-sm text-slate-400">Loading…</div>;
+  if (providerId && !original) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <p className="text-slate-500 dark:text-slate-400 mb-3">Provider not found</p>
+        <Link href="/provider-staff" className="flex items-center gap-2 text-sm text-blue-600 hover:underline"><ArrowLeft className="w-4 h-4" /> Back to Providers</Link>
+      </div>
+    );
+  }
+  return <ProviderFormScreen key={providerId ?? "new"} original={original} />;
+}
+
+function ProviderFormScreen({ original }: { original?: ProviderRecord }) {
   const router = useRouter();
-  const existing = providerId ? PROVIDERS.find(p => p.id === providerId) : undefined;
-  const isEdit = !!existing;
+  const store = useProviderStore();
+  const mode: "add" | "edit" = original ? "edit" : "add";
+  const backHref = original ? `/provider-staff/${original.id}` : "/provider-staff";
 
-  const [form, setForm] = useState<FormState>(existing ? {
-    firstName: existing.firstName, lastName: existing.lastName, gender: existing.gender, email: existing.email,
-    dob: existing.dob, phone: existing.phone, color: existing.color, street: existing.street,
-    city: existing.city, state: existing.state, zip: existing.zip, providerType: existing.providerType,
-    npi: existing.npi, licenseNumber: existing.licenseNumber, licenseState: existing.licenseState,
-    specializations: existing.specializations, clinicAccess: existing.clinicAccess,
-    workingHours: existing.workingHours,
-    visitTypes: existing.visitTypes, services: existing.services,
-    permissionRole: existing.permissionRole, telehealthEnabled: existing.telehealthEnabled,
-    displayName: existing.displayName, credentials: existing.credentials, bio: existing.bio, languages: existing.languages,
-    pronouns: "", licensedStates: [existing.licenseState].filter(Boolean),
-    capabilities: defaultCapabilities(existing.providerType.toLowerCase().includes("psychiatr") ? "md-do" : "therapist"),
-    capabilityOverrides: [],
-  } : INITIAL);
+  const [initial] = useState<ProviderForm>(() => (original ? formFromRecord(original) : emptyForm()));
+  const [initialJson] = useState(() => JSON.stringify(initial));
+  const [form, setFormState] = useState<ProviderForm>(initial);
+  const formRef = useRef(form);
+  const scheduleTouched = useRef(mode === "edit");
+  const [touched, setTouched] = useState<Record<string, true>>({});
+  const [showAll, setShowAll] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [active, setActive] = useState<SectionId>("identity");
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [newInvitePrompt, setNewInvitePrompt] = useState<{ email: string; providerId: string } | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const [activeTab, setActiveTab] = useState<TabId>("overview");
-  const [invited, setInvited] = useState(false);
+  useEffect(() => { sweepExpiries(); }, []);
 
-  function set<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm(f => ({ ...f, [key]: value }));
-    if (key === "firstName" || key === "lastName") {
-      const fn = key === "firstName" ? value as string : form.firstName;
-      const ln = key === "lastName" ? value as string : form.lastName;
-      setForm(f => ({ ...f, [key]: value, displayName: [fn, ln].filter(Boolean).join(" ") }));
-    }
-    if (key === "providerType") {
-      const caps = defaultCapabilities(providerTypeKey(value as string));
-      setForm(f => ({ ...f, providerType: value as string, capabilities: caps, capabilityOverrides: [] }));
-    }
+  /** Functional updater that also keeps the schedule in step with Clinic Access until the admin edits it by hand. */
+  const update = useCallback((fn: (f: ProviderForm) => ProviderForm) => {
+    const prev = formRef.current;
+    let next = fn(prev);
+    if (next.workingHours !== prev.workingHours) scheduleTouched.current = true;
+    else if (!scheduleTouched.current && next.clinicAccess !== prev.clinicAccess) next = { ...next, workingHours: defaultHoursFromClinics(next.clinicAccess) };
+    formRef.current = next;
+    setFormState(next);
+  }, []);
+  const set = useCallback(<K extends keyof ProviderForm>(key: K, value: ProviderForm[K]) => update((f) => ({ ...f, [key]: value })), [update]);
+  const touch = useCallback((key: string) => setTouched((t) => (t[key] ? t : { ...t, [key]: true })), []);
+
+  const v = useMemo(() => validateForm(form, { mode, original, store }), [form, mode, original, store]);
+  const err = useCallback((key: string) => {
+    const i = v.issues[key];
+    if (!i) return undefined;
+    return i.kind === "invalid" || touched[key] || showAll ? i.msg : undefined;
+  }, [v, touched, showAll]);
+
+  const dirty = !saving && JSON.stringify(form) !== initialJson;
+  const guard = useUnsavedGuard(dirty);
+
+  // Scroll-spy for the section rail
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root) return;
+    const io = new IntersectionObserver((entries) => {
+      const top = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+      if (top) setActive(top.target.getAttribute("data-section") as SectionId);
+    }, { root, rootMargin: "0px 0px -70% 0px", threshold: 0 });
+    root.querySelectorAll("[data-section]").forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, []);
+
+  function jump(id: SectionId) {
+    scrollRef.current?.querySelector(`#${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setActive(id);
   }
 
-  function toggleCapability(k: keyof ProviderCapabilities) {
-    setForm(f => {
-      const next = { ...f.capabilities, [k]: !f.capabilities[k] };
-      const seeded = defaultCapabilities(providerTypeKey(f.providerType || "therapist"));
-      const overrides = CAPABILITY_KEYS.filter(x => next[x] !== seeded[x]);
-      return { ...f, capabilities: next, capabilityOverrides: overrides };
-    });
+  const totalIssues = Object.keys(v.issues).length;
+  const firstBad = SECTIONS.find((s) => v.counts[s.id].required + v.counts[s.id].invalid > 0);
+
+  /* ── Save ── */
+
+  function persistAdd() {
+    setSaving(true);
+    const { record } = createProvider(stripFormMeta(form), { sendInvite: form.sendInvite, markActive: form.markActive });
+    router.push(`/provider-staff/${record.id}?created=1`);
   }
 
-  function toggleArr<K extends "specializations" | "clinicAccess" | "visitTypes" | "services" | "languages" | "licensedStates">(key: K, val: string) {
-    setForm(f => {
-      const next = (f[key] as string[]).includes(val) ? (f[key] as string[]).filter(x => x !== val) : [...(f[key] as string[]), val];
-      if (key !== "clinicAccess") return { ...f, [key]: next };
-      // Dropping a clinic a provider no longer has access to: reassign any
-      // working-hours segment pointing at one of its locations to the new
-      // first available location, or clear the day entirely if none is left.
-      const validLocationIds = locationsForClinics(next).map(l => l.id);
-      const fallback = validLocationIds[0] ?? "";
-      const workingHours = f.workingHours.map(h => {
-        const segments = h.segments
-          .map(s => (validLocationIds.includes(s.locationId) ? s : fallback ? { ...s, locationId: fallback } : null))
-          .filter((s): s is NonNullable<typeof s> => s !== null);
-        return { ...h, segments, isWorking: h.isWorking && segments.length > 0 };
+  function persistEdit() {
+    if (!original) return;
+    setSaving(true);
+    const fields = stripFormMeta(form);
+    const today = todayIso();
+    let next: ProviderRecord = { ...original, ...fields };
+    if (v.hoursChanged) {
+      if (form.applyFrom <= today) next = { ...next, workingHours: form.workingHours, pendingWorkingHours: undefined };
+      else next = { ...next, workingHours: original.workingHours, pendingWorkingHours: { effectiveFrom: form.applyFrom, hours: form.workingHours, scheduledAt: new Date().toISOString(), scheduledBy: CURRENT_ADMIN.name } };
+    } else {
+      next = { ...next, workingHours: original.workingHours, pendingWorkingHours: original.pendingWorkingHours };
+    }
+    const res = saveProvider(next);
+    if (res.emailChanged && !res.accepted) {
+      setReviewOpen(false);
+      setNewInvitePrompt({ email: next.email, providerId: original.id });
+      return;
+    }
+    router.push(`${backHref}?saved=1${res.emailChanged ? "&reverify=1" : ""}`);
+  }
+
+  /** Things an admin should consciously acknowledge before an Edit goes live. */
+  const impacts: { tone: "warn" | "info"; text: string }[] = [];
+  if (original) {
+    if (v.hoursChanged) impacts.push({ tone: "info", text: form.applyFrom <= todayIso() ? "Working hours change takes effect immediately." : `Working hours change is scheduled to take effect on ${form.applyFrom}. No further hour changes are allowed until then.` });
+    if (form.email.trim().toLowerCase() !== original.email.toLowerCase()) {
+      const accepted = isInviteAccepted(store, selectRecord(store, original.id) ?? original);
+      impacts.push({
+        tone: "warn",
+        text: `Email changes from ${original.email} to ${form.email.trim()}. This changes ${original.firstName}'s login. ${accepted
+          ? "They have already accepted their invitation, so the new address must be re-verified — a verification email goes to it."
+          : "Their current invitation link stops working; you'll be asked whether to send a new one to the new address."}`,
       });
-      return { ...f, clinicAccess: next, workingHours };
-    });
+    }
+    for (const k of ["telehealthOff", "cosignOff", "cosignOn"]) if (v.advisories[k]) impacts.push({ tone: v.advisories[k].tone, text: v.advisories[k].msg });
+    const removed = original.clinicAccess.filter((c) => !form.clinicAccess.includes(c));
+    if (removed.length) impacts.push({ tone: "warn", text: `Clinic access removed for ${removed.length} clinic${removed.length === 1 ? "" : "s"}. ${original.firstName} will no longer see or be booked there.` });
   }
 
-  function tabDot(tab: TabId) {
-    const required = tab === "overview" ? !!(form.firstName && form.lastName && form.email && form.phone && form.credentials && form.providerType)
-      : tab === "professional" ? !!(form.clinicAccess.length > 0) : null;
-    if (required === null) return null;
-    return required ? "bg-emerald-500" : "bg-rose-500";
+  function onSave() {
+    if (!v.valid) return;
+    if (mode === "add") persistAdd();
+    else if (impacts.length) setReviewOpen(true);
+    else persistEdit();
   }
 
-  const missingFields: string[] = [];
-  if (!form.firstName) missingFields.push("Legal first name");
-  if (!form.lastName) missingFields.push("Legal last name");
-  if (!form.email) missingFields.push("Work email");
-  if (!form.phone) missingFields.push("Mobile");
-  if (!form.credentials) missingFields.push("Credentials suffix");
-  if (!form.providerType) missingFields.push("Provider type");
-  if (!form.clinicAccess.length) missingFields.push("Clinic access");
-  if (form.telehealthEnabled && form.licensedStates.length === 0) missingFields.push("Licensed states");
+  /* ── Add-only: resulting status ── */
+  const addResult = (() => {
+    const inv = form.sendInvite, act = form.markActive;
+    if (inv && !act) return { tone: "info" as const, text: "Resulting status: Invited — normal lifecycle." };
+    if (inv && act) return { tone: "info" as const, text: "Resulting status: Clinically Active, invite sent — the provider is bookable immediately." };
+    if (!inv && act) return { tone: "warn" as const, text: "Resulting status: Clinically Active, no login — bookable, but can't open encounters or sign notes until invited." };
+    return { tone: "info" as const, text: "Resulting status: Invited — no email will be sent; use Resend invite when you're ready." };
+  })();
 
-  const providerColor = PROVIDER_COLORS.find(c => c.value === form.color);
-  const avatarInitials = `${form.firstName[0] ?? "?"}${form.lastName[0] ?? ""}`.toUpperCase();
-  const displayName = form.displayName || (form.firstName || form.lastName ? `${form.firstName} ${form.lastName}`.trim() : null);
+  const sectionProps: SectionProps = { form, set, update, v, mode, original, err, touch };
+  const displayName = original ? providerDisplayName(original) : "";
 
   return (
-    <div className="flex flex-col min-h-full -mt-1">
-
-      {/* ── Sticky horizontal profile summary bar ── */}
-      <div className="sticky top-0 z-20 bg-white/95 dark:bg-slate-950/95 backdrop-blur-sm border-b border-slate-200 dark:border-slate-800 py-3 mb-6 -mx-6 px-6">
-        <div className="flex items-center gap-4">
-          {/* Avatar */}
-          <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
-            style={{ backgroundColor: form.color || "#94a3b8" }}>
-            {avatarInitials}
-          </div>
-
-          {/* Name + type */}
-          <div className="flex-shrink-0 min-w-0">
-            <p className="font-semibold text-slate-800 dark:text-slate-200 leading-tight truncate max-w-[180px]">
-              {displayName ?? <span className="text-slate-400 italic font-normal text-sm">No name yet</span>}
-            </p>
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className="px-2 py-0 rounded-full text-xs font-medium bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400">Active</span>
-              {form.providerType && (
-                <span className="text-xs text-slate-500 dark:text-slate-400">{form.providerType}</span>
-              )}
-            </div>
-          </div>
-
-          <div className="h-8 w-px bg-slate-200 dark:bg-slate-700 flex-shrink-0" />
-
-          {/* Key info pills */}
-          <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
-            {form.email && (
-              <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs truncate max-w-[200px]">
-                {form.email}
-              </span>
-            )}
-            {form.phone && (
-              <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs">
-                {form.phone}
-              </span>
-            )}
-            {form.clinicAccess.length > 0 && (
-              <span className="px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border border-blue-100 dark:border-blue-900 text-xs font-medium">
-                {form.clinicAccess.length} clinic{form.clinicAccess.length !== 1 ? "s" : ""}
-              </span>
-            )}
-            {form.credentials && (
-              <span className="px-2.5 py-1 rounded-lg bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-400 border border-violet-100 dark:border-violet-900 text-xs font-medium">
-                {form.credentials}
-              </span>
-            )}
-          </div>
-
-          {/* Missing fields warning */}
-          {missingFields.length > 0 && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 text-xs text-rose-600 dark:text-rose-400 flex-shrink-0">
-              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
-              <span className="hidden sm:inline">Missing: </span>{missingFields.join(", ")}
-            </div>
-          )}
-
-          {/* Invite — available as soon as Tab 1 (identity) validates */}
-          {!isEdit && (
-            <button
-              disabled={!(form.firstName && form.lastName && form.email && form.phone && form.credentials && form.providerType)}
-              onClick={() => setInvited(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-brand-300 dark:border-brand-800 text-brand-700 dark:text-brand-400 text-sm font-semibold hover:bg-brand-50 dark:hover:bg-brand-950/30 disabled:opacity-40 flex-shrink-0 transition-colors">
-              <Send className="w-4 h-4" /> {invited ? "Invitation sent" : "Send Invitation"}
-            </button>
-          )}
-
-          {/* Save button */}
-          <button
-            disabled={missingFields.length > 0}
-            onClick={() => router.push("/provider-staff")}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold disabled:opacity-50 flex-shrink-0 transition-colors">
-            <CheckCircle2 className="w-4 h-4" />
-            {isEdit ? "Save Changes" : "Add Provider"}
-          </button>
-        </div>
-        {invited && (
-          <p className="mt-2 text-xs text-brand-700 dark:text-brand-400 flex items-center gap-1.5">
-            <CheckCircle2 className="w-3.5 h-3.5" /> Practice-branded invitation sent to {form.email}. Single-use link, expires in 7 days. Record status: Invited.
-          </p>
-        )}
-      </div>
-
-      {/* ── Page header ── */}
-      <div className="flex items-start justify-between mb-6">
+    <div className="flex flex-col h-[calc(100vh-108px)] min-h-[520px] -mb-1">
+      {/* Header */}
+      <div className="shrink-0 flex items-start justify-between gap-4 pb-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-            {isEdit ? "Edit Provider" : "Add New Provider"}
-          </h1>
+          <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-1">
+            <Link href="/provider-staff" className="hover:text-slate-600">Provider &amp; Staff</Link><span>/</span>
+            <span className="text-slate-500">{mode === "add" ? "Add provider" : `Edit ${displayName}`}</span>
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{mode === "add" ? "Add provider" : "Edit provider"}</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            {isEdit ? "Update provider information" : "Fill in the provider details to add them to your clinic"}
+            {mode === "add" ? "Add a provider to the organization. Every section is open — jump around as you like." : <>{displayName} · <span className="font-medium">{STATUS_META[original!.status].label}</span></>}
           </p>
         </div>
-        <button onClick={() => router.push("/provider-staff")}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 flex-shrink-0">
-          <ArrowLeft className="w-4 h-4" /> Back to List
+        <button type="button" onClick={() => guard.requestLeave(backHref)}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800">
+          <ArrowLeft className="w-4 h-4" /> {mode === "add" ? "Back to list" : "Back to provider"}
         </button>
       </div>
 
-      {/* ── Tab stepper ── */}
-      <div className="flex items-center border-b border-slate-200 dark:border-slate-800 mb-6">
-        {TABS.map(tab => {
-          const dot = tabDot(tab.id);
-          return (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-              className={cn("flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 -mb-px transition-colors",
-                activeTab === tab.id
-                  ? "border-blue-600 text-blue-600 dark:text-blue-400"
-                  : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300")}>
-              {tab.label}
-              {dot && <span className={cn("w-2 h-2 rounded-full flex-shrink-0", dot)} />}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ── Tab content ── */}
-      <div className="space-y-5">
-
-        {activeTab === "overview" && (
-          <>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={LABEL}>First Name <span className="text-rose-500">*</span></label>
-                <input className={INPUT} value={form.firstName} onChange={e => set("firstName", e.target.value)} placeholder="Enter first name" />
-              </div>
-              <div>
-                <label className={LABEL}>Last Name <span className="text-rose-500">*</span></label>
-                <input className={INPUT} value={form.lastName} onChange={e => set("lastName", e.target.value)} placeholder="Enter last name" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={LABEL}>Gender</label>
-                <select className={INPUT} value={form.gender} onChange={e => set("gender", e.target.value)}>
-                  <option value="">Select gender</option>
-                  {GENDERS.map(g => <option key={g} value={g}>{g}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className={LABEL}>Date of Birth</label>
-                <input type="date" className={INPUT} value={form.dob} onChange={e => set("dob", e.target.value)} />
-              </div>
-            </div>
-            <div>
-              <label className={LABEL}>Email <span className="text-rose-500">*</span></label>
-              <input type="email" className={INPUT} value={form.email} onChange={e => set("email", e.target.value)} placeholder="provider@clinic.com" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={LABEL}>Mobile number</label>
-                <input className={INPUT} value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="+1 (234) 567-8900" />
-              </div>
-              <div>
-                <label className={LABEL}>Pronouns</label>
-                <select className={INPUT} value={form.pronouns} onChange={e => set("pronouns", e.target.value)}>
-                  <option value="">Select</option>
-                  {["She / Her", "He / Him", "They / Them", "Prefer not to say"].map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </div>
-            </div>
-            <div>
-              <label className={LABEL}>Credentials suffix <span className="text-rose-500">*</span></label>
-              <input className={INPUT} value={form.credentials} onChange={e => set("credentials", e.target.value)} placeholder="e.g. MD, PsyD, LCSW, PMHNP-BC" />
-            </div>
-            <div>
-              <label className={LABEL}>Provider type <span className="text-rose-500">*</span></label>
-              <select className={INPUT} value={form.providerType} onChange={e => set("providerType", e.target.value)}>
-                <option value="">Select — drives every capability default</option>
-                {PROVIDER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className={LABEL}>Provider Color</label>
-              <div className="flex items-center gap-2 flex-wrap">
-                {PROVIDER_COLORS.map(c => (
-                  <button key={c.value} type="button" onClick={() => set("color", c.value)} title={c.label}
-                    className={cn("w-8 h-8 rounded-full border-2 transition-all", form.color === c.value ? "border-slate-900 dark:border-white scale-110" : "border-transparent hover:scale-105")}
-                    style={{ backgroundColor: c.value }} />
-                ))}
-                {form.color && <span className="text-sm text-slate-500 dark:text-slate-400">{providerColor?.label}</span>}
-              </div>
-            </div>
-            <div>
-              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 pt-2 border-t border-slate-100 dark:border-slate-800">Address</h3>
-              <div className="space-y-3">
-                <div>
-                  <label className={LABEL}>Street</label>
-                  <input className={INPUT} value={form.street} onChange={e => set("street", e.target.value)} />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={LABEL}>City</label>
-                    <input className={INPUT} value={form.city} onChange={e => set("city", e.target.value)} />
-                  </div>
-                  <div>
-                    <label className={LABEL}>State</label>
-                    <input className={INPUT} value={form.state} onChange={e => set("state", e.target.value)} />
-                  </div>
-                </div>
-                <div className="w-1/2">
-                  <label className={LABEL}>Zip Code</label>
-                  <input className={INPUT} value={form.zip} onChange={e => set("zip", e.target.value)} />
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-
-        {activeTab === "professional" && (
-          <>
-            <div>
-              <label className={LABEL}>Provider Type <span className="text-rose-500">*</span></label>
-              <select className={INPUT} value={form.providerType} onChange={e => set("providerType", e.target.value)}>
-                <option value="">Select provider type</option>
-                {PROVIDER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className={LABEL}>NPI Number</label>
-              <input className={INPUT} value={form.npi} onChange={e => set("npi", e.target.value)} placeholder="10-digit NPI" />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className={LABEL}>License Number</label>
-                <input className={INPUT} value={form.licenseNumber} onChange={e => set("licenseNumber", e.target.value)} />
-              </div>
-              <div>
-                <label className={LABEL}>License State</label>
-                <input className={INPUT} value={form.licenseState} onChange={e => set("licenseState", e.target.value)} />
-              </div>
-            </div>
-            <div>
-              <label className={LABEL}>Specializations</label>
-              <div className="flex flex-wrap gap-2">
-                {SPECIALIZATIONS_LIST.map(s => (
-                  <button key={s} type="button" onClick={() => toggleArr("specializations", s)}
-                    className={cn("px-3 py-1 rounded-full border text-xs font-medium transition-colors",
-                      form.specializations.includes(s) ? "bg-blue-600 border-blue-600 text-white" : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-blue-400")}>
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className={LABEL}>Clinic Access <span className="text-rose-500">*</span></label>
-              <div className="space-y-2">
-                {CLINICS.filter(c => c.isActive).map(c => (
-                  <label key={c.id} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
-                    <input type="checkbox" className="accent-blue-600 w-4 h-4"
-                      checked={form.clinicAccess.includes(c.id)} onChange={() => toggleArr("clinicAccess", c.id)} />
-                    <span className="text-xl">{c.logoEmoji}</span>
-                    <div>
-                      <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{c.name}</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">{c.city}, {c.state}</p>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div className="pt-2">
-              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1 border-t border-slate-100 dark:border-slate-800 pt-4">Working Hours</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">Provider-specific schedule. Each day can be split across locations — e.g. one site in the morning, another in the afternoon.</p>
-              {form.clinicAccess.length === 0 ? (
-                <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">Select Clinic Access above first — working hours are set per location.</p>
-              ) : (
-                <WorkingHoursEditor hours={form.workingHours} onChange={wh => set("workingHours", wh)}
-                  locations={locationsForClinics(form.clinicAccess).map(l => ({ id: l.id, name: l.name }))} />
-              )}
-            </div>
-          </>
-        )}
-
-        {activeTab === "access" && (
-          <>
-            <div>
-              <label className={LABEL}>Visit Types</label>
-              <div className="grid grid-cols-2 gap-2">
-                {VISIT_TYPES_LIST.map(vt => (
-                  <label key={vt} className="flex items-center gap-2.5 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
-                    <input type="checkbox" className="accent-blue-600 w-4 h-4"
-                      checked={form.visitTypes.includes(vt)} onChange={() => toggleArr("visitTypes", vt)} />
-                    <span className="text-sm text-slate-700 dark:text-slate-300">{vt}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className={LABEL}>Services</label>
-              <div className="grid grid-cols-2 gap-2">
-                {SERVICES_LIST.map(s => (
-                  <label key={s} className="flex items-center gap-2.5 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
-                    <input type="checkbox" className="accent-blue-600 w-4 h-4"
-                      checked={form.services.includes(s)} onChange={() => toggleArr("services", s)} />
-                    <span className="text-sm text-slate-700 dark:text-slate-300">{s}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className={LABEL}>Permission Role</label>
-              <select className={INPUT} value={form.permissionRole} onChange={e => set("permissionRole", e.target.value)}>
-                <option value="">Select role</option>
-                {PERMISSION_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
-            </div>
-            <div className="flex items-center justify-between py-3.5 px-4 rounded-xl border border-slate-200 dark:border-slate-800">
-              <div>
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Telehealth Enabled</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Whether they can be booked for video. Depends on telehealth licences purchased.</p>
-              </div>
-              <Toggle checked={form.telehealthEnabled} onChange={v => set("telehealthEnabled", v)} />
-            </div>
-
-            {form.telehealthEnabled && (
-              <div>
-                <label className={LABEL}>Licensed states <span className="text-rose-500">*</span></label>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">A hard gate — a video visit can&apos;t be delivered to a patient physically located in a state the provider isn&apos;t licensed in.</p>
-                <div className="flex flex-wrap gap-2">
-                  {US_STATES.map(s => (
-                    <button key={s} type="button" onClick={() => toggleArr("licensedStates", s)}
-                      className={cn("px-3 py-1 rounded-full border text-xs font-medium transition-colors",
-                        form.licensedStates.includes(s) ? "bg-blue-600 border-blue-600 text-white" : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-blue-400")}>
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1 pt-3">Capabilities</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
-                Pre-filled from the provider-type{form.providerType ? ` (${form.providerType})` : ""}. Each is individually overridable.
-              </p>
-              <div className="grid sm:grid-cols-2 gap-2">
-                {CAPABILITY_KEYS.map(k => (
-                  <label key={k} className="flex items-start gap-2.5 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
-                    <input type="checkbox" className="accent-blue-600 w-4 h-4 mt-0.5"
-                      checked={form.capabilities[k]} onChange={() => toggleCapability(k)} />
-                    <span className="min-w-0">
-                      <span className="flex items-center gap-1.5">
-                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{CAPABILITY_META[k].label}</span>
-                        {CAPABILITY_META[k].soon && <span className="text-[9px] font-bold text-slate-400">SOON</span>}
-                        {form.capabilityOverrides.includes(k) && <span className="text-[9px] font-bold text-amber-500 uppercase">override</span>}
-                      </span>
-                      <span className="block text-[11px] text-slate-400 font-mono">{k}</span>
+      {/* Rail + form */}
+      <div className="flex-1 min-h-0 flex gap-6">
+        <nav aria-label="Form sections" className="w-56 shrink-0 hidden md:block">
+          <ul className="space-y-1">
+            {SECTIONS.map((s, idx) => {
+              const off = s.id === "profile" && !form.capabilities.include_for_self_scheduling;
+              const c = v.counts[s.id];
+              const state = off ? "off" : c.invalid > 0 ? "invalid" : c.required > 0 ? "pending" : "done";
+              return (
+                <li key={s.id}>
+                  <button type="button" onClick={() => jump(s.id)} aria-current={active === s.id ? "true" : undefined}
+                    title={off ? "Turn on “Include for self-scheduling” in Access & Services to fill this in" : undefined}
+                    className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-sm transition-colors",
+                      active === s.id ? "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 font-semibold" : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800",
+                      off && "opacity-50")}>
+                    <span className={cn("w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0",
+                      state === "done" && "bg-emerald-500 text-white",
+                      state === "pending" && "bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400",
+                      state === "invalid" && "bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400",
+                      state === "off" && "bg-slate-100 dark:bg-slate-800 text-slate-400")}>
+                      {state === "done" ? <Check className="w-3.5 h-3.5" aria-label="Complete" /> : state === "off" ? <Lock className="w-3 h-3" aria-label="Unavailable" /> : c.required + c.invalid}
                     </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
-
-        {activeTab === "bio" && (
-          <>
-            <div>
-              <label className={LABEL}>Profile Photo</label>
-              <div className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-8 flex flex-col items-center justify-center gap-2 text-slate-400 hover:border-blue-400 dark:hover:border-blue-600 transition-colors cursor-pointer">
-                <Upload className="w-8 h-8" />
-                <p className="text-sm font-medium text-slate-600 dark:text-slate-400">Click to upload or drag & drop</p>
-                <p className="text-xs">PNG, JPG up to 5MB</p>
-              </div>
-            </div>
-            <div>
-              <label className={LABEL}>Display Name</label>
-              <input className={INPUT} value={form.displayName} onChange={e => set("displayName", e.target.value)} placeholder="Dr. First Last" />
-            </div>
-            <div>
-              <label className={LABEL}>Credentials</label>
-              <input className={INPUT} value={form.credentials} onChange={e => set("credentials", e.target.value)} placeholder="e.g. MD, PhD, LCSW" />
-            </div>
-            <div>
-              <label className={LABEL}>Bio</label>
-              <textarea rows={4} className={INPUT + " resize-none"} value={form.bio} onChange={e => set("bio", e.target.value)} placeholder="Brief professional biography..." />
-            </div>
-            <div>
-              <label className={LABEL}>Languages Spoken</label>
-              <div className="flex flex-wrap gap-2">
-                {LANGUAGES_LIST.map(l => (
-                  <button key={l} type="button" onClick={() => toggleArr("languages", l)}
-                    className={cn("px-3 py-1.5 rounded-full border text-sm font-medium transition-colors",
-                      form.languages.includes(l) ? "bg-blue-600 border-blue-600 text-white" : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-blue-400")}>
-                    {l}
+                    <span className="flex-1 min-w-0">
+                      <span className="block truncate">{idx + 1}. {s.label}</span>
+                      <span className="block text-[11px] font-normal text-slate-400 dark:text-slate-500">
+                        {state === "done" ? "Complete" : state === "off" ? "Off · self-scheduling" : state === "invalid" ? `${c.invalid} to fix${c.required ? ` · ${c.required} missing` : ""}` : `${c.required} required left`}
+                      </span>
+                    </span>
                   </button>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+
+        <div ref={scrollRef} className="flex-1 min-w-0 overflow-y-auto pr-1 pb-6 space-y-5">
+          <IdentitySection {...sectionProps} />
+          <AccessSection {...sectionProps} />
+          <ScheduleSection {...sectionProps} />
+          <ProfileSection {...sectionProps} />
+        </div>
       </div>
 
-      {/* ── Footer nav ── */}
-      <div className="flex items-center justify-between pt-6 mt-6 border-t border-slate-200 dark:border-slate-800">
-        <button disabled={activeTab === "overview"} onClick={() => {
-          const idx = TABS.findIndex(t => t.id === activeTab);
-          if (idx > 0) setActiveTab(TABS[idx - 1].id);
-        }} className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40">
-          ← Previous
-        </button>
-        {activeTab !== "bio" ? (
-          <button onClick={() => {
-            const idx = TABS.findIndex(t => t.id === activeTab);
-            if (idx < TABS.length - 1) setActiveTab(TABS[idx + 1].id);
-          }} className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium">
-            Next <ChevronRight className="w-4 h-4" />
-          </button>
-        ) : (
-          <button disabled={missingFields.length > 0} onClick={() => router.push("/provider-staff")}
-            className="flex items-center gap-1.5 px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold disabled:opacity-50">
-            <CheckCircle2 className="w-4 h-4" /> {isEdit ? "Save Changes" : "Add Provider"}
-          </button>
+      {/* Footer */}
+      <div className="shrink-0 -mx-6 -mb-6 mt-2 px-6 py-3 bg-white/95 dark:bg-slate-950/95 backdrop-blur border-t border-slate-200 dark:border-slate-800">
+        {mode === "add" && (
+          <div className="grid md:grid-cols-2 gap-x-8 gap-y-2 pb-3 mb-3 border-b border-slate-100 dark:border-slate-800">
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input type="checkbox" className="accent-blue-600 w-4 h-4 mt-0.5" checked={form.sendInvite} onChange={(e) => set("sendInvite", e.target.checked)} />
+              <span>
+                <span className="block text-sm font-medium text-slate-800 dark:text-slate-200">Send invite email to the provider</span>
+                <span className="block text-xs text-slate-500 dark:text-slate-400">Sends a single-use invite link to the provider&apos;s email on save.</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input type="checkbox" className="accent-blue-600 w-4 h-4 mt-0.5" checked={form.markActive} onChange={(e) => set("markActive", e.target.checked)} />
+              <span>
+                <span className="block text-sm font-medium text-slate-800 dark:text-slate-200">Mark the provider Clinically Active</span>
+                <span className="block text-xs text-slate-500 dark:text-slate-400">Skip the status lifecycle and immediately make the provider available for scheduling.</span>
+              </span>
+            </label>
+            {form.markActive && (
+              <Callout tone="warn" className="md:col-span-2 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-px" />
+                <span>Verification is being bypassed. Date of birth and the NPI credential are now required. This will be recorded against {CURRENT_ADMIN.name} with today&apos;s date and time.</span>
+              </Callout>
+            )}
+            <Callout tone={addResult.tone} className="md:col-span-2 flex items-start gap-2">
+              {addResult.tone === "warn" ? <AlertTriangle className="w-4 h-4 shrink-0 mt-px" /> : <Send className="w-4 h-4 shrink-0 mt-px" />}
+              <span>{addResult.text}</span>
+            </Callout>
+          </div>
         )}
+        <div className="flex items-center gap-4">
+          <div className="flex-1 min-w-0 text-xs">
+            {totalIssues > 0 ? (
+              <button type="button" onClick={() => { setShowAll(true); if (firstBad) jump(firstBad.id); }} className="text-left text-amber-700 dark:text-amber-400 hover:underline">
+                <span className="font-semibold">{totalIssues} thing{totalIssues === 1 ? "" : "s"} to complete</span> before you can save
+                {firstBad && <> — start with {firstBad.label}</>}
+              </button>
+            ) : dirty ? <span className="text-slate-500">Unsaved changes</span> : <span className="text-slate-400">{mode === "edit" ? "No changes yet" : ""}</span>}
+          </div>
+          <button type="button" onClick={() => guard.requestLeave(backHref)} className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
+          <button type="button" disabled={!v.valid || saving || (mode === "edit" && !dirty)} onClick={onSave}
+            className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed">
+            {mode === "add" ? "Save provider" : "Save changes"}
+          </button>
+        </div>
       </div>
 
+      {/* Unsaved-changes prompt */}
+      <Modal open={guard.pending !== null} onClose={guard.stay} title="Discard unsaved changes?" description="You have edits on this form that haven't been saved."
+        footer={<>
+          <button onClick={guard.stay} className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800">Keep editing</button>
+          <button onClick={guard.confirmLeave} className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold">Discard changes</button>
+        </>}>
+        <p>Leaving now throws them away.</p>
+      </Modal>
+
+      {/* Edit: review impactful changes */}
+      <Modal open={reviewOpen} onClose={() => setReviewOpen(false)} width="max-w-lg" title="Review before saving" description="These changes affect live work.">
+        <ul className="space-y-2">
+          {impacts.map((i, n) => <li key={n}><Callout tone={i.tone}>{i.text}</Callout></li>)}
+        </ul>
+        <div className="flex justify-end gap-2 pt-4">
+          <button onClick={() => setReviewOpen(false)} className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800">Go back</button>
+          <button onClick={persistEdit} className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold">Confirm &amp; save</button>
+        </div>
+      </Modal>
+
+      {/* Edit: email changed before the invite was accepted */}
+      <Modal open={!!newInvitePrompt} onClose={() => { /* forced choice */ }} hideClose title="Send the invitation to the new address?"
+        description="The previous invitation link no longer works.">
+        <p>The email on {original?.firstName}&apos;s record is now <strong>{newInvitePrompt?.email}</strong>. Send a fresh single-use invitation there?</p>
+        <div className="flex justify-end gap-2 pt-4">
+          <button onClick={() => router.push(`${backHref}?saved=1`)} className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800">Not now</button>
+          <button onClick={() => { if (newInvitePrompt) sendInvite(newInvitePrompt.providerId, { resend: false }); router.push(`${backHref}?saved=1&invited=1`); }}
+            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold">Send invitation</button>
+        </div>
+      </Modal>
     </div>
   );
 }

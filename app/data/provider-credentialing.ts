@@ -7,6 +7,7 @@
 // lifecycle, Provider record, Milestone gates.
 
 import { PROVIDERS } from "./providers";
+import { makeNpi } from "@/lib/provider-validation";
 
 /* ── Provider-type — one role, four capability profiles ─────────────────── */
 
@@ -93,7 +94,8 @@ export type ClinicalStatus =
   | "active-limited"
   | "suspended"
   | "offboarding"
-  | "offboarded";
+  | "offboarded"
+  | "rejected";
 
 export interface StatusPermits {
   login: boolean;
@@ -146,11 +148,15 @@ export const STATUS_META: Record<ClinicalStatus, { label: string; permits: Statu
     label: "Offboarded",
     permits: { login: false, bookable: false, openEncounter: false, signNotes: false, portal: "none" },
   },
+  rejected: {
+    label: "Rejected",
+    permits: { login: false, bookable: false, openEncounter: false, signNotes: false, portal: "none" },
+  },
 };
 
 export const CLINICAL_STATUS_ORDER: ClinicalStatus[] = [
   "invited", "account-setup", "under-verification", "pending-review",
-  "clinically-active", "active-limited", "suspended", "offboarding", "offboarded",
+  "clinically-active", "active-limited", "suspended", "offboarding", "offboarded", "rejected",
 ];
 
 /* ── Credentials table ─────────────────────────────────────────────────── */
@@ -221,7 +227,7 @@ const RAW: Record<string, Omit<ProviderClinicalProfile, "capabilities" | "provid
   p1: {
     providerId: "p1", providerType: "md-do", isSupervising: true,
     clinicalStatus: "clinically-active",
-    npi: "1234500001", taxonomyCode: "2084P0800X", caqhId: "12345678", dea: "BM1234563",
+    npi: makeNpi("123450001"), taxonomyCode: "2084P0800X", caqhId: "12345678", dea: "BM1234563",
     employmentType: "Employed", startDate: "2019-03-04",
     licensedStates: ["New York", "New Jersey"],
     superviseeIds: ["p3", "p5"], supervisorId: undefined,
@@ -247,7 +253,7 @@ const RAW: Record<string, Omit<ProviderClinicalProfile, "capabilities" | "provid
   p2: {
     providerId: "p2", providerType: "therapist", isSupervising: true,
     clinicalStatus: "clinically-active",
-    npi: "1234500002", taxonomyCode: "103T00000X", caqhId: "22222222",
+    npi: makeNpi("123450002"), taxonomyCode: "103T00000X", caqhId: "22222222",
     employmentType: "Employed", startDate: "2017-08-14",
     licensedStates: ["New York"], superviseeIds: ["p3"],
     capabilityOverrides: { can_cosign: true },
@@ -264,7 +270,7 @@ const RAW: Record<string, Omit<ProviderClinicalProfile, "capabilities" | "provid
   p3: {
     providerId: "p3", providerType: "therapist", isSupervising: false,
     clinicalStatus: "clinically-active",
-    npi: "1234500003", taxonomyCode: "1041C0700X",
+    npi: makeNpi("123450003"), taxonomyCode: "1041C0700X",
     employmentType: "Employed", startDate: "2023-01-09",
     licensedStates: ["New York"], superviseeIds: [], supervisorId: "p1",
     capabilityOverrides: { requires_cosign: true },
@@ -281,7 +287,7 @@ const RAW: Record<string, Omit<ProviderClinicalProfile, "capabilities" | "provid
   p4: {
     providerId: "p4", providerType: "md-do", isSupervising: false,
     clinicalStatus: "active-limited",
-    npi: "1234500004", taxonomyCode: "2084P0804X", dea: "BR9988771",
+    npi: makeNpi("123450004"), taxonomyCode: "2084P0804X", dea: "BR9988771",
     employmentType: "Contractor", startDate: "2022-06-01",
     licensedStates: ["New Jersey"], superviseeIds: [],
     credentials: [
@@ -296,7 +302,7 @@ const RAW: Record<string, Omit<ProviderClinicalProfile, "capabilities" | "provid
   p5: {
     providerId: "p5", providerType: "therapist", isSupervising: false,
     clinicalStatus: "under-verification",
-    npi: "1234500005", taxonomyCode: "101YM0800X",
+    npi: makeNpi("123450005"), taxonomyCode: "101YM0800X",
     employmentType: "Employed", startDate: daysFromNow(-12),
     licensedStates: ["New York"], superviseeIds: [], supervisorId: "p1",
     capabilityOverrides: { requires_cosign: true },
