@@ -2,7 +2,7 @@
 
 Detail on every individual master/setting inside [Global Masters](./global-masters.md): what it is, why the platform needs it, and what it actually affects once configured. Grounded in the current prototype's code (fields, seed data, and logic actually implemented) — see the **Note** under an entry where the code does something inconsistent, incomplete, or worth flagging before this ships.
 
-All 51 settings currently store data in local component state only (no backend yet) — "effect" below describes intended/eventual effect on the platform, not something enforced by the prototype today unless stated otherwise.
+51 of the 52 settings currently store data in local component state only (no backend yet) — "effect" below describes intended/eventual effect on the platform, not something enforced by the prototype today unless stated otherwise. The one exception is **Provider Terms & Conditions** (§2), which is backed by a real persisted store because it has a genuine cross-cutting effect on the provider invite flow — see its entry for why.
 
 ---
 
@@ -71,19 +71,27 @@ All 51 settings currently store data in local component state only (no backend y
 - **What it affects:** Populates specialization tags on provider profiles and, eventually, provider-search/matching (e.g. self-scheduling by specialty).
 - **Note:** The UI only allows nesting two levels deep (a specialization's parent must itself be top-level); deleting a parent silently deletes its direct children.
 
+### Provider Terms & Conditions
+- **What it is:** A single toggle (Require Provider Terms & Conditions) plus a rich-text content field, defined in `lib/provider-terms-store.ts`.
+- **Why it's needed:** Some clinics need every provider to explicitly accept clinic-specific terms before they can start working — this master both switches that requirement on/off and defines what those terms actually say.
+- **What it affects:** When the toggle is on, the provider account-setup wizard (`/invite/[token]`) shows an "Accept terms" step with this exact content before the provider can finish setup; accepting it logs a `terms_accepted` audit entry against the provider's record (visible in Provider & Staff → provider → Full audit history).
+- **Note:** Unlike the other 51 settings, this one is **not** local-state-only — it's backed by a real persisted store (`createPersistedStore`, key `provider-terms`) because it's read from a completely different route (the invite flow) and its acceptance must be durably logged. It's the one deliberate exception to the "local state only" rule stated at the top of this document.
+
 ---
 
 ## 3. Clinical
 
 ### Services
-- **What it is:** Billable/clinical service definitions — name, internal code, category, CPT billing code, default duration, and billable/telehealth flags.
-- **Why it's needed:** Ties a clinical offering to the billing code and duration the scheduling and billing systems need to process it correctly.
-- **What it affects:** Drives default appointment duration when a service is selected at booking, and supplies the CPT code claims would need at billing time; telehealth flag should determine whether the service is offered as a virtual visit.
+- **What it is:** Service definitions for all provider services — just a name, display order, and active flag (deliberately simplified; see Note).
+- **Why it's needed:** The Patient Portal needs a plain, orderable list of "what services do providers here offer" that isn't tangled up with the calendar/billing mechanics Visit Types owns.
+- **What it affects:** Powers the Patient Portal's self-scheduling display of what services providers offer; display order controls the row/list sort.
+- **Note:** The screen also keeps a `category` field and category filter that isn't in the field spec but is explicitly called out in the "on screen" description as a filter affordance — kept as a judgment call rather than dropped. Earlier prototype passes had this master carrying `code`, `billingCode`, `duration`, `isBillable`, `isTelehealth` — that richer shape now belongs to Visit Types / Procedure Codes instead.
 
 ### Visit Types
-- **What it is:** Appointment categories (Initial Consultation, Follow-Up, Crisis Visit, Group Session, …) with a color, duration, buffer time, delivery mode (in-person/telehealth/both), self-scheduling eligibility, and CPT code.
-- **Why it's needed:** Scheduling needs a category that's calendar-oriented (color, duration, buffer) rather than purely billing-oriented like Services — this is what actually renders on the calendar.
-- **What it affects:** Determines calendar slot length and color, whether patients can self-book this visit type, and whether it's offered virtually; feeds directly into Provider Schedule Rules ("All Types" vs. a specific visit type) and Self Scheduling configuration.
+- **What it is:** Calendar-facing, billable visit type definitions — name, colour, duration, delivery mode, self-scheduling eligibility, one or more procedure codes, charge, display order, and active flag.
+- **Why it's needed:** Scheduling needs a category that's calendar-oriented (colour, duration) rather than purely billing-oriented like Services — this is what actually renders on the calendar, and it's also what the billing side prefills from.
+- **What it affects:** Drives calendar slot length and colour; governs patient-facing self-book eligibility and virtual-delivery availability; the selected procedure code(s) are sourced from the Procedure Codes master and auto-added to the Encounter when the visit type is used, carrying the charge through to Bill; feeds Provider Schedule Rules (keyed per visit type) and Form Preferences (which maps forms to visit type). **Status here is the highest-priority master in the app — Inactive blocks patient booking outright.**
+- **Note:** The procedure-code field is a multi-select built locally in this screen (no shared multi-select component exists elsewhere in Global Masters yet); a `buffer` field from earlier prototype passes was dropped since it isn't part of the current field spec.
 
 ### Form Preferences
 - **What it is:** A mapping from a (Provider, Visit Type) pair to the set of intake/consent forms that should be attached, chosen from a fixed library of 12 forms.
@@ -269,10 +277,10 @@ All 51 settings currently store data in local component state only (no backend y
 - **What it affects:** Populates the insurance-payer selector at patient registration and on claims; payer ID is what a clearinghouse/claims system would use to route a claim correctly.
 
 ### Procedure Codes
-- **What it is:** The CPT code master — code, description, category, standard charge, discount percentage, billing modifier, place-of-service code (including telehealth POS values), and taxable flag.
-- **Why it's needed:** Every billable clinical service needs to resolve to a standard CPT code and charge amount for claims submission and patient invoicing.
-- **What it affects:** Should determine what a visit/service bills at, and which place-of-service code accompanies the claim (relevant for telehealth reimbursement rules).
-- **Note:** The `discount` field is stored but not currently applied anywhere in the displayed charge — confirm whether discount logic still needs to be built before this goes live.
+- **What it is:** The procedure code master — code, description, optional category, standard charge, discount percentage, a four-segment alphanumeric modifier, place-of-service code (including telehealth POS values), free-text additional details, display order, and active flag.
+- **Why it's needed:** Every billable clinical service needs to resolve to a standard code and charge amount for claims submission and patient invoicing, and Visit Types needs a shared source to pick codes from.
+- **What it affects:** What a visit bills at, and which POS code accompanies the claim (relevant for telehealth reimbursement rules); prefills encounter note codes; selected by Visit Types' Procedure Code field and by the encounter-note editor's procedure-code type-ahead (both share `data/procedure-codes.ts`).
+- **Note:** Category is optional and extensible in-line ("+ Create category…" in the drawer) rather than a fixed list — categories created this way only persist for the current session (local component state), same as every other master. The modifier is captured as four 2-character boxes that unlock left-to-right (matches how CMS 1500 modifier fields are structured) and stored as a single concatenated string. The `discount` field is stored but not currently applied anywhere in the displayed charge — confirm whether discount logic still needs to be built before this goes live. A previous `taxable` flag was dropped — not part of the current field spec, and unused anywhere else in the codebase.
 
 ---
 

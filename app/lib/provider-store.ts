@@ -50,7 +50,8 @@ export type AuditEvent =
   | "provider_created" | "provider_updated" | "status_changed" | "deactivated" | "reactivated"
   | "invite_sent" | "invite_resent" | "invite_failed" | "invite_expired" | "invite_invalidated" | "invite_accepted"
   | "email_changed" | "email_reverification_sent" | "verification_bypassed"
-  | "correction_submitted" | "correction_approved" | "correction_denied";
+  | "correction_submitted" | "correction_approved" | "correction_denied"
+  | "terms_accepted";
 
 export interface AuditEntry {
   id: string;
@@ -590,6 +591,11 @@ export function completeInvitation(token: string) {
   s = audit(s, { providerId: inv.providerId, event: "invite_accepted", email: inv.email, actor: "Provider" });
   if (rec && rec.isActive && rec.status === "invited") s = putRecord(s, { ...rec, status: "account-setup" });
   store.set(() => s);
+}
+
+/** The provider accepted the clinic's Provider Terms & Conditions during account setup (Global Masters → Users & Access → Providers). */
+export function logTermsAccepted(providerId: string) {
+  store.set((s) => audit(s, { providerId, event: "terms_accepted", actor: "Provider" }));
 }
 
 /** Log an "expired" audit line for any live invitation that has lapsed since it was last looked at. */

@@ -219,9 +219,6 @@ const seedTelehealthUsed = PROVIDERS.filter((p) => p.telehealthEnabled && !p.isD
 /** Telehealth licences the organization has purchased (demo: a little headroom over the seed). */
 export const TELEHEALTH_LICENSES_PURCHASED = Math.ceil((seedTelehealthUsed + 3) / 10) * 10;
 
-/** Terms & conditions step in the invitation journey is set by the clinic admin; off in the prototype. */
-export const CLINIC_TERMS_REQUIRED = false;
-
 /* ── Blank record for Add ──────────────────────────────────────────────── */
 
 export function newCredentialId() {

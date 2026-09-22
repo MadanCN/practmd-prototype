@@ -19,8 +19,8 @@ import {
 } from "lucide-react";
 import { PractMdLockup } from "@/components/brand/PractMdLogo";
 import { CLINICS } from "@/data/clinics";
-import { CLINIC_TERMS_REQUIRED } from "@/data/provider-record";
-import { completeInvitation, inviteStateOf, selectRecord, useProviderStore, useProviderStoreReady } from "@/lib/provider-store";
+import { completeInvitation, inviteStateOf, logTermsAccepted, selectRecord, useProviderStore, useProviderStoreReady } from "@/lib/provider-store";
+import { useProviderTerms } from "@/lib/provider-terms-store";
 import { setSessionProvider } from "@/lib/provider-session";
 import { acceptInvitation, completeAccountStep } from "@/lib/provider-activation";
 import { InviteStateSwitcher } from "./InviteStateSwitcher";
@@ -143,6 +143,7 @@ export default function InviteLanding({ token }: { token: string }) {
   const router = useRouter();
   const store = useProviderStore();
   const ready = useProviderStoreReady();
+  const providerTerms = useProviderTerms();
   const [step, setStep] = useState<Step>("account");
   const [finished, setFinished] = useState(false);
   const [pw, setPw] = useState("");
@@ -246,7 +247,11 @@ export default function InviteLanding({ token }: { token: string }) {
     setStep("mfa");
   }
   function finishMfa() {
-    if (CLINIC_TERMS_REQUIRED) { setStep("terms"); return; }
+    if (providerTerms.required) { setStep("terms"); return; }
+    finish();
+  }
+  function acceptTerms() {
+    logTermsAccepted(providerId);
     finish();
   }
   function finish() {
@@ -331,31 +336,22 @@ export default function InviteLanding({ token }: { token: string }) {
     );
   }
 
-  /* ── Clinic policies (only when the clinic has switched this on) ── */
+  /* ── Provider Terms & Conditions (only when Global Masters has switched this on) ── */
   if (step === "terms") {
     return (
       <CenteredCard>
         <button onClick={() => setStep("account")} className="-ml-1 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"><ArrowLeft className="w-4 h-4" /> Back</button>
         <ResolutionIcon><FileText className="w-6 h-6" /></ResolutionIcon>
-        <h1 className="mt-4 text-xl font-bold tracking-tight text-navy-900 dark:text-slate-100">Review {clinic?.name ?? "the clinic"}&apos;s policies</h1>
+        <h1 className="mt-4 text-xl font-bold tracking-tight text-navy-900 dark:text-slate-100">Provider Terms &amp; Conditions</h1>
         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{clinic?.name ?? "Your clinic"} asks every provider to accept these before starting.</p>
-        <div className="mt-5 space-y-2">
-          {["Acceptable use policy", "Provider code of conduct"].map((doc) => (
-            <div key={doc} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-navy-800">
-              <div className="w-9 h-9 rounded-lg bg-navy-50 dark:bg-navy-950 text-navy-800 dark:text-navy-200 flex items-center justify-center shrink-0"><FileText className="w-4 h-4" /></div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{doc}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">PDF</p>
-              </div>
-              <a href="#" onClick={(e) => e.preventDefault()} className="text-[13px] font-semibold text-brand-700 dark:text-brand-400 hover:underline">View</a>
-            </div>
-          ))}
+        <div className="mt-5 max-h-64 overflow-y-auto p-4 rounded-xl border border-slate-200 dark:border-navy-800 bg-slate-50 dark:bg-navy-950">
+          <p className="text-[13px] leading-relaxed text-slate-600 dark:text-slate-300 whitespace-pre-wrap">{providerTerms.content}</p>
         </div>
         <label className="mt-5 flex items-start gap-2.5 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
           <input type="checkbox" checked={accept} onChange={(e) => setAccept(e.target.checked)} className="w-[18px] h-[18px] mt-0.5 accent-brand-600" />
-          I&apos;ve read and accept {clinic?.name ?? "the clinic"}&apos;s policies.
+          I&apos;ve read and accept the Provider Terms &amp; Conditions.
         </label>
-        <button type="button" disabled={!accept} onClick={finish} className="mt-5 w-full h-12 rounded-xl practmd-gradient text-white text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed">Accept and continue</button>
+        <button type="button" disabled={!accept} onClick={acceptTerms} className="mt-5 w-full h-12 rounded-xl practmd-gradient text-white text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed">Accept and continue</button>
         <p className="mt-3 text-xs text-center text-slate-400">Your acceptance is recorded with the date and time.</p>
       </CenteredCard>
     );

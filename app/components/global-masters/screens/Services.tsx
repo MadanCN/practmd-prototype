@@ -9,12 +9,10 @@ import { cn } from "@/lib/utils";
 interface Service {
   id: string;
   name: string;
-  code: string;
+  // Not in the field spec, but the spec's "on screen" line explicitly asks for
+  // a category filter above the table — kept so that affordance has something
+  // to filter on.
   category: string;
-  billingCode: string;
-  duration: number;
-  isBillable: boolean;
-  isTelehealth: boolean;
   displayOrder: number;
   isActive: boolean;
 }
@@ -38,15 +36,17 @@ const CAT_COLORS: Record<string, string> = {
 };
 
 const SEED: Service[] = [
-  { id: "1", name: "Initial Psychiatric Evaluation", code: "IPE", category: "psychiatric", billingCode: "90791", duration: 60, isBillable: true, isTelehealth: true, displayOrder: 1, isActive: true },
-  { id: "2", name: "Medication Management", code: "MEDMGMT", category: "psychiatric", billingCode: "99213", duration: 30, isBillable: true, isTelehealth: true, displayOrder: 2, isActive: true },
-  { id: "3", name: "Individual Therapy (60 min)", code: "ITHX60", category: "therapy", billingCode: "90837", duration: 60, isBillable: true, isTelehealth: true, displayOrder: 3, isActive: true },
-  { id: "4", name: "Individual Therapy (45 min)", code: "ITHX45", category: "therapy", billingCode: "90834", duration: 45, isBillable: true, isTelehealth: true, displayOrder: 4, isActive: true },
-  { id: "5", name: "Group Therapy", code: "GTHX", category: "group", billingCode: "90853", duration: 90, isBillable: true, isTelehealth: false, displayOrder: 5, isActive: true },
-  { id: "6", name: "Psychological Testing", code: "PSYTEST", category: "assessment", billingCode: "96136", duration: 120, isBillable: true, isTelehealth: false, displayOrder: 6, isActive: true },
-  { id: "7", name: "Crisis Intervention", code: "CRISIS", category: "crisis", billingCode: "90839", duration: 60, isBillable: true, isTelehealth: true, displayOrder: 7, isActive: true },
-  { id: "8", name: "Family Therapy", code: "FTHX", category: "therapy", billingCode: "90847", duration: 60, isBillable: true, isTelehealth: true, displayOrder: 8, isActive: true },
+  { id: "1", name: "Initial Psychiatric Evaluation", category: "psychiatric", displayOrder: 1, isActive: true },
+  { id: "2", name: "Medication Management", category: "psychiatric", displayOrder: 2, isActive: true },
+  { id: "3", name: "Individual Therapy (60 min)", category: "therapy", displayOrder: 3, isActive: true },
+  { id: "4", name: "Individual Therapy (45 min)", category: "therapy", displayOrder: 4, isActive: true },
+  { id: "5", name: "Group Therapy", category: "group", displayOrder: 5, isActive: true },
+  { id: "6", name: "Psychological Testing", category: "assessment", displayOrder: 6, isActive: true },
+  { id: "7", name: "Crisis Intervention", category: "crisis", displayOrder: 7, isActive: true },
+  { id: "8", name: "Family Therapy", category: "therapy", displayOrder: 8, isActive: true },
 ];
+
+const EMPTY_FORM: Omit<Service, "id"> = { name: "", category: "therapy", displayOrder: 1, isActive: true };
 
 function StatusBadge({ active }: { active: boolean }) {
   return (
@@ -65,32 +65,32 @@ export default function ServicesScreen() {
   const [catFilter, setCatFilter] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<Service | null>(null);
-  const [form, setForm] = useState<Omit<Service, "id">>({ name: "", code: "", category: "therapy", billingCode: "", duration: 60, isBillable: true, isTelehealth: false, displayOrder: 1, isActive: true });
+  const [form, setForm] = useState<Omit<Service, "id">>(EMPTY_FORM);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  const filtered = useMemo(() => services.filter(s => {
-    const matchQ = !query || s.name.toLowerCase().includes(query.toLowerCase()) || s.code.toLowerCase().includes(query.toLowerCase()) || s.billingCode.includes(query);
-    const matchC = !catFilter || s.category === catFilter;
-    return matchQ && matchC;
-  }), [services, query, catFilter]);
+  const filtered = useMemo(() => services
+    .filter(s => {
+      const matchQ = !query || s.name.toLowerCase().includes(query.toLowerCase());
+      const matchC = !catFilter || s.category === catFilter;
+      return matchQ && matchC;
+    })
+    .sort((a, b) => a.displayOrder - b.displayOrder), [services, query, catFilter]);
 
   function openAdd() {
-    setForm({ name: "", code: "", category: "therapy", billingCode: "", duration: 60, isBillable: true, isTelehealth: false, displayOrder: services.length + 1, isActive: true });
+    setForm({ ...EMPTY_FORM, displayOrder: services.length + 1 });
     setEditing(null); setErrors({}); setDrawerOpen(true);
   }
 
   function openEdit(s: Service) {
-    setForm({ name: s.name, code: s.code, category: s.category, billingCode: s.billingCode, duration: s.duration, isBillable: s.isBillable, isTelehealth: s.isTelehealth, displayOrder: s.displayOrder, isActive: s.isActive });
+    setForm({ name: s.name, category: s.category, displayOrder: s.displayOrder, isActive: s.isActive });
     setEditing(s); setErrors({}); setDrawerOpen(true);
   }
 
   function validate() {
     const errs: Record<string, string> = {};
     if (!form.name.trim()) errs.name = "Service name is required";
-    if (!form.code.trim()) errs.code = "Code is required";
-    if (!form.duration || form.duration < 1) errs.duration = "Duration must be ≥ 1 min";
     setErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -114,7 +114,7 @@ export default function ServicesScreen() {
           </div>
           <div>
             <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Services</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Define the clinical services offered by the organization — used in scheduling and billing.</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Service definitions for all provider services — powers the Patient Portal self-scheduling display of what services providers offer.</p>
           </div>
         </div>
         <button onClick={openAdd} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium flex-shrink-0">
@@ -125,7 +125,7 @@ export default function ServicesScreen() {
       <div className="flex gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search by name, code, or billing code…"
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search services…"
             className="w-full pl-9 pr-8 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500" />
           {query && <button onClick={() => setQuery("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400"><X className="w-3.5 h-3.5" /></button>}
         </div>
@@ -140,34 +140,25 @@ export default function ServicesScreen() {
         <table className="w-full text-sm">
           <thead className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800">
             <tr>
-              <th className="text-left py-3 px-4 font-medium text-slate-600 dark:text-slate-400">Service</th>
+              <th className="text-left py-3 px-4 font-medium text-slate-600 dark:text-slate-400">Service Name</th>
               <th className="text-left py-3 px-4 font-medium text-slate-600 dark:text-slate-400 w-32">Category</th>
-              <th className="text-left py-3 px-4 font-medium text-slate-600 dark:text-slate-400 w-28">Billing Code</th>
-              <th className="text-left py-3 px-4 font-medium text-slate-600 dark:text-slate-400 w-20">Duration</th>
+              <th className="text-left py-3 px-4 font-medium text-slate-600 dark:text-slate-400 w-32">Order of Display</th>
               <th className="text-center py-3 px-4 font-medium text-slate-600 dark:text-slate-400 w-24">Status</th>
               <th className="py-3 px-4 w-24" />
             </tr>
           </thead>
           <tbody>
-            {filtered.length === 0 && <tr><td colSpan={6} className="py-12 text-center text-slate-400">No services found</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan={5} className="py-12 text-center text-slate-400">No services found</td></tr>}
             {filtered.map(s => (
               <tr key={s.id} onMouseEnter={() => setHoveredId(s.id)} onMouseLeave={() => setHoveredId(null)}
                 className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/40 transition-colors">
-                <td className="py-3 px-4">
-                  <p className="font-medium text-slate-900 dark:text-slate-100">{s.name}</p>
-                  <p className="text-xs text-slate-400 font-mono">{s.code}</p>
-                  <div className="flex gap-1.5 mt-1">
-                    {s.isBillable && <span className="text-xs bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded">Billable</span>}
-                    {s.isTelehealth && <span className="text-xs bg-teal-50 dark:bg-teal-950/40 text-teal-600 dark:text-teal-400 px-1.5 py-0.5 rounded">Telehealth</span>}
-                  </div>
-                </td>
+                <td className="py-3 px-4"><p className="font-medium text-slate-900 dark:text-slate-100">{s.name}</p></td>
                 <td className="py-3 px-4">
                   <span className={cn("inline-flex px-2 py-0.5 rounded-full text-xs font-medium", CAT_COLORS[s.category])}>
                     {CATEGORIES.find(c => c.value === s.category)?.label}
                   </span>
                 </td>
-                <td className="py-3 px-4 font-mono text-slate-600 dark:text-slate-400">{s.billingCode || "—"}</td>
-                <td className="py-3 px-4 text-slate-600 dark:text-slate-400">{s.duration} min</td>
+                <td className="py-3 px-4 text-slate-600 dark:text-slate-400">{s.displayOrder}</td>
                 <td className="py-3 px-4 text-center"><StatusBadge active={s.isActive} /></td>
                 <td className="py-3 px-4">
                   <div className={cn("flex items-center justify-end gap-1 transition-opacity", hoveredId === s.id ? "opacity-100" : "opacity-0")}>
@@ -190,19 +181,13 @@ export default function ServicesScreen() {
           </div>
         }>
         <div className="space-y-4">
-          {[
-            { key: "name", label: "Service Name", placeholder: "e.g., Individual Therapy (60 min)", required: true },
-            { key: "code", label: "Internal Code", placeholder: "e.g., ITHX60", required: true },
-            { key: "billingCode", label: "Billing / CPT Code", placeholder: "e.g., 90837" },
-          ].map(f => (
-            <div key={f.key}>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">{f.label} {f.required && <span className="text-red-500">*</span>}</label>
-              <input value={String(form[f.key as keyof typeof form] ?? "")} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} placeholder={f.placeholder}
-                className={cn("w-full px-3 py-2 rounded-lg border text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500",
-                  errors[f.key] ? "border-red-400" : "border-slate-200 dark:border-slate-700")} />
-              {errors[f.key] && <p className="text-xs text-red-500 mt-1">{errors[f.key]}</p>}
-            </div>
-          ))}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Service Name <span className="text-red-500">*</span></label>
+            <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g., Individual Therapy (60 min)"
+              className={cn("w-full px-3 py-2 rounded-lg border text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500",
+                errors.name ? "border-red-400" : "border-slate-200 dark:border-slate-700")} />
+            {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Category</label>
@@ -212,26 +197,18 @@ export default function ServicesScreen() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Duration (minutes) <span className="text-red-500">*</span></label>
-              <input type="number" min={1} value={form.duration} onChange={e => setForm(p => ({ ...p, duration: parseInt(e.target.value) || 1 }))}
-                className={cn("w-full px-3 py-2 rounded-lg border text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500",
-                  errors.duration ? "border-red-400" : "border-slate-200 dark:border-slate-700")} />
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Display Order</label>
+              <input type="number" min={1} value={form.displayOrder} onChange={e => setForm(p => ({ ...p, displayOrder: parseInt(e.target.value) || 1 }))}
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <p className="text-xs text-slate-400 mt-1">Controls row sort order.</p>
             </div>
           </div>
-          <div className="space-y-2">
-            {[
-              { key: "isBillable", label: "Billable", desc: "Can be submitted to insurance for reimbursement" },
-              { key: "isTelehealth", label: "Telehealth Eligible", desc: "Can be conducted via virtual visit" },
-              { key: "isActive", label: "Active", desc: "Available for scheduling and booking" },
-            ].map(opt => (
-              <div key={opt.key} className="flex items-center justify-between py-3 px-4 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
-                <div>
-                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300">{opt.label}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">{opt.desc}</p>
-                </div>
-                <Toggle checked={Boolean(form[opt.key as keyof typeof form])} onChange={v => setForm(p => ({ ...p, [opt.key]: v }))} />
-              </div>
-            ))}
+          <div className="flex items-center justify-between py-3 px-4 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
+            <div>
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Active</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Shown on the Patient Portal&apos;s self-scheduling service list</p>
+            </div>
+            <Toggle checked={form.isActive} onChange={v => setForm(p => ({ ...p, isActive: v }))} />
           </div>
         </div>
       </Drawer>

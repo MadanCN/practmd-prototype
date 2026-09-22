@@ -336,7 +336,7 @@ Seed providers are lifted into the new schema automatically. Four are pre-set to
 14. **Email change:** not-yet-accepted → old link is invalidated and you're asked whether to send to the new address. Already accepted → the record is flagged *Email unverified* and a re-verification is logged; the real re-verification flow is a separate ticket and is not built.
 15. **Resend limits** (1 per 10 min, 5 per day) count *resends* only — not the first send — and **failed deliveries don't count**, so a typo doesn't lock the admin out.
 16. **Reminders** (day 3 and 6) are recorded on the invitation and shown, but nothing sends them.
-17. **Invitation journey:** Welcome → set password → done → `/provider/activate`. MFA is skipped (deferred). The terms step is switched off (`CLINIC_TERMS_REQUIRED` in `data/provider-record.ts`), as "not active" in the spec. Unknown and superseded links show the same "This invitation has expired." screen (no error screens).
+17. **Invitation journey:** Welcome → set password → optional MFA (skippable) → done → `/provider/activate`. The terms step is now driven by Global Masters → Users & Access → Providers → **Provider Terms & Conditions** (`lib/provider-terms-store.ts`) instead of a hardcoded constant: off by default, and when switched on it shows that master's actual configured content and logs a `terms_accepted` audit entry against the provider. Unknown and superseded links show the same "This invitation has expired." screen (no error screens).
 18. **Actor** for audit entries is a fixed "Sarah Kowalski (Clinic Admin)" — there is no real auth in the prototype.
 
 **Removed / changed from the old screens**

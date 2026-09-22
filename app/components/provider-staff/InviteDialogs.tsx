@@ -263,6 +263,7 @@ const EVENT_LABEL: Record<AuditEntry["event"], string> = {
   invite_accepted: "Invitation accepted", email_changed: "Email changed", email_reverification_sent: "Email re-verification sent",
   verification_bypassed: "Verification bypassed", correction_submitted: "Provider corrected a pre-filled field",
   correction_approved: "Correction approved", correction_denied: "Correction denied",
+  terms_accepted: "Accepted Provider Terms & Conditions",
 };
 
 const INVITE_EVENTS: AuditEntry["event"][] = [
