@@ -18,7 +18,7 @@ import { useProviderSession, lockPortal, setActiveClinic, setPresenting } from "
 import { portalLevel } from "@/lib/provider-nav";
 import { CLINICS } from "@/data/clinics";
 
-const LIMITED_ALLOWED = ["/provider/readiness", "/provider/profile", "/provider/availability", "/provider/messages", "/provider/settings", "/provider/support"];
+const LIMITED_ALLOWED = ["/provider/readiness", "/provider/profile", "/provider/settings", "/provider/support"];
 import { TourProvider } from "@/components/provider/tour/TourProvider";
 import { HeaderHelpButton } from "@/components/provider/tour/HeaderHelpButton";
 

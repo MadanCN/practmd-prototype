@@ -52,7 +52,7 @@ export default function ProviderTelehealthPage({ params }: { params: Promise<{ i
         hasTelehealthConsent: th.hasConsent,
         patientState: th.confirmedState,
         licensedStates: session.profile.licensedStates,
-        canTelehealth: session.capabilities.can_telehealth,
+        canTelehealth: session.capabilities.telehealth_license,
       })
     : { ok: false as const };
 

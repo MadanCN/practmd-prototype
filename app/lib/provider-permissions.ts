@@ -8,8 +8,8 @@
 import {
   STATUS_META,
   type ClinicalStatus,
-  type ProviderCapabilities,
 } from "@/data/provider-credentialing";
+import type { AccessCapabilities } from "@/data/provider-record";
 import type { ProviderSession } from "@/lib/provider-session";
 
 /* ── Module access ────────────────────────────────────────────────────── */
@@ -73,7 +73,7 @@ export function statusBanner(status: ClinicalStatus) {
 export interface GateContext {
   session: ProviderSession;
   /** capability the action requires, if any */
-  capability?: keyof ProviderCapabilities;
+  capability?: keyof AccessCapabilities;
   /** does the action require an open-encounter-capable status? */
   requiresOpenEncounter?: boolean;
   requiresBookable?: boolean;
@@ -121,7 +121,7 @@ export function checkGate(ctx: GateContext): GateResult {
 export type SignaturePath = "sign" | "sign-and-cosign" | "none";
 
 /** Which signature control(s) a provider is offered for their own draft. */
-export function signaturePaths(caps: ProviderCapabilities, status: ClinicalStatus): SignaturePath[] {
+export function signaturePaths(caps: AccessCapabilities, status: ClinicalStatus): SignaturePath[] {
   if (STATUS_META[status].permits.signNotes === false) return [];
   if (caps.requires_cosign) return ["sign-and-cosign"]; // plain Sign is NOT offered
   if (caps.can_sign_notes) return ["sign"];

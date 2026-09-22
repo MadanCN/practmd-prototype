@@ -54,7 +54,7 @@ export const PROVIDER_NAV: NavItem[] = [
   { key: "cosign", label: "To Co-sign", href: `${BASE}/encounter-notes?filter=to-cosign`, icon: ListChecks, levels: ["full"], capability: "can_cosign", badgeKey: "cosign" },
   { key: "waiting", label: "Waiting Room", href: `${BASE}/waiting-room`, icon: DoorOpen, levels: ["full"], badgeKey: "waiting" },
   {
-    key: "messages", label: "Messages", icon: MessageSquare, levels: ["limited", "full", "read-only"], badgeKey: "messages",
+    key: "messages", label: "Messages", icon: MessageSquare, levels: ["full", "read-only"], badgeKey: "messages",
     children: [
       { label: "Patients", href: `${BASE}/messages/patients`, icon: UserRound },
       { label: "Internal", href: `${BASE}/messages/internal`, icon: Building2 },
@@ -68,7 +68,7 @@ export const PROVIDER_NAV: NavItem[] = [
   { key: "reports", label: "Reports", href: `${BASE}/reports`, icon: BarChart3, levels: FULL },
   { key: "recents", label: "Recents", href: `${BASE}/recents`, icon: Clock, levels: FULL },
   { key: "readiness", label: "Account Readiness", href: `${BASE}/readiness`, icon: ListChecks, levels: ["limited", "read-only"] },
-  { key: "availability", label: "My Availability", href: `${BASE}/availability`, icon: CalendarRange, levels: ["limited", "full", "read-only"], availabilityGated: true },
+  { key: "availability", label: "My Availability", href: `${BASE}/availability`, icon: CalendarRange, levels: ["full", "read-only"], availabilityGated: true },
 ];
 
 export function portalLevel(session: ProviderSession): PortalLevel {

@@ -402,6 +402,18 @@ function invalidateLive(s: State, providerId: string, note: string): State {
   return next;
 }
 
+/** The provider's current live invite link, sending a fresh one if they don't have one
+ *  (or have already used it up) — so any provider id always has somewhere to land when
+ *  asked to "start" or "replay" account setup, not just the demo-seeded ones. */
+export function ensureLiveInvite(providerId: string): Invitation | undefined {
+  const s = store.get();
+  const rec = selectRecord(s, providerId);
+  if (!rec) return undefined;
+  const live = latestInvite(s, providerId);
+  if (live && inviteStateOf(live) === "live") return live;
+  return sendInvite(providerId, { resend: false }).invitation;
+}
+
 /**
  * Send or resend an invitation. `email` overrides the address on the record
  * (Resend dialog → "Edit email"): the record is updated, the old link dies and

@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { FlaskConical, RotateCcw, X } from "lucide-react";
 import { PROVIDERS } from "@/data/providers";
 import {
-  CAPABILITY_KEYS, CAPABILITY_META, CLINICAL_STATUS_ORDER, PROVIDER_TYPE_LABEL, STATUS_META,
+  CLINICAL_STATUS_ORDER, PROVIDER_TYPE_LABEL, STATUS_META,
   type ClinicalStatus, type ProviderTypeKey,
 } from "@/data/provider-credentialing";
+import { CAPABILITY_ORDER, ACCESS_CAPABILITY_META } from "@/data/provider-record";
 import {
   useProviderSession, setSessionProvider, setSessionStatus, setSessionProviderType,
   setSessionCapability, resetSessionOverrides,
@@ -76,7 +77,7 @@ export function DevProviderSwitcher() {
 
               <Field label="Capabilities">
                 <div className="space-y-1">
-                  {CAPABILITY_KEYS.map((k) => (
+                  {CAPABILITY_ORDER.map((k) => (
                     <label key={k} className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
                       <input
                         type="checkbox"
@@ -85,7 +86,7 @@ export function DevProviderSwitcher() {
                         className="w-3.5 h-3.5 rounded accent-brand-600"
                       />
                       <span className="font-mono">{k}</span>
-                      {CAPABILITY_META[k].soon && <span className="text-[9px] font-bold text-slate-400">SOON</span>}
+                      {ACCESS_CAPABILITY_META[k].soon && <span className="text-[9px] font-bold text-slate-400">SOON</span>}
                     </label>
                   ))}
                 </div>

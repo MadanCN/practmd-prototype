@@ -21,10 +21,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Stethoscope,
-  CalendarRange,
+  ClipboardCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/contexts/AppContext";
+import { PractMdLockup } from "@/components/brand/PractMdLogo";
 
 const NAV = [
   {
@@ -52,7 +53,7 @@ const NAV = [
   {
     title: "Approvals",
     items: [
-      { label: "Leave Approvals", href: "/admin/leave-approvals", icon: CalendarRange },
+      { label: "Approval", href: "/admin/approvals", icon: ClipboardCheck },
     ],
   },
   {
@@ -89,14 +90,7 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="flex items-center h-[60px] px-4 border-b border-slate-800 shrink-0">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shrink-0 text-white font-bold text-sm">
-            P
-          </div>
-          {!sidebarCollapsed && (
-            <span className="text-white font-semibold text-base tracking-tight truncate">
-              PractMD
-            </span>
-          )}
+          <PractMdLockup variant={sidebarCollapsed ? "symbol" : "full"} className={sidebarCollapsed ? "h-6" : "h-5"} />
         </div>
         {!sidebarCollapsed && (
           <span className="ml-1.5 text-[10px] font-medium text-blue-400 bg-blue-950 px-1.5 py-0.5 rounded shrink-0">

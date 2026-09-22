@@ -213,10 +213,10 @@ function ProviderFormScreen({ original }: { original?: ProviderRecord }) {
                   <button type="button" onClick={() => jump(s.id)} aria-current={active === s.id ? "true" : undefined}
                     title={off ? "Turn on “Include for self-scheduling” in Access & Services to fill this in" : undefined}
                     className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-sm transition-colors",
-                      active === s.id ? "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 font-semibold" : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800",
+                      active === s.id ? "bg-navy-50 dark:bg-navy-950/40 text-navy-800 dark:text-navy-300 font-semibold" : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800",
                       off && "opacity-50")}>
                     <span className={cn("w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0",
-                      state === "done" && "bg-emerald-500 text-white",
+                      state === "done" && "bg-brand-500 text-navy-900",
                       state === "pending" && "bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400",
                       state === "invalid" && "bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400",
                       state === "off" && "bg-slate-100 dark:bg-slate-800 text-slate-400")}>

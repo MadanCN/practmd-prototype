@@ -62,6 +62,7 @@ export interface AccessCapabilities {
   telehealth_license: boolean;
   e_prescribing: boolean;
   can_book: boolean;
+  can_sign_notes: boolean;
   requires_cosign: boolean;
   can_cosign: boolean;
   can_order_labs: boolean;
@@ -73,7 +74,7 @@ export interface AccessCapabilities {
 export type CapabilityKey = keyof AccessCapabilities;
 
 export const CAPABILITY_ORDER: CapabilityKey[] = [
-  "telehealth_license", "e_prescribing", "can_book", "can_view_all_patients",
+  "telehealth_license", "e_prescribing", "can_book", "can_sign_notes", "can_view_all_patients",
   "requires_cosign", "can_cosign", "can_order_labs", "can_be_billed",
   "can_see_reports", "include_for_self_scheduling",
 ];
@@ -91,6 +92,10 @@ export const ACCESS_CAPABILITY_META: Record<CapabilityKey, { label: string; desc
   can_book: {
     label: "Can Book",
     description: "Lets the provider book their own appointments — + New Appointment appears for them, always pre-filled with their own name.",
+  },
+  can_sign_notes: {
+    label: "Can Sign Notes",
+    description: "Signs their own notes without a co-signature. Off by default for a provider who Requires Co-sign — that's a separate flag, not the absence of this one.",
   },
   can_view_all_patients: {
     label: "Can View All Patients",
@@ -225,7 +230,7 @@ export function newCredentialId() {
 
 export function emptyCapabilities(): AccessCapabilities {
   return {
-    telehealth_license: false, e_prescribing: false, can_book: false, requires_cosign: false,
+    telehealth_license: false, e_prescribing: false, can_book: false, can_sign_notes: true, requires_cosign: false,
     can_cosign: false, can_order_labs: false, can_be_billed: true, can_view_all_patients: false,
     can_see_reports: false, include_for_self_scheduling: false,
   };
@@ -292,6 +297,7 @@ export function seedProviderRecord(p: Provider): ProviderRecord {
       return {
         ...base,
         telehealth_license: p.telehealthEnabled, e_prescribing: c.can_prescribe, can_book: c.can_book,
+        can_sign_notes: c.can_sign_notes,
         requires_cosign: c.requires_cosign, can_cosign: c.can_cosign, can_order_labs: c.can_order_labs,
         can_be_billed: c.can_bill, can_view_all_patients: c.can_view_all_patients, can_see_reports: true,
         include_for_self_scheduling: p.acceptingNewPatients ?? true,
@@ -301,6 +307,7 @@ export function seedProviderRecord(p: Provider): ProviderRecord {
     return {
       ...base,
       telehealth_license: p.telehealthEnabled, e_prescribing: c.can_prescribe, can_order_labs: c.can_order_labs,
+      can_sign_notes: c.can_sign_notes,
       can_be_billed: c.can_bill, can_see_reports: true, include_for_self_scheduling: p.acceptingNewPatients ?? true,
     };
   })();

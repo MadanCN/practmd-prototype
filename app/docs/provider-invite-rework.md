@@ -1,8 +1,94 @@
 # Provider workflow rework — invite provider to organization (PRM-105)
 
 Scope of this pass: the schema, the full-page Add/Edit form, the View page, and the invitation flow.
-**Not in this pass** (next work): configurable capabilities / permission overrides, dependent master
-updates, full offboarding panel-resolution.
+**Not in this pass** (next work): dependent master updates, full offboarding panel-resolution.
+
+## Fifth pass — capability model merge, admin Approval page, onboarding simplification, design pass
+
+A large batch: merge the two capability models into one real permission gate; restructure admin
+approvals around a new Approval page (Leave Approvals + Change Requests tabs); simplify the account-
+setup/activation sequence per an exact spec (no DOB/phone step, optional MFA, no step numbering, no
+tour, a channel-based notification matrix); trim the limited portal's nav; a design-canvas pass on
+Add/Edit/View. Full to-do list and the clarifying questions asked before starting are earlier in this
+conversation; this is what shipped.
+
+**Capability model merge** (`data/provider-record.ts`, `data/provider-credentialing.ts`,
+`lib/provider-session.ts`, `lib/provider-permissions.ts`, `components/provider/layout/DevProviderSwitcher.tsx`,
+`app/provider/telehealth/[id]/page.tsx`): `AccessCapabilities` (the newer, admin-editable model on
+`ProviderRecord`) is now the one real permission gate — `provider-session.ts`'s `capabilities` derives
+live from the record instead of a frozen type-based seed, same pattern as the earlier `clinicalStatus`
+fix. Added `can_sign_notes` (a real gate in `signaturePaths()` that had no home in the new model);
+dropped `can_diagnose`/`can_view_full_note` (defined in the old model but never actually read anywhere —
+confirmed by grep before removing). `can_telehealth`→`telehealth_license`, `can_bill`→`can_be_billed`
+renamed at their one remaining call site each. `data/provider-credentialing.ts`'s `ProviderCapabilities`/
+`defaultCapabilities()` still exist, now purely as internal seed-data generation for realistic demo
+profiles — no longer read by any permission check.
+
+**Old onboarding flow retired**: `/provider/welcome` no longer renders the old `ProviderOnboarding`
+component (DOB/phone check → password → full MFA enrollment → terms) — that component and its
+`CodeInput`/`FakeQrCode` helpers are deleted. The route now finds or sends a live invite for the
+session's provider and forwards to `/invite/[token]` (`ensureLiveInvite()` in `provider-store.ts`), so
+there is exactly one account-setup flow. This is also what Settings' "Replay account activation" hits.
+
+**Activation wizard** (`app/provider/activate/page.tsx`, `lib/provider-activation.ts`): "Step N of 8"
+labels removed; the Product Tour step deleted (`ACTIVATION_STEPS` is now 3 items, not 4); notification
+preferences reworked into an In App / Email / SMS matrix — SMS is disabled everywhere ("Soon"),
+"Unsigned note escalation"'s In App toggle is locked on. Submitting a profile or hours correction now
+shows the provider an explicit confirmation ("N changes to your profile were sent to your clinic admin
+for review") before advancing to the next step.
+
+**Readiness page** (`app/provider/readiness/page.tsx`): simplified from 5 granular rows (license/NPI/
+payer-enrolment detail) to exactly 3 — Profile confirmed, Working hours confirmed, Pending verification
+— per spec. The granular credentialing detail this removed is still fully tracked in `ProviderClinicalProfile`
+for anyone who needs it later; this page just no longer surfaces it.
+
+**Limited-portal nav** (`lib/provider-nav.ts`, `components/provider/layout/ProviderLayout.tsx`'s
+`LIMITED_ALLOWED`): Messages and My Availability no longer show (or route-guard-allow) at the `limited`
+portal level — only Account Readiness, plus the always-shown Profile/Settings/Support in the sidebar's
+bottom section. Both the nav-visibility list and the route-guard allow-list needed the edit — they're
+two independent lists (a pre-existing drift risk the earlier pass on this feature had already flagged);
+verified with Playwright that navigating straight to `/provider/availability` or `/provider/messages/internal`
+by URL while `under-verification` now redirects to readiness, not just that the links are hidden.
+
+**Admin Approval page** (`app/admin/approvals/page.tsx`, new; `components/admin/LeaveApprovalsPanel.tsx`
+and `components/admin/ChangeRequestsPanel.tsx`, new): "Leave Approvals" nav item renamed "Approval",
+now a tabbed page. Leave Approvals tab is the existing leave-request logic, moved out of its own page
+into a panel component unchanged. Change Requests tab is new — every provider's pending profile/hours
+corrections org-wide (not just the one on that provider's own page, which still exists too), with the
+same Approve/Revise/Deny per request and the same exact field diffs the provider submitted.
+`/admin/leave-approvals` now redirects to `/admin/approvals?tab=leave` in case anything still links it.
+
+**Admin sidebar branding** (`components/layout/Sidebar.tsx`): the placeholder blue square with a plain
+"P" is now the real `PractMdLockup` logo — this was the one place in the app still using it, confirmed
+by grep before changing.
+
+**Link-state switcher** (`components/provider-staff/InviteStateSwitcher.tsx`, new): a flask-icon button
+(same convention as the provider portal's existing `DevProviderSwitcher`) on every `/invite/[token]`
+screen, to jump between the seeded demo states (live, expired, deactivated, used) without hunting for
+tokens. Doesn't cover the "replaced" state — there's no static seeded token for a superseded link.
+
+**Text-to-speech indicator** (`components/provider/encounters/EncounterNoteEditor.tsx`): a disabled
+"Dictate" button in the note toolbar, styled "Soon" — a UI affordance only, no Web Speech API
+integration (explicitly scoped that way).
+
+**Design pass on Add/Edit/View**: a Design-canvas Artifact was built first showing the target direction
+(elevated `practmd-card-pop` section cards, brand-teal "done" states and navy active-state in the
+Add/Edit rail instead of emerald/blue, brand-colored tabs on View instead of blue) —
+https://claude.ai/artifact/SVwBNK8JAbQGUEFQC4Vo4g — then implemented into the real components
+(`form/fields.tsx`'s `SectionCard`, `AddEditProvider.tsx`'s rail, `ProviderDetail.tsx`'s tabs). The
+mockup's flat-gradient avatar was deliberately **not** copied into the real View page — the real avatar
+uses the provider's own assigned color, meaningful data used for identification elsewhere (calendars,
+lists); replacing it with a fixed gradient would have thrown that away for a cosmetic match.
+
+**Scoping notes:**
+- Both `LeaveApprovalsPanel` and the per-provider `CorrectionsPanel` on a provider's own page still
+  exist alongside the new global Change Requests tab — kept both since they serve different moments
+  (triage across the org vs. context while already looking at one provider), and they share the same
+  underlying `resolveCorrection`/`markCorrectionForRevision` calls so acting from either stays in sync.
+- `EncounterNoteEditor.tsx` has 4 pre-existing `react-hooks/set-state-in-effect` lint errors (lines 129,
+  132, 140, 606 — none near the Dictate-button edit) discovered while touching this file for the first
+  time this session. Not fixed — out of scope for a UI indicator; flagged here for whoever picks up that
+  file next.
 
 ## Real activation-wizard corrections + admin approval, UI uniformity, MFA step (added)
 

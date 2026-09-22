@@ -2,17 +2,18 @@
 
 // The provider's journey from invitation to first session (PRD "The Provider's
 // journey"). Prototype state: which steps of account-setup + activation are
-// done, and any field corrections the provider made at step 5 (which raise a
-// task to the Credentialing Admin rather than silently overwriting).
+// done. Field corrections at "Confirm profile" are tracked here for the
+// readiness page's own list; the actual approve/deny/revise workflow lives in
+// lib/provider-store.ts's Correction model.
 
 import { useSyncExternalStore } from "react";
 import { createPersistedStore } from "@/lib/persist";
 
 export type AccountStep = "welcome" | "verify-identity" | "set-password" | "enrol-mfa" | "accept-terms";
-export type ActivationStep = "confirm-profile" | "confirm-hours" | "notification-prefs" | "tour";
+export type ActivationStep = "confirm-profile" | "confirm-hours" | "notification-prefs";
 
 export const ACCOUNT_STEPS: AccountStep[] = ["welcome", "verify-identity", "set-password", "enrol-mfa", "accept-terms"];
-export const ACTIVATION_STEPS: ActivationStep[] = ["confirm-profile", "confirm-hours", "notification-prefs", "tour"];
+export const ACTIVATION_STEPS: ActivationStep[] = ["confirm-profile", "confirm-hours", "notification-prefs"];
 
 export interface FieldCorrection {
   field: string;

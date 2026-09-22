@@ -9,8 +9,8 @@ import { PractMdLogo } from "@/components/brand/PractMdLogo";
 /**
  * Entry point for the Provider portal. No real auth in the prototype, so we
  * branch on the persisted journey state (PRD "The Provider's journey"):
- *   not through account setup   → invitation / onboarding flow
- *   setup done, not activated    → activation wizard (steps 5–8)
+ *   not through account setup   → the current invite link (or a fresh one)
+ *   setup done, not activated    → the activation wizard
  *   activated                    → the portal (the layout then routes
  *                                  limited / read-only statuses on to
  *                                  their readiness checklist)

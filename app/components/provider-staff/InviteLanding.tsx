@@ -23,6 +23,7 @@ import { CLINIC_TERMS_REQUIRED } from "@/data/provider-record";
 import { completeInvitation, inviteStateOf, selectRecord, useProviderStore, useProviderStoreReady } from "@/lib/provider-store";
 import { setSessionProvider } from "@/lib/provider-session";
 import { acceptInvitation, completeAccountStep } from "@/lib/provider-activation";
+import { InviteStateSwitcher } from "./InviteStateSwitcher";
 import { cn } from "@/lib/utils";
 
 type Step = "account" | "mfa" | "terms" | "ready" | "not-active";
@@ -72,6 +73,7 @@ function CenteredCard({ children }: { children: React.ReactNode }) {
           {children}
         </div>
       </main>
+      <InviteStateSwitcher />
     </div>
   );
 }
@@ -105,6 +107,7 @@ function SplitScreen({ headline, sub, children }: { headline: string; sub: strin
           </div>
         </div>
       </div>
+      <InviteStateSwitcher />
     </div>
   );
 }

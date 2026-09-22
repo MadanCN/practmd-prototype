@@ -6,7 +6,7 @@ import {
   ChevronLeft, ChevronDown, ChevronRight, Printer, Download, Send,
   ShieldCheck, CheckCircle2, Plus, X, Lock, Users, Check, AlertTriangle,
   WifiOff, Wifi, FileClock, ArrowUp, ArrowDown, Copy, PanelRightOpen, PanelRightClose,
-  Undo2, MessageSquareWarning, PenLine, Receipt, History, ClipboardList,
+  Undo2, MessageSquareWarning, PenLine, Receipt, History, ClipboardList, Mic,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DIAGNOSIS_CODES, completeEncounterForNote, pushNotification } from "@/lib/encounter-store";
@@ -274,6 +274,14 @@ function Editor({ doc, session }: { doc: EncounterNoteDoc; session: ReturnType<t
               </div>
 
               <div className="flex items-center gap-1.5 ml-auto">
+                {!readOnly && (
+                  <button type="button" disabled title="Dictate into this note — coming soon"
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-dashed border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed">
+                    <Mic className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Dictate</span>
+                    <span className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[9px] font-bold uppercase tracking-wide">Soon</span>
+                  </button>
+                )}
                 <ToolBtn icon={Download} label="Export" onClick={() => flash("Note exported as PDF.")} />
                 <ToolBtn icon={Printer} label="Print" onClick={() => window.print()} />
                 <ToolBtn icon={Send} label="Send summary" onClick={() => flash(`Visit summary sent to ${doc.patientName}.`)} compact />

@@ -159,7 +159,7 @@ export function Callout({ tone, children, className }: { tone: "warn" | "info" |
 
 export function SectionCard({ id, title, subtitle, children, muted }: { id: string; title: string; subtitle?: string; children: React.ReactNode; muted?: boolean }) {
   return (
-    <section id={id} data-section={id} className={cn("scroll-mt-4 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800", muted && "opacity-60")}>
+    <section id={id} data-section={id} className={cn("scroll-mt-4 rounded-[20px] border bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 practmd-card-pop", muted && "opacity-60")}>
       <header className="px-6 pt-5 pb-3 border-b border-slate-100 dark:border-slate-800">
         <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
         {subtitle && <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{subtitle}</p>}

@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowRight, ArrowLeft, Check, CheckCircle2, UserRound, CalendarClock, Bell, Compass, ShieldCheck,
+  ArrowRight, ArrowLeft, CheckCircle2, UserRound, CalendarClock, Bell, ShieldCheck, Mail, MessageSquareMore, Smartphone,
 } from "lucide-react";
 import { PractMdLogo } from "@/components/brand/PractMdLogo";
 import { cn } from "@/lib/utils";
@@ -24,12 +24,21 @@ import { Field, INPUT, MultiSelect } from "@/components/provider-staff/form/fiel
 
 type StepId = (typeof ACTIVATION_STEPS)[number];
 
-const STEP_META: Record<StepId, { n: number; label: string; icon: React.ElementType; skippable: boolean }> = {
-  "confirm-profile": { n: 5, label: "Confirm profile", icon: UserRound, skippable: false },
-  "confirm-hours": { n: 6, label: "Confirm working hours", icon: CalendarClock, skippable: false },
-  "notification-prefs": { n: 7, label: "Notification preferences", icon: Bell, skippable: true },
-  tour: { n: 8, label: "Product tour", icon: Compass, skippable: true },
+const STEP_META: Record<StepId, { label: string; icon: React.ElementType; skippable: boolean }> = {
+  "confirm-profile": { label: "Confirm profile", icon: UserRound, skippable: false },
+  "confirm-hours": { label: "Confirm working hours", icon: CalendarClock, skippable: false },
+  "notification-prefs": { label: "Notification preferences", icon: Bell, skippable: true },
 };
+
+type NotifChannel = "inApp" | "email";
+const NOTIF_ROWS: { key: string; label: string; lockedInApp?: boolean }[] = [
+  { key: "apptBooked", label: "New appointment booked" },
+  { key: "apptChanged", label: "Appointment cancelled or rescheduled" },
+  { key: "noteUnsigned", label: "Encounter checked out, note unsigned" },
+  { key: "cosign", label: "Co-signature requested / returned" },
+  { key: "messages", label: "New patient message" },
+  { key: "escalation", label: "Unsigned note escalation", lockedInApp: true },
+];
 
 let eduSeq = 0;
 const newEduId = () => `wed_${Date.now().toString(36)}${eduSeq++}`;
@@ -86,11 +95,17 @@ export default function ActivateWizardPage() {
     .filter((c) => record?.clinicAccess.includes(c.id))
     .flatMap((c) => c.locations.map((l) => ({ id: l.id, name: l.name })));
 
-  // ── Notification prefs (unchanged from before — no record field backs these yet) ──
-  const [prefs, setPrefs] = useState({ apptBooked: true, apptChanged: true, noteUnsigned: true, cosign: true, messages: true, escalation: true });
+  // ── Notification prefs — In App / Email toggles per row; SMS is coming soon (not
+  // yet a channel we can actually deliver on), and "Unsigned note escalation" can't
+  // have its In App alert turned off — that's the one that keeps a note from going
+  // stale unsigned, so it isn't something to silence by accident. No record field
+  // backs these yet, same as before this pass. ──
+  const [prefs, setPrefs] = useState<Record<string, Record<NotifChannel, boolean>>>(() =>
+    Object.fromEntries(NOTIF_ROWS.map((r) => [r.key, { inApp: true, email: true }])));
+  const [notice, setNotice] = useState<string | null>(null);
 
-  function submitProfileCorrection() {
-    if (!record) return;
+  function submitProfileCorrection(): number {
+    if (!record) return 0;
     const fields: CorrectionFieldDiff[] = [];
     diffStr("First name", record.firstName, firstName, fields);
     diffStr("Middle name", record.middleName, middleName, fields);
@@ -129,32 +144,37 @@ export default function ActivateWizardPage() {
       ...(profileOn ? { aboutProvider: record.aboutProvider, education: record.education, yearsExperience: record.yearsExperience, experienceSummary: record.experienceSummary, servicesProvided: record.servicesProvided } : {}),
     };
     submitCorrection(record.id, "profile", fields, patch, revertPatch);
+    return fields.length;
   }
 
-  function submitHoursCorrection() {
-    if (!record) return;
-    if (JSON.stringify(record.workingHours) === JSON.stringify(hours)) return;
+  function submitHoursCorrection(): number {
+    if (!record) return 0;
+    if (JSON.stringify(record.workingHours) === JSON.stringify(hours)) return 0;
     submitCorrection(record.id, "hours", [{ field: "Working hours", from: "As entered by the admin", to: "Updated by the provider" }],
       { workingHours: hours }, { workingHours: record.workingHours });
+    return 1;
   }
 
   function next() {
+    let nextNotice: string | null = null;
     if (step === "confirm-profile") {
-      submitProfileCorrection();
+      const changed = submitProfileCorrection();
       completeActivationStep("confirm-profile");
+      if (changed > 0) nextNotice = `${changed} change${changed === 1 ? "" : "s"} to your profile ${changed === 1 ? "was" : "were"} sent to your clinic admin for review.`;
     }
     if (step === "confirm-hours") {
-      submitHoursCorrection();
+      const changed = submitHoursCorrection();
       completeActivationStep("confirm-hours");
       submitCredentials();
       // Activation wizard complete → status moves from Account Setup to Under
       // Verification (PRD "Activation Wizard completion"); Credentialing then
       // reviews before Clinic Admin approval moves it to Clinically Active.
       if (record) changeStatus(record.id, "under-verification", "Activation wizard completed — credentials submitted for verification");
+      if (changed > 0) nextNotice = "Your working-hours change was sent to your clinic admin for review.";
     }
     if (step === "notification-prefs") completeActivationStep("notification-prefs");
-    if (step === "tour") completeActivationStep("tour");
 
+    setNotice(nextNotice);
     if (stepIdx < ACTIVATION_STEPS.length - 1) setStepIdx(stepIdx + 1);
     else complete();
   }
@@ -192,11 +212,15 @@ export default function ActivateWizardPage() {
             <div className="w-10 h-10 rounded-xl practmd-gradient-vivid text-white flex items-center justify-center">
               <Icon className="w-5 h-5" />
             </div>
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Step {STEP_META[step].n} of 8</p>
-              <h1 className="text-lg font-bold text-navy-900 dark:text-slate-100">{STEP_META[step].label}</h1>
-            </div>
+            <h1 className="text-lg font-bold text-navy-900 dark:text-slate-100">{STEP_META[step].label}</h1>
           </div>
+
+          {notice && (
+            <div className="mt-4 flex items-start gap-2.5 p-3 rounded-xl bg-brand-50 dark:bg-brand-950/30 border border-brand-200 dark:border-brand-900 text-[13px] leading-relaxed text-brand-800 dark:text-brand-300">
+              <ShieldCheck className="w-4 h-4 shrink-0 mt-px" />
+              <span>{notice}</span>
+            </div>
+          )}
 
           {step === "confirm-profile" && (
             <div className="mt-5 space-y-5">
@@ -322,48 +346,45 @@ export default function ActivateWizardPage() {
 
           {step === "notification-prefs" && (
             <div className="mt-5">
-              <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">Sensible defaults are selected. You can change these any time in Settings.</p>
-              <div className="space-y-2">
-                {([
-                  ["apptBooked", "New appointment booked"],
-                  ["apptChanged", "Appointment cancelled or rescheduled"],
-                  ["noteUnsigned", "Encounter checked out, note unsigned"],
-                  ["cosign", "Co-signature requested / returned"],
-                  ["messages", "New patient message"],
-                  ["escalation", "Unsigned note escalation"],
-                ] as const).map(([k, label]) => (
-                  <label key={k} className="flex items-center gap-2.5 text-sm text-slate-700 dark:text-slate-300">
-                    <input type="checkbox" checked={prefs[k]} onChange={(e) => setPrefs((p) => ({ ...p, [k]: e.target.checked }))} className="w-4 h-4 rounded accent-brand-600" />
-                    {label}
-                  </label>
-                ))}
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Sensible defaults are selected. You can change these any time in Settings.</p>
+              <div className="rounded-xl border border-slate-200 dark:border-navy-800 overflow-hidden">
+                <div className="grid grid-cols-[1fr_60px_60px_76px] gap-2 px-3.5 py-2 bg-slate-50 dark:bg-navy-950 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <span />
+                  <span className="text-center flex flex-col items-center gap-0.5"><MessageSquareMore className="w-3.5 h-3.5" />In App</span>
+                  <span className="text-center flex flex-col items-center gap-0.5"><Mail className="w-3.5 h-3.5" />Email</span>
+                  <span className="text-center flex flex-col items-center gap-0.5"><Smartphone className="w-3.5 h-3.5" />SMS</span>
+                </div>
+                <div className="divide-y divide-slate-100 dark:divide-navy-800">
+                  {NOTIF_ROWS.map((r) => (
+                    <div key={r.key} className="grid grid-cols-[1fr_60px_60px_76px] gap-2 px-3.5 py-2.5 items-center text-sm text-slate-700 dark:text-slate-300">
+                      <span>{r.label}</span>
+                      <span className="flex justify-center">
+                        <input type="checkbox" checked={prefs[r.key].inApp} disabled={r.lockedInApp}
+                          onChange={(e) => setPrefs((p) => ({ ...p, [r.key]: { ...p[r.key], inApp: e.target.checked } }))}
+                          className="w-4 h-4 rounded accent-brand-600 disabled:opacity-60" />
+                      </span>
+                      <span className="flex justify-center">
+                        <input type="checkbox" checked={prefs[r.key].email}
+                          onChange={(e) => setPrefs((p) => ({ ...p, [r.key]: { ...p[r.key], email: e.target.checked } }))}
+                          className="w-4 h-4 rounded accent-brand-600" />
+                      </span>
+                      <span className="flex justify-center text-[10px] font-semibold text-slate-400">Soon</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-
-          {step === "tour" && (
-            <div className="mt-5">
-              <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">
-                Seven areas, under a minute. You can replay it any time from the <span className="font-semibold">?</span> in the header.
-              </p>
-              <div className="grid grid-cols-2 gap-2">
-                {["Today", "Schedule", "Clinical Notes", "Waiting Room", "Telehealth", "Patients", "Tasks"].map((a) => (
-                  <div key={a} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-navy-800 text-xs font-medium text-slate-600 dark:text-slate-300">
-                    <Check className="w-3.5 h-3.5 text-brand-500" /> {a}
-                  </div>
-                ))}
-              </div>
+              <p className="mt-3 text-xs text-slate-400">Unsigned note escalation always alerts you in-app — it&apos;s what keeps a note from going stale unnoticed.</p>
             </div>
           )}
 
           <div className="mt-6 flex items-center gap-2">
             {stepIdx > 0 && (
-              <button onClick={() => setStepIdx(stepIdx - 1)} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200">
+              <button onClick={() => { setNotice(null); setStepIdx(stepIdx - 1); }} className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200">
                 <ArrowLeft className="w-4 h-4" /> Back
               </button>
             )}
-            {STEP_META[step].skippable && stepIdx < ACTIVATION_STEPS.length - 1 && (
-              <button onClick={() => setStepIdx(stepIdx + 1)} className="px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200">
+            {STEP_META[step].skippable && (
+              <button onClick={next} className="px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200">
                 Skip
               </button>
             )}

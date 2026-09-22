@@ -14,10 +14,10 @@ import {
   buildClinicalProfile,
   defaultCapabilities,
   type ClinicalStatus,
-  type ProviderCapabilities,
   type ProviderClinicalProfile,
   type ProviderTypeKey,
 } from "@/data/provider-credentialing";
+import { emptyCapabilities, type AccessCapabilities } from "@/data/provider-record";
 import { getProviderStore, getRecord, subscribeProviderStore } from "@/lib/provider-store";
 
 export interface ProviderSessionState {
@@ -26,7 +26,7 @@ export interface ProviderSessionState {
   statusOverride: ClinicalStatus | null;
   /** null = use provider-type defaults + seeded overrides */
   providerTypeOverride: ProviderTypeKey | null;
-  capabilityOverrides: Partial<ProviderCapabilities>;
+  capabilityOverrides: Partial<AccessCapabilities>;
   activeClinicId: string;
   locked: boolean;
   /** provider has flagged that they are screen-sharing — the shell suppresses
@@ -34,6 +34,18 @@ export interface ProviderSessionState {
   presenting: boolean;
   /** last time the provider touched the keyboard / mouse (inactivity lock) */
   lastActivity: number;
+}
+
+/** The dev switcher's "provider-type (re-seeds capabilities)" control needs a same-shaped
+ *  default set to preview — mapped from the type-based seed defaults in provider-credentialing.ts. */
+function accessCapsFromType(type: ProviderTypeKey, supervising: boolean): AccessCapabilities {
+  const c = defaultCapabilities(supervising ? "supervising" : type);
+  return {
+    telehealth_license: c.can_telehealth, e_prescribing: c.can_prescribe, can_book: c.can_book,
+    can_sign_notes: c.can_sign_notes, requires_cosign: c.requires_cosign, can_cosign: c.can_cosign,
+    can_order_labs: c.can_order_labs, can_be_billed: c.can_bill, can_view_all_patients: c.can_view_all_patients,
+    can_see_reports: true, include_for_self_scheduling: true,
+  };
 }
 
 const INITIAL: ProviderSessionState = {
@@ -61,7 +73,7 @@ export interface ProviderSession {
   profile: ProviderClinicalProfile;
   providerType: ProviderTypeKey;
   clinicalStatus: ClinicalStatus;
-  capabilities: ProviderCapabilities;
+  capabilities: AccessCapabilities;
   activeClinicId: string;
   locked: boolean;
   presenting: boolean;
@@ -73,25 +85,28 @@ function deriveSession(s: ProviderSessionState): ProviderSession {
 
   const providerType = s.providerTypeOverride ?? base.providerType;
 
-  // when the provider-type is overridden in the dev switcher, re-seed capability
-  // defaults from that type, then apply the seeded + dev overrides on top
-  const typeDefaults = s.providerTypeOverride
-    ? defaultCapabilities(base.isSupervising ? "supervising" : s.providerTypeOverride)
-    : base.capabilities;
-
-  const capabilities: ProviderCapabilities = { ...typeDefaults, ...s.capabilityOverrides };
-
-  // Clinical status lives on the provider record (lib/provider-store) once the
-  // provider has been through Add/invite — that's the admin- and provider-side
-  // source of truth. The dev switcher's statusOverride still wins, for demoing
-  // any status on any provider; CLINICAL_PROFILES is only the last-resort seed.
+  // Capabilities live on the provider record (lib/provider-store) — what the
+  // Clinic Admin actually granted in Add/Edit — and that's what gates the
+  // portal now, not a frozen provider-type seed. The dev switcher's
+  // provider-type override still re-seeds a same-shaped default set to
+  // preview a different type; capabilityOverrides always wins on top.
   const liveRecord = getRecord(s.providerId);
+  const typeDefaults = s.providerTypeOverride
+    ? accessCapsFromType(s.providerTypeOverride, base.isSupervising)
+    : (liveRecord?.capabilities ?? emptyCapabilities());
+
+  const capabilities: AccessCapabilities = { ...typeDefaults, ...s.capabilityOverrides };
+
+  // Clinical status lives on the same live record — the admin- and
+  // provider-side source of truth. The dev switcher's statusOverride still
+  // wins, for demoing any status on any provider; CLINICAL_PROFILES is only
+  // the last-resort seed for a provider id with no record at all.
   const clinicalStatus = s.statusOverride ?? liveRecord?.status ?? base.clinicalStatus;
 
   return {
     raw: s,
     provider,
-    profile: { ...base, providerType, capabilities, clinicalStatus },
+    profile: { ...base, providerType, clinicalStatus },
     providerType,
     clinicalStatus,
     capabilities,
@@ -150,7 +165,7 @@ export function setSessionProviderType(type: ProviderTypeKey | null) {
   store.set((s) => ({ ...s, providerTypeOverride: type, capabilityOverrides: {} }));
 }
 
-export function setSessionCapability(key: keyof ProviderCapabilities, value: boolean) {
+export function setSessionCapability(key: keyof AccessCapabilities, value: boolean) {
   store.set((s) => ({ ...s, capabilityOverrides: { ...s.capabilityOverrides, [key]: value } }));
 }
 

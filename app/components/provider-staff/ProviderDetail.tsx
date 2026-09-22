@@ -223,7 +223,7 @@ export default function ProviderDetailScreen({ id, flash = {} }: { id: string; f
         {TABS.map((t) => (
           <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
             className={cn("px-5 py-3 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors",
-              tab === t.id ? "border-blue-600 text-blue-600 dark:text-blue-400" : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300")}>
+              tab === t.id ? "border-brand-600 text-brand-700 dark:text-brand-400" : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300")}>
             {t.label}
           </button>
         ))}
