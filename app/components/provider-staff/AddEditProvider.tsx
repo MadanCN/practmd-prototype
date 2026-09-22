@@ -248,14 +248,14 @@ function ProviderFormScreen({ original }: { original?: ProviderRecord }) {
         {mode === "add" && (
           <div className="grid md:grid-cols-2 gap-x-8 gap-y-2 pb-3 mb-3 border-b border-slate-100 dark:border-slate-800">
             <label className="flex items-start gap-2.5 cursor-pointer">
-              <input type="checkbox" className="accent-blue-600 w-4 h-4 mt-0.5" checked={form.sendInvite} onChange={(e) => set("sendInvite", e.target.checked)} />
+              <input type="checkbox" className="accent-brand-600 w-4 h-4 mt-0.5" checked={form.sendInvite} onChange={(e) => set("sendInvite", e.target.checked)} />
               <span>
                 <span className="block text-sm font-medium text-slate-800 dark:text-slate-200">Send invite email to the provider</span>
                 <span className="block text-xs text-slate-500 dark:text-slate-400">Sends a single-use invite link to the provider&apos;s email on save.</span>
               </span>
             </label>
             <label className="flex items-start gap-2.5 cursor-pointer">
-              <input type="checkbox" className="accent-blue-600 w-4 h-4 mt-0.5" checked={form.markActive} onChange={(e) => set("markActive", e.target.checked)} />
+              <input type="checkbox" className="accent-brand-600 w-4 h-4 mt-0.5" checked={form.markActive} onChange={(e) => set("markActive", e.target.checked)} />
               <span>
                 <span className="block text-sm font-medium text-slate-800 dark:text-slate-200">Mark the provider Clinically Active</span>
                 <span className="block text-xs text-slate-500 dark:text-slate-400">Skip the status lifecycle and immediately make the provider available for scheduling.</span>
@@ -282,9 +282,9 @@ function ProviderFormScreen({ original }: { original?: ProviderRecord }) {
               </button>
             ) : dirty ? <span className="text-slate-500">Unsaved changes</span> : <span className="text-slate-400">{mode === "edit" ? "No changes yet" : ""}</span>}
           </div>
-          <button type="button" onClick={() => guard.requestLeave(backHref)} className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
+          <button type="button" onClick={() => guard.requestLeave(backHref)} className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
           <button type="button" disabled={!v.valid || saving || (mode === "edit" && !dirty)} onClick={onSave}
-            className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed">
+            className="px-5 py-2 rounded-xl practmd-gradient text-white text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed">
             {mode === "add" ? "Save provider" : "Save changes"}
           </button>
         </div>
@@ -313,11 +313,14 @@ function ProviderFormScreen({ original }: { original?: ProviderRecord }) {
       {/* Edit: email changed before the invite was accepted */}
       <Modal open={!!newInvitePrompt} onClose={() => { /* forced choice */ }} hideClose title="Send the invitation to the new address?"
         description="The previous invitation link no longer works.">
-        <p>The email on {original?.firstName}&apos;s record is now <strong>{newInvitePrompt?.email}</strong>. Send a fresh single-use invitation there?</p>
+        <p>You changed {original?.firstName}&apos;s email to <strong>{newInvitePrompt?.email}</strong>. The invitation sent to the old address no longer works.</p>
+        <div className="mt-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400">
+          If you choose Not now, the provider won&apos;t have a working invitation until you send one from their record.
+        </div>
         <div className="flex justify-end gap-2 pt-4">
-          <button onClick={() => router.push(`${backHref}?saved=1`)} className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800">Not now</button>
+          <button onClick={() => router.push(`${backHref}?saved=1`)} className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800">Not now</button>
           <button onClick={() => { if (newInvitePrompt) sendInvite(newInvitePrompt.providerId, { resend: false }); router.push(`${backHref}?saved=1&invited=1`); }}
-            className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold">Send invitation</button>
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl practmd-gradient text-white text-sm font-semibold">Send to new address</button>
         </div>
       </Modal>
     </div>

@@ -21,7 +21,7 @@ import { WorkingHoursReadOnly } from "@/components/ui/WorkingHoursEditor";
 import { cn } from "@/lib/utils";
 import { Callout } from "./form/fields";
 import {
-  ActiveToggleDialog, AuditList, ChangeStatusDialog, InviteEmailPreview, ResendInviteDialog, fmtDate, fmtDateTime,
+  ActiveToggleDialog, AuditList, ChangeStatusDialog, InviteEmailPreview, InviteHistoryTable, ResendInviteDialog, fmtDate, fmtDateTime,
 } from "./InviteDialogs";
 
 const TABS = [
@@ -163,43 +163,51 @@ export default function ProviderDetailScreen({ id, flash = {} }: { id: string; f
 
       {/* Invitation status */}
       {!accepted && (
-        <div className={cn("mb-5 rounded-xl border p-4 flex items-start gap-3 flex-wrap",
-          st === "live" ? "border-blue-200 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-950/20"
-            : st === "failed" ? "border-rose-200 dark:border-rose-900 bg-rose-50/50 dark:bg-rose-950/20"
-            : "border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20")}>
-          {st === "failed" ? <MailWarning className="w-5 h-5 text-rose-600 shrink-0" /> : st === "live" ? <Mail className="w-5 h-5 text-blue-600 shrink-0" /> : <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />}
+        <div className={cn("mb-5 rounded-2xl border p-4 flex items-center gap-3.5 flex-wrap",
+          st === "live" ? "border-navy-200 dark:border-navy-800 bg-white dark:bg-slate-900"
+            : st === "failed" ? "border-rose-200 dark:border-rose-900 bg-rose-50/60 dark:bg-rose-950/20"
+            : st === "invalidated" ? "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40"
+            : "border-amber-200 dark:border-amber-900 bg-amber-50/60 dark:bg-amber-950/20")}>
+          <div className={cn("w-9 h-9 rounded-full flex items-center justify-center shrink-0",
+            st === "live" ? "bg-navy-50 dark:bg-navy-950 text-navy-700 dark:text-navy-300"
+              : st === "failed" ? "bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-400"
+              : st === "invalidated" ? "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300"
+              : "bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400")}>
+            {st === "failed" ? <MailWarning className="w-[18px] h-[18px]" /> : st === "invalidated" ? <Pencil className="w-[18px] h-[18px]" /> : st === "live" ? <Mail className="w-[18px] h-[18px]" /> : <Clock className="w-[18px] h-[18px]" />}
+          </div>
           <div className="flex-1 min-w-[260px] text-sm">
             <p className="font-semibold text-slate-800 dark:text-slate-200">
               {!latest ? "No invitation has been sent"
-                : st === "live" ? `Invitation sent — waiting for ${p.firstName} to accept`
-                : st === "expired" ? "The invitation link has expired"
-                : st === "failed" ? "The invitation couldn't be delivered"
-                : "There's no live invitation link"}
+                : st === "live" ? "Invitation sent · Delivered"
+                : st === "expired" ? `Invitation expired on ${fmtDate(latest.expiresAt)}`
+                : st === "failed" ? "Email bounced — check the address"
+                : "Email changed — invitation not sent"}
             </p>
-            <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+            <p className="text-[13px] text-slate-600 dark:text-slate-400 mt-0.5">
               {!latest && `${p.firstName} can't sign in until they're invited.${p.verificationBypass ? " They are bookable, but can't open encounters or sign notes." : ""}`}
-              {latest && st === "live" && <>Sent to {latest.email} on <span suppressHydrationWarning>{fmtDateTime(latest.sentAt)}</span> · expires {fmtDate(latest.expiresAt)} · reminders on day {REMINDER_DAYS.join(" and ")}.</>}
-              {latest && st === "expired" && <>It was sent to {latest.email} and expired on {fmtDate(latest.expiresAt)}. Resend to give them a fresh link.</>}
-              {latest && st === "failed" && <>{latest.failureReason} Check the address ({latest.email}) and resend.</>}
-              {latest && st === "invalidated" && <>The previous link was replaced or the email changed. Send a new invitation to {p.email}.</>}
+              {latest && st === "live" && <>Sent <span suppressHydrationWarning>{fmtDateTime(latest.sentAt)}</span> by {latest.sentBy} · Expires {fmtDate(latest.expiresAt)} · reminders on day {REMINDER_DAYS.join(" and ")}.</>}
+              {latest && st === "expired" && <>{p.firstName} didn&apos;t set up their account in time.</>}
+              {latest && st === "failed" && <>{latest.email} couldn&apos;t receive the message.</>}
+              {latest && st === "invalidated" && <>The link sent to {latest.email} no longer works.</>}
               {!p.isActive && <> {p.firstName} is deactivated: they can still set a password from the link, but will see &ldquo;Your account is not active&rdquo; when signing in.</>}
             </p>
             {latest && st === "live" && (
               <div className="flex items-center gap-4 mt-2 text-xs">
-                <button onClick={() => setEmailOpen(true)} className="inline-flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400 hover:underline"><Eye className="w-3.5 h-3.5" /> View email</button>
-                <button onClick={copyLink} className="inline-flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400 hover:underline"><Copy className="w-3.5 h-3.5" /> {copied ? "Copied" : "Copy invite link"}</button>
-                <a href={inviteUrl(latest.token)} target="_blank" rel="noreferrer" className="font-medium text-blue-600 dark:text-blue-400 hover:underline">Open invite link</a>
+                <button onClick={() => setEmailOpen(true)} className="inline-flex items-center gap-1 font-medium text-brand-700 dark:text-brand-400 hover:underline"><Eye className="w-3.5 h-3.5" /> View email</button>
+                <button onClick={copyLink} className="inline-flex items-center gap-1 font-medium text-brand-700 dark:text-brand-400 hover:underline"><Copy className="w-3.5 h-3.5" /> {copied ? "Copied" : "Copy invite link"}</button>
+                <a href={inviteUrl(latest.token)} target="_blank" rel="noreferrer" className="font-medium text-brand-700 dark:text-brand-400 hover:underline">Open invite link</a>
               </div>
             )}
             {latest && st !== "live" && (
               <div className="flex items-center gap-4 mt-2 text-xs">
-                {latest.delivery === "delivered" && <button onClick={() => setEmailOpen(true)} className="inline-flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400 hover:underline"><Eye className="w-3.5 h-3.5" /> View last email</button>}
-                <a href={inviteUrl(latest.token)} target="_blank" rel="noreferrer" className="font-medium text-blue-600 dark:text-blue-400 hover:underline">Open old link (see what the provider sees)</a>
+                {latest.delivery === "delivered" && <button onClick={() => setEmailOpen(true)} className="inline-flex items-center gap-1 font-medium text-brand-700 dark:text-brand-400 hover:underline"><Eye className="w-3.5 h-3.5" /> View last email</button>}
+                <a href={inviteUrl(latest.token)} target="_blank" rel="noreferrer" className="font-medium text-brand-700 dark:text-brand-400 hover:underline">Open old link (see what the provider sees)</a>
               </div>
             )}
           </div>
-          <button onClick={() => setResendOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800">
-            <RefreshCw className="w-4 h-4" /> {latest ? "Resend invite" : "Send invite"}
+          <button onClick={() => setResendOpen(true)} className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold practmd-gradient text-white">
+            {latest ? (st === "failed" ? <Pencil className="w-4 h-4" /> : <RefreshCw className="w-4 h-4" />) : <Send className="w-4 h-4" />}
+            {latest ? (st === "failed" ? "Edit email & resend" : "Resend invite") : "Send invite"}
           </button>
         </div>
       )}
@@ -392,15 +400,21 @@ export default function ProviderDetailScreen({ id, flash = {} }: { id: string; f
           )
         )}
 
+        {invs.length > 0 && (
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+            <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200 mt-6 mb-4">Invitation history</h2>
+            <InviteHistoryTable entries={auditFor(store, p.id)} />
+          </div>
+        )}
         <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200 mt-6 mb-4">Invitation &amp; audit history</h2>
+          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200 mt-6 mb-4">Full audit history</h2>
           <AuditList entries={auditFor(store, p.id)} />
         </div>
       </div>
 
       <ResendInviteDialog open={resendOpen} onClose={() => setResendOpen(false)} provider={p} everSent={invs.length > 0}
         onResult={(r) => setNote(r.ok ? { tone: "ok", text: `Invitation sent to ${r.invitation.email}. The link expires on ${fmtDate(r.invitation.expiresAt)}; the previous link no longer works.` } : { tone: "error", text: r.message })} />
-      <InviteEmailPreview open={emailOpen} onClose={() => setEmailOpen(false)} provider={p} invitation={latest && latest.delivery === "delivered" ? latest : undefined} />
+      <InviteEmailPreview open={emailOpen} onClose={() => setEmailOpen(false)} provider={p} invitation={latest && latest.delivery === "delivered" ? latest : undefined} isResend={invs.length > 1} />
       <ChangeStatusDialog open={statusOpen} onClose={() => setStatusOpen(false)} provider={p} onDone={() => setNote({ tone: "ok", text: "Status updated." })} />
       <ActiveToggleDialog open={activeOpen} onClose={() => setActiveOpen(false)} provider={p} onDone={() => setNote({ tone: "ok", text: p.isActive ? `${p.firstName} was deactivated.` : `${p.firstName} was reactivated.` })} />
     </div>

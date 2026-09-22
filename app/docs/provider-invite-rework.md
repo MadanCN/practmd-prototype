@@ -4,6 +4,80 @@ Scope of this pass: the schema, the full-page Add/Edit form, the View page, and 
 **Not in this pass** (next work): configurable capabilities / permission overrides, dependent master
 updates, full offboarding panel-resolution.
 
+## Visual rebuild to the "Provider Invitation — Email & Link States" design (added)
+
+The user shared a Claude Design-canvas artifact (12 artboards: the invitation email + its resend
+variant, the combined welcome+password screen, a clinic-policies screen, an account-ready hand-off,
+four link-state screens — Expired, Replaced, Already-used→Sign-in, Deactivated — and three admin
+boards: the invitation status card + history table, the resend dialog, and Add/Edit's invite
+checkboxes/duplicate-email/email-changed dialogs) and asked for a full rebuild to match it, states and
+new behaviour included, not just a restyle.
+
+It turned out the app's existing brand CSS (`app/globals.css` — `--color-brand-*`, `--color-navy-*`,
+`.practmd-gradient`, `.practmd-gradient-vivid`, `.practmd-card-pop`) is the *exact* palette and card
+treatment the design canvas was built from, so the rebuild reuses those utility classes rather than
+hardcoding the mockup's hex values — the provider-portal onboarding screens built earlier already used
+the same system, so this stays visually consistent with them.
+
+**`components/provider-staff/InviteLanding.tsx`** — rewritten:
+- Welcome + create-password merged into one split-panel screen (form card left, brand-gradient
+  marketing panel with feature pills right) instead of two separate steps.
+- Password rules changed to match the design: 8+ chars, uppercase, lowercase, number, **special
+  character** (previously 10 chars, upper+lower combined, number — no special-char rule).
+- Clinic-policies (terms) screen redesigned with a document list and a recorded-acceptance note.
+- "Account ready" hand-off screen redesigned as its own step.
+- **New distinct screen:** a superseded/invalidated link ("A newer invitation was sent") with the
+  email masked (`n•••@clinic.com`) — previously this fell through to the generic expired copy.
+- Expired / deactivated-before-accepting screens gained a real admin contact card (avatar initials,
+  name, role, mailto/tel), sourced from `CLINICS[].admins` matched by the invitation's `sentBy`.
+- An already-used link now renders a full (non-functional) sign-in screen in place, instead of
+  `router.replace("/")` bouncing the visitor away before they see anything.
+
+**`components/provider-staff/InviteDialogs.tsx`**:
+- `InviteEmailPreview` rewritten to match the design's email layout (From/To/Subject/Preview card,
+  clinic-branded header, CTA, expiry, link fallback, "need help", security notice, footer address) and
+  gained an `isResend` variant (amber "this is a new invitation" banner, different subject/headline) —
+  `ProviderDetail` now passes `isResend={invs.length > 1}`.
+- `ResendInviteDialog` rewritten with the design's default / editing-email (with an "Available" check)
+  / rate-limited states, plus a new **"sent" confirmation state inside the dialog itself** (a navy toast
+  card with Done) instead of closing straight back to a plain page-level banner.
+- New `InviteHistoryTable` — a compact Event/When/Address/By grid, filtered to invite-related audit
+  events, shown above the existing full audit list on the provider detail page.
+
+**`components/provider-staff/ProviderDetail.tsx`** — the invitation status card restyled to the
+design's icon-circle + title/subtitle + action-button layout, with "Bounced" now a distinct visual/copy
+state from a generic "couldn't be delivered" (same underlying `delivery: "failed"` outcome — see
+scoping note below).
+
+**`components/provider-staff/AddEditProvider.tsx`** — invite checkboxes' accent color and the primary
+Save / "Send to new address" buttons switched to the brand gradient; the email-changed-after-send
+dialog gained the design's explanatory note box.
+
+**Scoping decisions (please review):**
+- The design's Admin-Invite-Panel board is a *style-guide showcase* of every possible invitation state
+  side-by-side (its own canvas title says so), not a literal "all states visible at once" requirement —
+  a real provider's invitation is in exactly one state at a time, so the rebuild makes the single status
+  card correctly render *whichever* state applies, rather than building a static swatch gallery into
+  the app.
+- The design's "Sending…" / "Send failed — retrying (attempt 2 of 3)" / "Send failed — gave up" states
+  were **not** built as real automatic background retries — there's no backend to retry against in this
+  prototype, and the resend button already *is* the retry mechanism. "Bounced" is real (the existing
+  `isUndeliverable()` heuristic), just relabelled/restyled to match; the multi-attempt auto-retry
+  choreography was judged to be simulated theater with no functional payoff and was skipped.
+- The duplicate-email inline error ("email already used by a provider in another clinic" /
+  "non-provider account", with an "Open existing provider" link) was **not** rebuilt to match the
+  design's red-alert-box + deep-link treatment — `lib/provider-form.ts` only carries a pre-formatted
+  string per issue today, and widening that to a structured, linkable conflict object felt like too
+  much risk to a validation engine memory already flags as tested/verified, for a cosmetic nicety. The
+  existing plain-text conflict message (already correct and distinguishes provider/staff/admin
+  conflicts) is unchanged.
+- Verified end-to-end with Playwright against the real dev server: account setup → policies (briefly
+  flipped `CLINIC_TERMS_REQUIRED` to true for this, then reverted) → account ready → activation wizard;
+  expired, deactivated/not-active, and used→sign-in link states; the admin email preview, resend dialog
+  (default/editing/rate-limited/sent-toast) and status card. Zero console errors; `tsc`/`eslint` clean
+  on every touched file (one pre-existing, unrelated `WorkingHour`/`BusinessHour` type error remains at
+  `ProviderDetail.tsx:205` — see Known issues below).
+
 ## Post-invitation onboarding (added — spec source: the flowcharts + tables pasted into this session)
 
 The activation wizard, readiness/limited-portal screens, `ClinicalStatus` lifecycle and permission
