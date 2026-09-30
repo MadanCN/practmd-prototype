@@ -1,7 +1,7 @@
 // Supabase queries for Challenges. All access goes through RLS with the user's session.
 import type { ProductSupabase } from "@/lib/product/supabase/client";
 import type { Tables, TablesInsert, TablesUpdate } from "@/lib/product/database.types";
-import { must } from "./errors";
+import { must, mustAffect } from "./errors";
 
 export type Challenge = Tables<"challenges">;
 export type ChallengeNote = Tables<"challenge_notes">;
@@ -52,6 +52,15 @@ export async function updateChallenge(sb: ProductSupabase, id: string, patch: Ta
   return must(await sb.from("challenges").update(patch).eq("id", id).select("*").single());
 }
 
+/** Permanently deletes a challenge and (by cascade) its notes. */
+export async function deleteChallenge(sb: ProductSupabase, id: string): Promise<void> {
+  mustAffect(await sb.from("challenges").delete().eq("id", id).select("id"));
+}
+
+export async function deleteCategory(sb: ProductSupabase, code: string): Promise<void> {
+  mustAffect(await sb.from("challenge_categories").delete().eq("code", code).select("code"));
+}
+
 /** Writes new sort_order values (and category, when a card moved column) in one round trip per row. */
 export async function reorderChallenges(
   sb: ProductSupabase,
@@ -78,7 +87,7 @@ export async function updateNote(sb: ProductSupabase, id: string, patch: TablesU
 }
 
 export async function deleteNote(sb: ProductSupabase, id: string): Promise<void> {
-  must(await sb.from("challenge_notes").delete().eq("id", id).select("id"));
+  mustAffect(await sb.from("challenge_notes").delete().eq("id", id).select("id"));
 }
 
 /** Same counts as the `challenges_summary` view. */

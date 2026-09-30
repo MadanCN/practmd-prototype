@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getSupabaseBrowserClient } from "@/lib/product/supabase/client";
 import type { TablesInsert, TablesUpdate } from "@/lib/product/database.types";
 import {
+  clearDates,
+  deleteItem,
   fetchItems,
   fetchMvpLine,
   fetchWeights,
@@ -148,5 +150,49 @@ export function useInsertItem() {
       toast(`Added “${row.name}”`);
     },
     onError: (err) => toast(`Couldn't add item: ${err.message}`, "error"),
+  });
+}
+
+export function useDeleteItem() {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const sb = getSupabaseBrowserClient();
+  return useMutation({
+    mutationFn: (item: RoadmapItem) => deleteItem(sb, item.id),
+    onMutate: async (item) => {
+      await qc.cancelQueries({ queryKey: roadmapKeys.items });
+      const previous = qc.getQueryData<RoadmapItem[]>(roadmapKeys.items);
+      qc.setQueryData<RoadmapItem[]>(roadmapKeys.items, (old) => old?.filter((i) => i.id !== item.id));
+      return { previous };
+    },
+    onError: (err, _item, ctx) => {
+      if (ctx?.previous) qc.setQueryData(roadmapKeys.items, ctx.previous);
+      toast(`Couldn't delete: ${err.message}`, "error");
+    },
+    onSuccess: (_r, item) => toast(`Deleted “${item.name}”`),
+    onSettled: () => qc.invalidateQueries({ queryKey: roadmapKeys.items }),
+  });
+}
+
+/** Clears From/To so items leave the timeline (back to the unscheduled tray). */
+export function useClearDates() {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const sb = getSupabaseBrowserClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => clearDates(sb, ids),
+    onMutate: async (ids) => {
+      await qc.cancelQueries({ queryKey: roadmapKeys.items });
+      const previous = qc.getQueryData<RoadmapItem[]>(roadmapKeys.items);
+      const set = new Set(ids);
+      qc.setQueryData<RoadmapItem[]>(roadmapKeys.items, (old) => old?.map((i) => (set.has(i.id) ? { ...i, start_date: null, end_date: null } : i)));
+      return { previous };
+    },
+    onError: (err, _ids, ctx) => {
+      if (ctx?.previous) qc.setQueryData(roadmapKeys.items, ctx.previous);
+      toast(`Couldn't remove from the timeline: ${err.message}`, "error");
+    },
+    onSuccess: (_r, ids) => toast(ids.length === 1 ? "Removed from the timeline" : `Removed ${ids.length} items from the timeline`),
+    onSettled: () => qc.invalidateQueries({ queryKey: roadmapKeys.items }),
   });
 }

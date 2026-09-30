@@ -17,7 +17,7 @@ create table public.challenges (
   title text not null check (char_length(title) between 3 and 140),
   description text,
   category text not null references public.challenge_categories(code) on update cascade,
-  ask text,                                   -- the question we want Prasanna's view on
+  ask text,                                   -- the question we want advice on
   status public.challenge_status not null default 'open',
   priority public.challenge_priority not null default 'medium',
   owner text,                                 -- person accountable on our side
@@ -38,7 +38,7 @@ create table public.challenge_notes (
   challenge_id uuid not null references public.challenges(id) on delete cascade,
   note_type public.note_type not null default 'comment',
   body text not null check (char_length(body) between 2 and 4000),
-  source text,                                -- who said it, e.g. 'Prasanna Gopalakrishnan'
+  source text,                                -- who said it, e.g. an adviser's name
   action_owner text,                          -- only for note_type = 'action'
   due_date date,                              -- only for note_type = 'action'
   action_done boolean not null default false, -- only for note_type = 'action'

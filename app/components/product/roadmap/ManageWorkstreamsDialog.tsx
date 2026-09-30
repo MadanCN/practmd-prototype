@@ -2,24 +2,58 @@
 
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Plus } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { contrastWithWhite } from "@/lib/product/constants";
 import { workstreamSchema } from "@/lib/product/schemas";
-import { roadmapKeys, upsertWorkstreams, type Workstream } from "@/lib/product/data/roadmap";
+import { deleteWorkstream, roadmapKeys, upsertWorkstreams, type RoadmapItem, type Workstream } from "@/lib/product/data/roadmap";
 import { getSupabaseBrowserClient } from "@/lib/product/supabase/client";
 import { Button, Dialog, inputClass } from "@/components/product/ui/primitives";
 import { useToast } from "@/components/product/ui/Toast";
+import { useConfirm } from "@/components/product/ui/Confirm";
 import { cn } from "@/lib/utils";
 
 type Draft = Workstream & { isNew?: boolean };
 
 /** Admin-only editor for workstream names, colours, descriptions and order. */
-export default function ManageWorkstreamsDialog({ open, onClose, workstreams }: { open: boolean; onClose: () => void; workstreams: Workstream[] }) {
+export default function ManageWorkstreamsDialog({
+  open,
+  onClose,
+  workstreams,
+  items,
+}: {
+  open: boolean;
+  onClose: () => void;
+  workstreams: Workstream[];
+  items: RoadmapItem[];
+}) {
   const [rows, setRows] = useState<Draft[]>(workstreams);
   const [errors, setErrors] = useState<Record<number, string>>({});
   const [saving, setSaving] = useState(false);
   const qc = useQueryClient();
   const toast = useToast();
+  const confirm = useConfirm();
+
+  async function removeRow(i: number) {
+    const row = rows[i];
+    if (row.isNew) {
+      setRows((r) => r.filter((_, j) => j !== i));
+      return;
+    }
+    const ok = await confirm({
+      title: "Delete this workstream?",
+      message: <p><strong>{row.name}</strong>{" "}will be permanently deleted. This can&apos;t be undone.</p>,
+      confirmLabel: "Delete workstream",
+    });
+    if (!ok) return;
+    try {
+      await deleteWorkstream(getSupabaseBrowserClient(), row.code);
+      await qc.invalidateQueries({ queryKey: roadmapKeys.workstreams });
+      setRows((r) => r.filter((x) => x.code !== row.code));
+      toast(`Deleted “${row.name}”`);
+    } catch (e) {
+      toast(`Couldn't delete: ${(e as Error).message}`, "error");
+    }
+  }
 
   const patch = (i: number, p: Partial<Draft>) => setRows((r) => r.map((row, j) => (j === i ? { ...row, ...p } : row)));
   const move = (i: number, d: -1 | 1) =>
@@ -89,6 +123,22 @@ export default function ManageWorkstreamsDialog({ open, onClose, workstreams }: 
                   <Button size="sm" variant="ghost" aria-label={`Move ${r.name} down`} disabled={i === rows.length - 1} onClick={() => move(i, 1)}>
                     <ArrowDown className="h-4 w-4" />
                   </Button>
+                  {(() => {
+                    const used = items.filter((it) => it.workstream === r.code).length;
+                    return (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        aria-label={`Delete ${r.name || "new workstream"}`}
+                        title={used ? `Used by ${used} item${used === 1 ? "" : "s"} (archived included). Move or delete them first.` : "Delete"}
+                        disabled={used > 0}
+                        onClick={() => removeRow(i)}
+                        className="text-pm-warning"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    );
+                  })()}
                 </div>
               </div>
               <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">

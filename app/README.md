@@ -66,14 +66,15 @@ Run every command from this folder (`app/`).
    npx supabase link --project-ref <ref>        # asks for the database password
    ```
 5. **Add the team.** Edit `supabase/seed.sql` and add everyone to `app_users` (role `viewer`,
-   `editor` or `admin`), including Prasanna as `editor`. Only listed emails can see anything.
-6. **Create the schema and seed it.**
+   `editor` or `admin`), including any advisers as `editor`. Only listed emails can see anything.
+6. **Create the schema and seed it** (new project only).
    ```
-   npm run db:push        # = npx supabase db push --include-seed
+   npm run db:setup       # = npx supabase db push --include-seed
    ```
-   This applies `migrations/0001_roadmap.sql` and `0002_challenges.sql`, then runs `seed.sql`
-   and `seed_challenges.sql`. (Alternative: paste the four files, in that order, into the
-   dashboard's SQL Editor.) To add people later, insert into `app_users` from the SQL Editor.
+   This applies every file in `migrations/`, then runs `seed.sql` and `seed_challenges.sql`.
+   (Alternative: paste the migrations, then the two seed files, in that order into the dashboard's
+   SQL Editor.) For later migrations use `npm run db:push`, which applies new migrations only and
+   never re-seeds. To add people later, insert into `app_users` from the SQL Editor.
 7. **Auth.** Authentication → Sign In / Providers → **Email**: enabled (magic link / OTP).
    Authentication → URL Configuration: **Site URL** = the Vercel production URL; **Redirect URLs**:
    `http://localhost:3000/**`, `https://<your-app>.vercel.app/**`, and for preview deploys

@@ -10,7 +10,7 @@ import {
   type Row,
   type SortingState,
 } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, ArrowUpDown, ArchiveRestore } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ArchiveRestore, Trash2 } from "lucide-react";
 import { CRITERIA, HORIZONS, type Horizon } from "@/lib/product/constants";
 import { dateToMonth, formatMonth, monthToFrom, monthToTo } from "@/lib/product/dates";
 import { compareByRank } from "@/lib/product/score";
@@ -167,6 +167,7 @@ export default function PrioritiesTable({
   onOpen,
   onSave,
   onRestore,
+  onDelete,
 }: {
   rows: RankedItem[];
   workstreams: Workstream[];
@@ -177,6 +178,7 @@ export default function PrioritiesTable({
   onOpen: (code: string) => void;
   onSave: Save;
   onRestore: (id: string) => void;
+  onDelete: (item: RankedItem) => void;
 }) {
   const wsByCode = useMemo(() => new Map(workstreams.map((w) => [w.code, w])), [workstreams]);
 
@@ -209,9 +211,14 @@ export default function PrioritiesTable({
                 <ItemTags isMvp={i.is_mvp} workstream={i.workstream} />
                 <RowWarning code={i.code} />
                 {i.archived_at && canEdit && (
-                  <button type="button" onClick={() => onRestore(i.id)} className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-pm-link hover:underline">
-                    <ArchiveRestore className="h-3.5 w-3.5" /> Restore
-                  </button>
+                  <span className="ml-auto flex items-center gap-3">
+                    <button type="button" onClick={() => onRestore(i.id)} className="inline-flex items-center gap-1 text-xs font-medium text-pm-link hover:underline">
+                      <ArchiveRestore className="h-3.5 w-3.5" /> Restore
+                    </button>
+                    <button type="button" onClick={() => onDelete(i)} className="inline-flex items-center gap-1 text-xs font-medium text-pm-warning hover:underline">
+                      <Trash2 className="h-3.5 w-3.5" /> Delete
+                    </button>
+                  </span>
                 )}
               </div>
             );
@@ -268,7 +275,7 @@ export default function PrioritiesTable({
           cell: (c) => <HorizonCell item={c.row.original} canEdit={canEdit && !c.row.original.archived_at} save={onSave} />,
         }),
       ]),
-    [wsByCode, canEdit, onOpen, onSave, onRestore],
+    [wsByCode, canEdit, onOpen, onSave, onRestore, onDelete],
   );
 
   const table = useTable({

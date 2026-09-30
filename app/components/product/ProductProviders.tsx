@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { ToastProvider } from "@/components/product/ui/Toast";
+import { ConfirmProvider } from "@/components/product/ui/Confirm";
 
 export default function ProductProviders({ children }: { children: React.ReactNode }) {
   // Realtime pushes changes, so refetching on focus/mount is just noise during a live workshop.
@@ -16,7 +17,9 @@ export default function ProductProviders({ children }: { children: React.ReactNo
   );
   return (
     <QueryClientProvider client={queryClient}>
-      <ToastProvider>{children}</ToastProvider>
+      <ToastProvider>
+        <ConfirmProvider>{children}</ConfirmProvider>
+      </ToastProvider>
     </QueryClientProvider>
   );
 }

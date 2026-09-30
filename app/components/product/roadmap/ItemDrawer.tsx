@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow, parseISO } from "date-fns";
-import { Archive, ArchiveRestore, History } from "lucide-react";
+import { Archive, ArchiveRestore, History, Trash2 } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/product/supabase/client";
 import { fetchHistory, roadmapKeys, type RoadmapItem, type Workstream } from "@/lib/product/data/roadmap";
 import { describeChanges } from "@/lib/product/history";
@@ -11,7 +11,8 @@ import { Button, ColorChip, Sheet, Skeleton } from "@/components/product/ui/prim
 import { useSession } from "@/components/product/SessionContext";
 import ItemForm, { itemToInput } from "./ItemForm";
 import { HorizonChip, ItemTags } from "./bits";
-import { useUpdateItem } from "./useRoadmap";
+import { useDeleteItem, useUpdateItem } from "./useRoadmap";
+import { useConfirm } from "@/components/product/ui/Confirm";
 
 function HistoryList({ itemId }: { itemId: string }) {
   const sb = getSupabaseBrowserClient();
@@ -66,9 +67,33 @@ export default function ItemDrawer({
 }) {
   const { canEdit } = useSession();
   const update = useUpdateItem();
+  const remove = useDeleteItem();
+  const confirm = useConfirm();
   if (!item) return null;
   const ws = workstreams.find((w) => w.code === item.workstream);
   const dependedOnBy = items.filter((i) => !i.archived_at && i.depends_on_codes.includes(item.code));
+
+  async function onDelete() {
+    if (!item) return;
+    const ok = await confirm({
+      title: "Delete this item?",
+      message: (
+        <>
+          <p>
+            <strong>{item.name}</strong>{" "}and its change history will be permanently deleted. This can&apos;t be undone.
+          </p>
+          {dependedOnBy.length > 0 && (
+            <p className="mt-2 text-pm-muted">It will also be removed from the dependencies of {dependedOnBy.map((d) => d.name).join(", ")}.</p>
+          )}
+          {!item.archived_at && <p className="mt-2 text-pm-muted">To hide it but keep the record, use Archive instead.</p>}
+        </>
+      ),
+      confirmLabel: "Delete item",
+    });
+    if (!ok) return;
+    remove.mutate(item);
+    onClose();
+  }
 
   return (
     <Sheet
@@ -86,13 +111,18 @@ export default function ItemDrawer({
       }
       actions={
         canEdit && (
-          <Button
-            size="sm"
-            onClick={() => update.mutate({ id: item.id, patch: { archived_at: item.archived_at ? null : new Date().toISOString() } })}
-          >
-            {item.archived_at ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
-            {item.archived_at ? "Restore" : "Archive"}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              onClick={() => update.mutate({ id: item.id, patch: { archived_at: item.archived_at ? null : new Date().toISOString() } })}
+            >
+              {item.archived_at ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+              {item.archived_at ? "Restore" : "Archive"}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={onDelete} className="text-pm-warning hover:bg-pm-warning/10">
+              <Trash2 className="h-4 w-4" /> Delete
+            </Button>
+          </div>
         )
       }
     >

@@ -94,6 +94,33 @@ export async function roadmapSmoke(browser) {
     });
     assert(dated?.start_date?.endsWith("-01") && dated.end_date > dated.start_date, `tray drop saves From/To (${dated?.start_date} → ${dated?.end_date})`);
 
+    // --- removing it from the timeline asks for confirmation and sends it back to the tray
+    await page.getByRole("button", { name: `Remove ${name} from the timeline` }).click();
+    await page.getByRole("dialog", { name: /Remove from the timeline\?/ }).getByRole("button", { name: "Remove from timeline" }).click();
+    await bar.waitFor({ state: "detached" });
+    await tray.waitFor();
+    const cleared = await eventually(async () => {
+      const { data } = await admin.from("roadmap_items").select("start_date").eq("code", code).single();
+      return data && data.start_date === null;
+    });
+    assert(cleared, "remove from timeline (confirmed) clears From/To and returns it to the tray");
+
+    // --- deleting the item asks for confirmation; cancel keeps it, confirm deletes it
+    await page.goto(`${BASE_URL}/product/priorities?item=${code}`);
+    const drawerDialog = page.getByRole("dialog", { name });
+    await drawerDialog.waitFor();
+    await drawerDialog.getByRole("button", { name: "Delete", exact: true }).click();
+    await page.getByRole("dialog", { name: /Delete this item\?/ }).getByRole("button", { name: "Cancel" }).click();
+    assert(await drawerDialog.isVisible(), "cancelling the delete keeps the item");
+    await drawerDialog.getByRole("button", { name: "Delete", exact: true }).click();
+    await page.getByRole("dialog", { name: /Delete this item\?/ }).getByRole("button", { name: "Delete item" }).click();
+    await page.getByRole("row").filter({ hasText: name }).waitFor({ state: "detached" });
+    const deleted = await eventually(async () => {
+      const { data } = await admin.from("roadmap_items").select("id").eq("code", code);
+      return data?.length === 0;
+    });
+    assert(deleted, "confirming deletes the item from the database");
+
     // --- weights: re-rank locally at once, and in a second browser within 2 s
     await assertWeightsLive(browser, page, email);
 
@@ -103,9 +130,10 @@ export async function roadmapSmoke(browser) {
     // --- RLS: an authenticated user who isn't in app_users reads nothing
     await assertOutsiderReadsNothing(admin);
   } finally {
+    // Close the browser first so no pending (debounced) weight save can land after the reset.
+    await context.close();
     await admin.from("scoring_weights").update({ w_revenue: 3, w_operational: 3, w_unlocks: 2, w_ease: 2 }).eq("id", 1);
     await admin.from("roadmap_items").delete().eq("code", code);
-    await context.close();
   }
 }
 
@@ -136,7 +164,9 @@ async function assertWeightsLive(browser, page, email) {
           button.click();
         }),
     );
-    assert(local < 300, `re-ranks the list in ${local} ms after a weight change`);
+    // 300 ms is the target for the production build; `next dev` is several times slower.
+    const budget = Number(process.env.E2E_RERANK_MS ?? 300);
+    assert(local < budget, `re-ranks the list in ${local} ms after a weight change (budget ${budget} ms)`);
     await firstScore(observer).getByText("85").waitFor({ timeout: 2_000 + 450 });
     assert(true, `second browser re-ranks within 2 s of the save (${Date.now() - t0} ms after the click, incl. the 450 ms save debounce)`);
     await page.getByRole("button", { name: "Balanced" }).click();
@@ -184,6 +214,9 @@ async function assertOutsiderReadsNothing(admin) {
     }
     const { error: writeErr } = await client.from("roadmap_items").insert({ code: "hack1", name: "Nope nope", workstream: "foundations" });
     assert(!!writeErr, "non-member cannot insert");
+    const { data: delItems } = await client.from("roadmap_items").delete().eq("code", "f1").select("id");
+    const { data: delChallenges } = await client.from("challenges").delete().not("id", "is", null).select("id");
+    assert((delItems ?? []).length === 0 && (delChallenges ?? []).length === 0, "non-member cannot delete items or challenges");
   } finally {
     await admin.auth.admin.deleteUser(created.user.id);
   }

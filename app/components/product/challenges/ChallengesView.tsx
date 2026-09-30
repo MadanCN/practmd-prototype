@@ -141,7 +141,7 @@ export default function ChallengesView() {
 
       <ChallengeDrawer challenge={open} notes={notes} categories={categories} roadmapCodes={roadmapCodes} onClose={() => url.set({ challenge: null })} />
       {recap && <RecapDialog onClose={() => setRecap(false)} categories={categories} challenges={challenges} notes={notes} />}
-      {managing && isAdmin && <CategoriesDialog onClose={() => setManaging(false)} categories={categories} />}
+      {managing && isAdmin && <CategoriesDialog onClose={() => setManaging(false)} categories={categories} challenges={challenges} />}
     </div>
   );
 }

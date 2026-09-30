@@ -97,13 +97,19 @@ function portalRoot(): HTMLElement {
   return document.getElementById("product-portal") ?? document.body;
 }
 
-function useEscape(open: boolean, onClose: () => void) {
+function useEscape(open: boolean, onClose: () => void, panel?: React.RefObject<HTMLElement | null>) {
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      // With a dialog stacked on a drawer, only the one holding focus closes.
+      const target = e.target as Element | null;
+      if (panel?.current && !panel.current.contains(target) && target?.closest?.('[role="dialog"]')) return;
+      onClose();
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open, onClose, panel]);
 }
 
 /** Moves focus into the panel on open and restores it on close. */
@@ -146,7 +152,7 @@ export function Sheet({
 }) {
   const panel = useRef<HTMLDivElement>(null);
   const titleId = useId();
-  useEscape(open, onClose);
+  useEscape(open, onClose, panel);
   useFocusReturn(open, panel);
   if (!open || typeof document === "undefined") return null;
   return createPortal(
@@ -197,7 +203,7 @@ export function Dialog({
 }) {
   const panel = useRef<HTMLDivElement>(null);
   const titleId = useId();
-  useEscape(open, onClose);
+  useEscape(open, onClose, panel);
   useFocusReturn(open, panel);
   if (!open || typeof document === "undefined") return null;
   return createPortal(

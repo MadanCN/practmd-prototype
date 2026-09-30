@@ -15,7 +15,8 @@ import PrioritiesTable, { parseSort, serializeSort } from "./PrioritiesTable";
 import WeightsPanel from "./WeightsPanel";
 import ItemDrawer from "./ItemDrawer";
 import AddItemSheet from "./AddItemSheet";
-import { toWeights, useRankedItems, useRoadmapData, useRoadmapRealtime, useUpdateItem, type RankedItem } from "./useRoadmap";
+import { toWeights, useDeleteItem, useRankedItems, useRoadmapData, useRoadmapRealtime, useUpdateItem, type RankedItem } from "./useRoadmap";
+import { useConfirm } from "@/components/product/ui/Confirm";
 
 export default function PrioritiesView() {
   const { canEdit } = useSession();
@@ -23,6 +24,8 @@ export default function PrioritiesView() {
   const { items, weights, workstreams, isLoading, error } = useRoadmapData();
   useRoadmapRealtime();
   const update = useUpdateItem();
+  const remove = useDeleteItem();
+  const confirm = useConfirm();
   const [draftWeights, setDraftWeights] = useState<Weights | null>(null);
   const [adding, setAdding] = useState(false);
   const { ranked, archived, warnings } = useRankedItems(items, draftWeights);
@@ -54,6 +57,21 @@ export default function PrioritiesView() {
 
   const onSave = useCallback((id: string, patch: TablesUpdate<"roadmap_items">) => update.mutate({ id, patch }), [update]);
   const onRestore = useCallback((id: string) => update.mutate({ id, patch: { archived_at: null } }), [update]);
+  const onDelete = useCallback(
+    async (item: RankedItem) => {
+      const ok = await confirm({
+        title: "Delete this item?",
+        message: (
+          <p>
+            <strong>{item.name}</strong>{" "}and its change history will be permanently deleted. This can&apos;t be undone.
+          </p>
+        ),
+        confirmLabel: "Delete item",
+      });
+      if (ok) remove.mutate(item);
+    },
+    [confirm, remove],
+  );
   const onOpen = useCallback((code: string) => url.set({ item: code }), [url]);
   const onSortingChange = useCallback((s: SortingState) => url.set({ sort: serializeSort(s) }), [url]);
 
@@ -170,6 +188,7 @@ export default function PrioritiesView() {
           onOpen={onOpen}
           onSave={onSave}
           onRestore={onRestore}
+          onDelete={onDelete}
         />
       )}
 

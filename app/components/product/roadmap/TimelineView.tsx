@@ -16,7 +16,7 @@ import {
   type KeyboardCoordinateGetter,
 } from "@dnd-kit/core";
 import { useQueryClient } from "@tanstack/react-query";
-import { CalendarRange, Diamond, Flag, GitBranch } from "lucide-react";
+import { CalendarRange, CalendarX2, Diamond, Flag, GitBranch, X } from "lucide-react";
 import { contrastWithWhite, HORIZONS, type Horizon } from "@/lib/product/constants";
 import {
   addMonths,
@@ -40,7 +40,8 @@ import { useSession } from "@/components/product/SessionContext";
 import { useUrlState } from "@/components/product/useUrlState";
 import { ScoreBadge } from "./bits";
 import ItemDrawer from "./ItemDrawer";
-import { toWeights, useRankedItems, useRoadmapData, useRoadmapRealtime, useUpdateItem, type RankedItem } from "./useRoadmap";
+import { toWeights, useClearDates, useRankedItems, useRoadmapData, useRoadmapRealtime, useUpdateItem, type RankedItem } from "./useRoadmap";
+import { useConfirm } from "@/components/product/ui/Confirm";
 import { cn } from "@/lib/utils";
 
 const LABEL_W = 210;
@@ -228,7 +229,7 @@ function Track({ children, monthCount, monthW }: { children: React.ReactNode; mo
   );
 }
 
-function MvpLineDialog({ line, onClose }: { line: MvpLine; onClose: () => void }) {
+function MvpLineDialog({ line, onClose, onRemove }: { line: MvpLine; onClose: () => void; onRemove: () => void }) {
   const [label, setLabel] = useState(line.label);
   const [month, setMonth] = useState(dateToMonth(line.date));
   const qc = useQueryClient();
@@ -250,6 +251,11 @@ function MvpLineDialog({ line, onClose }: { line: MvpLine; onClose: () => void }
       title="MVP line"
       footer={
         <>
+          {line.date && (
+            <Button variant="ghost" className="mr-auto text-pm-warning hover:bg-pm-warning/10" onClick={onRemove}>
+              Remove line
+            </Button>
+          )}
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
@@ -277,6 +283,10 @@ export default function TimelineView() {
   const { items, weights, workstreams, mvpLine, isLoading, error } = useRoadmapData();
   useRoadmapRealtime();
   const update = useUpdateItem();
+  const clear = useClearDates();
+  const confirm = useConfirm();
+  const qc = useQueryClient();
+  const toast = useToast();
   const { ranked } = useRankedItems(items, null);
 
   const [zoom, setZoom] = useState<Zoom>("month");
@@ -300,6 +310,37 @@ export default function TimelineView() {
   );
 
   const onOpen = useCallback((code: string) => url.set({ item: code }), [url]);
+
+  async function removeFromTimeline(item: RankedItem) {
+    const ok = await confirm({
+      title: "Remove from the timeline?",
+      message: (
+        <p>
+          <strong>{item.name}</strong>{" "}loses its From and To dates and goes back to the Unscheduled tray. The item itself is not deleted.
+        </p>
+      ),
+      confirmLabel: "Remove from timeline",
+    });
+    if (ok) clear.mutate([item.id]);
+  }
+
+  async function removeMvpLine() {
+    if (!mvpLine) return;
+    const ok = await confirm({
+      title: "Remove the MVP line?",
+      message: <p>The “{mvpLine.label}” marker will no longer show on the timeline. You can set it again at any time.</p>,
+      confirmLabel: "Remove line",
+    });
+    if (!ok) return;
+    try {
+      await saveMvpLine(getSupabaseBrowserClient(), { label: mvpLine.label, date: null });
+      await qc.invalidateQueries({ queryKey: roadmapKeys.mvpLine });
+      toast("MVP line removed");
+      setEditingMvp(false);
+    } catch (e) {
+      toast(`Couldn't remove the MVP line: ${(e as Error).message}`, "error");
+    }
+  }
 
   const visible = ranked.filter((i) => !hiddenWs.includes(i.workstream) && (!horizons.length || horizons.includes(i.horizon)));
   const scheduled = visible.filter((i) => i.start_date && i.end_date);
@@ -420,8 +461,35 @@ export default function TimelineView() {
             <GitBranch className="h-3.5 w-3.5" /> Dependencies
           </ToggleChip>
           {isAdmin && mvpLine && (
-            <Button onClick={() => setEditingMvp(true)}>
-              <Flag className="h-4 w-4" /> MVP line
+            <div className="inline-flex">
+              <Button onClick={() => setEditingMvp(true)} className={cn(mvpLine.date && "rounded-r-none")}>
+                <Flag className="h-4 w-4" /> MVP line
+              </Button>
+              {mvpLine.date && (
+                <Button onClick={removeMvpLine} aria-label="Remove MVP line" title="Remove MVP line" className="-ml-px rounded-l-none px-2 text-pm-warning">
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          )}
+          {canEdit && scheduled.length > 0 && (
+            <Button
+              className="text-pm-warning"
+              onClick={async () => {
+                const ok = await confirm({
+                  title: "Clear the timeline?",
+                  message: (
+                    <p>
+                      {scheduled.length === 1 ? "1 item" : `${scheduled.length} items`} shown on the timeline will lose their From and To dates and go back to the
+                      Unscheduled tray. Hidden workstreams and horizons are not affected, and no items are deleted.
+                    </p>
+                  ),
+                  confirmLabel: "Clear timeline",
+                });
+                if (ok) clear.mutate(scheduled.map((i) => i.id));
+              }}
+            >
+              <CalendarX2 className="h-4 w-4" /> Clear timeline
             </Button>
           )}
         </div>
@@ -519,6 +587,17 @@ export default function TimelineView() {
                                 <button type="button" onClick={() => onOpen(item.code)} className="truncate text-left hover:text-pm-link hover:underline" title={item.name}>
                                   {item.name}
                                 </button>
+                                {canEdit && (
+                                  <button
+                                    type="button"
+                                    onClick={() => removeFromTimeline(item)}
+                                    aria-label={`Remove ${item.name} from the timeline`}
+                                    title="Remove from the timeline"
+                                    className="ml-auto shrink-0 rounded p-0.5 text-pm-muted hover:bg-pm-subtle hover:text-pm-warning focus-visible:outline-2 focus-visible:outline-pm-accent"
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
                               </div>
                               <Track monthCount={monthCount} monthW={monthW}>
                                 {inRange ? (
@@ -626,7 +705,7 @@ export default function TimelineView() {
         </DndContext>
       )}
 
-      {editingMvp && mvpLine && <MvpLineDialog line={mvpLine} onClose={() => setEditingMvp(false)} />}
+      {editingMvp && mvpLine && <MvpLineDialog line={mvpLine} onClose={() => setEditingMvp(false)} onRemove={removeMvpLine} />}
       <ItemDrawer item={openItem} items={items} workstreams={workstreams} weights={toWeights(weights)} onClose={() => url.set({ item: null })} onOpenItem={onOpen} />
     </div>
   );

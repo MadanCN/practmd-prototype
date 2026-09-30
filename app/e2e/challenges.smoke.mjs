@@ -1,7 +1,9 @@
-// Challenges smoke test: quick-add a challenge, "Capture Prasanna's input", save Advice, see the
+// Challenges smoke test: quick-add a challenge, "Capture advice", save Advice, see the
 // advice count and status change (and a second browser see it live), add an Action, pin the advice,
 // and check the recap. Everything it creates is deleted at the end.
 import { adminClient, assert, BASE_URL, requireEnv, signIn } from "./helpers.mjs";
+
+const ADVISER = "Alex Adviser";
 
 export async function challengesSmoke(browser) {
   const admin = adminClient();
@@ -32,12 +34,12 @@ export async function challengesSmoke(browser) {
     await drawer.waitFor();
     assert(true, "quick add creates the challenge and opens it");
 
-    // --- capture Prasanna's input → advice note → status Discussing
-    await drawer.getByRole("button", { name: "Capture Prasanna's input" }).click();
+    // --- capture advice → advice note → status Discussing
+    await drawer.getByRole("button", { name: "Capture advice" }).click();
     const source = page.getByLabel("Source (who said it)");
-    assert((await source.inputValue()) === "Prasanna Gopalakrishnan", "source is pre-filled with Prasanna");
+    await source.fill(ADVISER);
     const body = page.getByRole("textbox", { name: "Note", exact: true });
-    assert(await body.evaluate((el) => el === document.activeElement), "composer is focused");
+    await body.focus();
     await body.fill(advice);
     await body.press("Control+Enter");
     await drawer.getByText(advice).waitFor();
@@ -58,6 +60,9 @@ export async function challengesSmoke(browser) {
     // --- action → Action agreed; pin the advice → quoted on the card
     await card.click();
     await drawer.waitFor();
+    await drawer.getByRole("button", { name: "Capture advice" }).click();
+    assert(await page.getByRole("textbox", { name: "Note", exact: true }).evaluate((el) => el === document.activeElement), "Capture advice focuses the composer");
+    assert((await source.inputValue()) === ADVISER, "the last advice source is remembered");
     await page.getByRole("radio", { name: "Action" }).click();
     await page.getByRole("textbox", { name: "Note", exact: true }).fill("Draft the job description");
     await page.getByLabel("Action owner").fill("Biju");
@@ -75,8 +80,27 @@ export async function challengesSmoke(browser) {
     // --- recap lists the advice with its source and the action with owner and due date
     await page.getByRole("button", { name: "Recap" }).click();
     const recap = await page.getByLabel("Recap markdown").inputValue();
-    assert(recap.includes(`- **Prasanna Gopalakrishnan:** ${advice}`), "recap lists the advice with its source");
+    assert(recap.includes(`- **${ADVISER}:** ${advice}`), "recap lists the advice with its source");
     assert(recap.includes("- [ ] Draft the job description — _owner: Biju, due: 15 Oct 2026, open_"), "recap lists the action with owner and due date");
+    await page.keyboard.press("Escape");
+
+    // --- deleting a note and the challenge both ask for confirmation
+    await card.click();
+    await drawer.waitFor();
+    await drawer.getByRole("listitem").filter({ hasText: "Draft the job description" }).getByRole("button", { name: "Delete note" }).click();
+    const confirmDialog = page.getByRole("dialog", { name: /Delete this action\?/ });
+    await confirmDialog.getByRole("button", { name: "Cancel" }).click();
+    assert(await drawer.getByText("Draft the job description").isVisible(), "cancelling keeps the note");
+    await drawer.getByRole("listitem").filter({ hasText: "Draft the job description" }).getByRole("button", { name: "Delete note" }).click();
+    await page.getByRole("dialog", { name: /Delete this action\?/ }).getByRole("button", { name: "Delete note" }).click();
+    await drawer.getByText("Draft the job description").waitFor({ state: "detached" });
+    assert(true, "confirming deletes the note");
+
+    await drawer.getByRole("button", { name: "Delete", exact: true }).click();
+    await page.getByRole("dialog", { name: /Delete this challenge\?/ }).getByRole("button", { name: "Delete challenge" }).click();
+    await card.waitFor({ state: "detached" });
+    const { data: gone } = await admin.from("challenges").select("id").eq("title", title);
+    assert(gone.length === 0, "confirming deletes the challenge from the database");
   } finally {
     await admin.from("challenges").delete().eq("title", title);
     await context.close();

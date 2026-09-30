@@ -13,6 +13,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...        # generates sign-in links and cleans up; never shipped
 E2E_EMAIL=you@accessionhealthtech.com # an editor or admin in app_users
 E2E_BASE_URL=http://localhost:3000    # optional; point at a deploy to test it
+E2E_RERANK_MS=300                     # optional; the re-rank budget. `next dev` is slower, use ~1500 there
 ```
 
 Sign-in skips the inbox: the service role generates a magic link and the browser opens it through
@@ -36,9 +37,10 @@ colour; changing a weight re-ranks in under 300 ms and reaches a second browser 
 gets no edit controls; a signed-in user who isn't in `app_users` reads nothing and can't insert.
 
 **challenges** — the seeded board loads; quick add creates a challenge and opens it; "Capture
-Prasanna's input" focuses the composer with the source filled in; saving Advice moves the card to
+advice" focuses the composer and remembers the last advice source; saving Advice moves the card to
 Discussing with an advice count of 1, and a second browser sees it within 2 s; an Action moves it
 to Action agreed; a pinned note is quoted on the card; the recap lists the advice with its source
-and the action with owner and due date.
+and the action with owner and due date; deleting a note and the challenge asks for confirmation
+and removes them.
 
 `node --env-file=.env e2e/screens.mjs [tab ...]` saves screenshots to `e2e/.screens/` (git-ignored).

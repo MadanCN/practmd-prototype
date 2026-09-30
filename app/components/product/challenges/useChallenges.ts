@@ -6,6 +6,7 @@ import { getSupabaseBrowserClient } from "@/lib/product/supabase/client";
 import type { TablesInsert, TablesUpdate } from "@/lib/product/database.types";
 import {
   challengeKeys,
+  deleteChallenge,
   deleteNote,
   fetchCategories,
   fetchChallenges,
@@ -181,5 +182,21 @@ export function useChallengeMutations() {
     onSettled: () => qc.invalidateQueries({ queryKey: challengeKeys.notes }),
   });
 
-  return { create, update, reorder, addNote, editNote, removeNote };
+  const remove = useMutation({
+    mutationFn: (c: Challenge) => deleteChallenge(sb, c.id),
+    onMutate: async (c) => {
+      await qc.cancelQueries({ queryKey: challengeKeys.challenges });
+      const previous = qc.getQueryData<Challenge[]>(challengeKeys.challenges);
+      qc.setQueryData<Challenge[]>(challengeKeys.challenges, (old) => old?.filter((x) => x.id !== c.id));
+      return { previous };
+    },
+    onError: (err, _c, ctx) => {
+      if (ctx?.previous) qc.setQueryData(challengeKeys.challenges, ctx.previous);
+      fail("delete the challenge")(err);
+    },
+    onSuccess: (_r, c) => toast(`Deleted “${c.title}”`),
+    onSettled: () => Promise.all([qc.invalidateQueries({ queryKey: challengeKeys.challenges }), qc.invalidateQueries({ queryKey: challengeKeys.notes })]),
+  });
+
+  return { create, update, reorder, addNote, editNote, removeNote, remove };
 }

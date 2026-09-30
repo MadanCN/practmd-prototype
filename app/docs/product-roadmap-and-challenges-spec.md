@@ -183,7 +183,7 @@ The HTML workshop pack showed 77 for the first case because of floating-point ro
 
 # Part 2 — Challenges
 
-You are adding Challenges to the PractMD internal workshop app. It replaces the static "Challenges" tab of our HTML workshop pack. The product team uses it to record the challenges we face, discuss them with Prasanna Gopalakrishnan (visiting investor and likely Head of Product), and capture his advice, the decisions we make, and the resulting actions against each challenge. Everything is stored in Supabase and updates live for everyone in the room.
+You are adding Challenges to the PractMD internal workshop app. It replaces the static "Challenges" tab of our HTML workshop pack. The product team uses it to record the challenges we face, discuss them with advisers, and capture their advice, the decisions we make, and the resulting actions against each challenge. Everything is stored in Supabase and updates live for everyone in the room.
 
 Work in the milestone order at the end. After each milestone, run the app and the tests, and tell me what you built. Ask before adding dependencies not listed here.
 
@@ -200,7 +200,7 @@ Keep queries in `src/lib/data/challenges.ts` and generate types with `npx supaba
 - Use the existing Supabase project, or create one and set `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` (server and seed only) in `.env.local` and on Vercel.
 - Add `supabase/migrations/0002_challenges.sql` (below) and apply it with `npx supabase db push`.
 - Add the seed (below) to `supabase/seed.sql`, or to a separate `supabase/seed_challenges.sql`, and run it.
-- Enable Email OTP auth if it isn't already on, and add Prasanna's email to `app_users` with the editor role before the session.
+- Enable Email OTP auth if it isn't already on, and add any advisers' emails to `app_users` with the editor role before the session.
 - Confirm that `challenges` and `challenge_notes` appear under Database → Replication (realtime).
 
 ## 3. Schema
@@ -214,7 +214,7 @@ Keep queries in `src/lib/data/challenges.ts` and generate types with `npx supaba
 ### 4a. Board view (default)
 
 - One column per category in `sort_order`, each headed with its colour and a count. This matches the layout of the workshop pack.
-- Each challenge card shows the title, a one-line description, the Ask in ocean colour prefixed with "Ask:", a status chip (with text, never colour alone), a priority dot, the owner, counts of notes, advice and open actions, and any pinned note (usually Prasanna's key advice) quoted in a callout.
+- Each challenge card shows the title, a one-line description, the Ask in ocean colour prefixed with "Ask:", a status chip (with text, never colour alone), a priority dot, the owner, counts of notes, advice and open actions, and any pinned note (usually the key advice) quoted in a callout.
 - Each column has a quick-add input at the bottom: type a title and press Enter to create a challenge in that category. The drawer then opens so you can add the rest.
 - Drag cards within a column to reorder (saves `sort_order`) or across columns to change category, using @dnd-kit with keyboard support.
 - Filters across the top: status (multi), priority, owner, "Has advice", "Has open actions", and a text search over titles, descriptions and notes.
@@ -227,13 +227,13 @@ A sortable table with columns for title, category, status, priority, owner, rais
 
 - Editable fields: title, description, category, Ask, status, priority, owner, raised by, and related roadmap item (a searchable select over `roadmap_items` when that table exists, otherwise a free-text code).
 - Notes timeline, newest first, with a coloured tag per note type:
-  - **Advice** (from Prasanna or another adviser). Show the source name prominently.
+  - **Advice** (from an adviser). Show the source name prominently.
   - **Decision**: what we agreed.
   - **Action**: owner and due date, with a checkbox to mark it done.
   - **Question**: an open question to follow up on.
   - **Comment**: general discussion.
-- Composer at the bottom: a type selector (default Advice), a body textarea with markdown bold, italics and lists, a source field (default "Prasanna Gopalakrishnan" when the type is Advice, remembered per browser), plus owner and due date fields when the type is Action. Cmd/Ctrl+Enter saves.
-- A **"Capture Prasanna's input"** button in the drawer header focuses the composer, set to Advice with the source pre-filled. This is the one-click path during the live session.
+- Composer at the bottom: a type selector (default Advice), a body textarea with markdown bold, italics and lists, a source field (for Advice, remembered per browser as the last source used), plus owner and due date fields when the type is Action. Cmd/Ctrl+Enter saves.
+- A **"Capture advice"** button in the drawer header focuses the composer, set to Advice with the last source pre-filled. This is the one-click path during a live session.
 - Pin or unpin a note to show it on the card. Authors can edit or delete their own notes, and the timeline shows "edited" when a note has changed.
 - The status changes automatically through the trigger, and can still be set by hand.
 
@@ -254,13 +254,13 @@ Subscribe to `challenges` and `challenge_notes`. New notes appear in open drawer
 ## 6. Tests
 
 - Vitest: the recap builder (given fixture challenges and notes, it produces the expected markdown), and the zod schemas (an Action note needs no owner, but a non-Action note must not have one).
-- Playwright smoke test: sign in, quick-add a challenge, open it, click "Capture Prasanna's input", save an Advice note, and see the card's advice count go to 1 and the status change to Discussing.
+- Playwright smoke test: sign in, quick-add a challenge, open it, click "Capture advice", save an Advice note, and see the card's advice count go to 1 and the status change to Discussing.
 
 ## 7. Milestones (stop after each and report)
 
 1. Migration, seed, types and README steps.
 2. Board view with cards, quick add, drag and drop, and filters.
-3. Drawer with editable fields and the notes timeline and composer, including "Capture Prasanna's input".
+3. Drawer with editable fields and the notes timeline and composer, including "Capture advice".
 4. List view, recap export, realtime and presence.
 5. Tests, dark mode, empty states, and deployment.
 
@@ -320,6 +320,14 @@ All milestones for both parts are built, and verified against the live Supabase 
 - **Challenge notes — schema limit:** the brief's RLS lets only a note's author update it, so
   pinning a note and ticking an Action as done are available to the note's author only (others see
   the state read-only). Relax the "authors update own notes" policy if anyone should be able to do this.
+- **Deleting (added after the briefs):** migration `0003_deletes.sql` lets editors delete roadmap
+  items and challenges (the briefs only allowed archiving). Deleting an item removes its history and
+  clears its code from other items' dependencies and from linked challenges. Every delete asks for
+  confirmation: items, challenges, notes, workstreams and categories (only when nothing uses them),
+  the MVP line, and removing items from the Timeline (per row, or "Clear timeline", which clears
+  From/To but keeps the items).
+- **Neutral naming:** the app is a general product tool. The advice source is free text,
+  remembered per browser, and the drawer button is "Capture advice".
 - **Challenge counts** (notes, advice, open actions, last activity) are computed in the app from the
   loaded notes, with the same definitions as the `challenges_summary` view; the notes are loaded
   anyway for search and pinned callouts.

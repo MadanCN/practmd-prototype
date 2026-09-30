@@ -2,7 +2,7 @@
 import type { ProductSupabase } from "@/lib/product/supabase/client";
 import type { Json, Tables, TablesInsert, TablesUpdate } from "@/lib/product/database.types";
 import type { Weights } from "@/lib/product/score";
-import { DataError, must } from "./errors";
+import { DataError, must, mustAffect } from "./errors";
 
 export type RoadmapItemRow = Tables<"roadmap_items">;
 /** A roadmap item plus its score from the `roadmap_items_scored` view (null when unscored or archived). */
@@ -77,6 +77,20 @@ export async function insertItem(sb: ProductSupabase, item: TablesInsert<"roadma
 
 export async function updateItem(sb: ProductSupabase, id: string, patch: TablesUpdate<"roadmap_items">): Promise<RoadmapItemRow> {
   return must(await sb.from("roadmap_items").update(patch).eq("id", id).select("*").single());
+}
+
+/** Permanently deletes an item (its history goes with it; references are cleared by a trigger). */
+export async function deleteItem(sb: ProductSupabase, id: string): Promise<void> {
+  mustAffect(await sb.from("roadmap_items").delete().eq("id", id).select("id"));
+}
+
+/** Removes items from the timeline by clearing their From and To. */
+export async function clearDates(sb: ProductSupabase, ids: string[]): Promise<void> {
+  mustAffect(await sb.from("roadmap_items").update({ start_date: null, end_date: null }).in("id", ids).select("id"));
+}
+
+export async function deleteWorkstream(sb: ProductSupabase, code: string): Promise<void> {
+  mustAffect(await sb.from("workstreams").delete().eq("code", code).select("code"));
 }
 
 export async function fetchHistory(sb: ProductSupabase, itemId: string): Promise<HistoryEntry[]> {

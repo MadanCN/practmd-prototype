@@ -3,8 +3,8 @@
 
 insert into public.app_users (email, display_name, role) values
   ('madan@accessionhealthtech.com','Madan','admin');
--- add the rest of the team and Prasanna before the workshop, for example:
--- ('<prasanna-email>','Prasanna Gopalakrishnan','editor')
+-- add the rest of the team before a session, for example:
+-- ('<email>','<Name>','editor')
 
 insert into public.workstreams (code, name, color, description, sort_order) values
   ('foundations','Foundations','#475569','Platform, environments, queues, notifications',1),

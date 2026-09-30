@@ -219,7 +219,7 @@ export default function WorkstreamsView() {
         </DndContext>
       )}
 
-      {isAdmin && managing && <ManageWorkstreamsDialog open onClose={() => setManaging(false)} workstreams={workstreams} />}
+      {isAdmin && managing && <ManageWorkstreamsDialog open onClose={() => setManaging(false)} workstreams={workstreams} items={items} />}
       <ItemDrawer item={openItem} items={items} workstreams={workstreams} weights={toWeights(weights)} onClose={() => url.set({ item: null })} onOpenItem={onOpen} />
     </div>
   );

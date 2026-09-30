@@ -9,9 +9,10 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:push": "npx supabase db push --include-seed",
+    "db:push": "npx supabase db push",
     "db:types": "npx supabase gen types typescript --linked > lib/product/database.types.ts",
-    "test:e2e": "node --env-file-if-exists=.env --env-file-if-exists=.env.local e2e/run.mjs"
+    "test:e2e": "node --env-file-if-exists=.env --env-file-if-exists=.env.local e2e/run.mjs",
+    "db:setup": "npx supabase db push --include-seed"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

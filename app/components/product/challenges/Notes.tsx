@@ -3,7 +3,8 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { format, formatDistanceToNow, parseISO } from "date-fns";
 import { CalendarClock, Pencil, Pin, PinOff, Trash2, User } from "lucide-react";
-import { DEFAULT_ADVISER, NOTE_TYPES, NOTE_TYPE_LABEL, type NoteType } from "@/lib/product/constants";
+import { NOTE_TYPES, NOTE_TYPE_LABEL, type NoteType } from "@/lib/product/constants";
+import { useConfirm } from "@/components/product/ui/Confirm";
 import { noteSchema } from "@/lib/product/schemas";
 import type { ChallengeNote } from "@/lib/product/data/challenges";
 import { useFlashing } from "@/lib/product/flash";
@@ -15,11 +16,12 @@ import { cn } from "@/lib/utils";
 
 const SOURCE_KEY = "practmd.adviceSource";
 
+/** The last advice source used in this browser, so repeat sessions with one adviser are one click. */
 function rememberedSource(): string {
   try {
-    return window.localStorage.getItem(SOURCE_KEY) || DEFAULT_ADVISER;
+    return window.localStorage.getItem(SOURCE_KEY) ?? "";
   } catch {
-    return DEFAULT_ADVISER;
+    return "";
   }
 }
 function rememberSource(source: string) {
@@ -44,7 +46,7 @@ function NoteItem({ note, canEdit }: { note: ChallengeNote; canEdit: boolean }) 
   const flashing = useFlashing(note.id);
   const [editing, setEditing] = useState(false);
   const [body, setBody] = useState(note.body);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const confirm = useConfirm();
   const mine = canEdit && (note.created_by ?? "").toLowerCase() === user.email;
 
   function saveEdit() {
@@ -71,20 +73,22 @@ function NoteItem({ note, canEdit }: { note: ChallengeNote; canEdit: boolean }) 
             <button type="button" onClick={() => setEditing(true)} aria-label="Edit note" title="Edit" className="rounded p-1 text-pm-muted hover:bg-pm-subtle hover:text-pm-text">
               <Pencil className="h-3.5 w-3.5" />
             </button>
-            {confirmDelete ? (
-              <span className="flex items-center gap-1 text-xs">
-                <button type="button" onClick={() => removeNote.mutate(note.id)} className="font-semibold text-pm-warning hover:underline">
-                  Delete
-                </button>
-                <button type="button" onClick={() => setConfirmDelete(false)} className="text-pm-muted hover:underline">
-                  Keep
-                </button>
-              </span>
-            ) : (
-              <button type="button" onClick={() => setConfirmDelete(true)} aria-label="Delete note" title="Delete" className="rounded p-1 text-pm-muted hover:bg-pm-subtle hover:text-pm-warning">
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={async () => {
+                const ok = await confirm({
+                  title: `Delete this ${NOTE_TYPE_LABEL[note.note_type].toLowerCase()}?`,
+                  message: <p>The note will be permanently deleted. This can&apos;t be undone.</p>,
+                  confirmLabel: "Delete note",
+                });
+                if (ok) removeNote.mutate(note.id);
+              }}
+              aria-label="Delete note"
+              title="Delete"
+              className="rounded p-1 text-pm-muted hover:bg-pm-subtle hover:text-pm-warning"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
           </span>
         )}
       </div>
@@ -157,7 +161,7 @@ export const NoteComposer = forwardRef<ComposerHandle, { challengeId: string }>(
   const { addNote } = useChallengeMutations();
   const [type, setType] = useState<NoteType>("advice");
   const [body, setBody] = useState("");
-  const [source, setSource] = useState(() => (typeof window === "undefined" ? DEFAULT_ADVISER : rememberedSource()));
+  const [source, setSource] = useState(() => (typeof window === "undefined" ? "" : rememberedSource()));
   const [owner, setOwner] = useState("");
   const [due, setDue] = useState("");
   const [error, setError] = useState<string | null>(null);

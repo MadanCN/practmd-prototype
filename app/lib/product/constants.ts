@@ -52,7 +52,6 @@ export const NOTE_TYPES: { value: NoteType; label: string; chip: string }[] = [
 ];
 export const NOTE_TYPE_LABEL = Object.fromEntries(NOTE_TYPES.map((n) => [n.value, n.label])) as Record<NoteType, string>;
 
-export const DEFAULT_ADVISER = "Prasanna Gopalakrishnan";
 
 /** WCAG contrast ratio of white text on a hex background. */
 export function contrastWithWhite(hex: string): number {

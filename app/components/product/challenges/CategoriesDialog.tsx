@@ -2,23 +2,47 @@
 
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Plus } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { categorySchema } from "@/lib/product/schemas";
-import { challengeKeys, upsertCategories, type ChallengeCategory } from "@/lib/product/data/challenges";
+import { challengeKeys, deleteCategory, upsertCategories, type Challenge, type ChallengeCategory } from "@/lib/product/data/challenges";
 import { getSupabaseBrowserClient } from "@/lib/product/supabase/client";
 import { Button, Dialog, inputClass } from "@/components/product/ui/primitives";
 import { useToast } from "@/components/product/ui/Toast";
+import { useConfirm } from "@/components/product/ui/Confirm";
 import { cn } from "@/lib/utils";
 
 type Draft = ChallengeCategory & { isNew?: boolean };
 
 /** Admin-only editor for challenge categories: name, colour and order. */
-export default function CategoriesDialog({ onClose, categories }: { onClose: () => void; categories: ChallengeCategory[] }) {
+export default function CategoriesDialog({ onClose, categories, challenges }: { onClose: () => void; categories: ChallengeCategory[]; challenges: Challenge[] }) {
   const [rows, setRows] = useState<Draft[]>(categories);
   const [errors, setErrors] = useState<Record<number, string>>({});
   const [saving, setSaving] = useState(false);
   const qc = useQueryClient();
   const toast = useToast();
+  const confirm = useConfirm();
+
+  async function removeRow(i: number) {
+    const row = rows[i];
+    if (row.isNew) {
+      setRows((r) => r.filter((_, j) => j !== i));
+      return;
+    }
+    const ok = await confirm({
+      title: "Delete this category?",
+      message: <p><strong>{row.name}</strong>{" "}will be permanently deleted. This can&apos;t be undone.</p>,
+      confirmLabel: "Delete category",
+    });
+    if (!ok) return;
+    try {
+      await deleteCategory(getSupabaseBrowserClient(), row.code);
+      await qc.invalidateQueries({ queryKey: challengeKeys.categories });
+      setRows((r) => r.filter((x) => x.code !== row.code));
+      toast(`Deleted “${row.name}”`);
+    } catch (e) {
+      toast(`Couldn't delete: ${(e as Error).message}`, "error");
+    }
+  }
   const patch = (i: number, p: Partial<Draft>) => setRows((r) => r.map((row, j) => (j === i ? { ...row, ...p } : row)));
   const move = (i: number, d: -1 | 1) =>
     setRows((r) => {
@@ -77,6 +101,22 @@ export default function CategoriesDialog({ onClose, categories }: { onClose: () 
               <Button size="sm" variant="ghost" aria-label={`Move ${r.name} down`} disabled={i === rows.length - 1} onClick={() => move(i, 1)}>
                 <ArrowDown className="h-4 w-4" />
               </Button>
+              {(() => {
+                const used = challenges.filter((c) => c.category === r.code).length;
+                return (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    aria-label={`Delete ${r.name || "new category"}`}
+                    title={used ? `Used by ${used} challenge${used === 1 ? "" : "s"} (archived included). Move or delete them first.` : "Delete"}
+                    disabled={used > 0}
+                    onClick={() => removeRow(i)}
+                    className="text-pm-warning"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                );
+              })()}
             </div>
             {r.isNew && <input aria-label="Code" placeholder="code (e.g. finance)" className={cn(inputClass, "mt-2 font-mono")} value={r.code} onChange={(e) => patch(i, { code: e.target.value })} />}
             {errors[i] && (

@@ -55,7 +55,7 @@ const note = (over: Partial<Parameters<typeof buildRecap>[2][number]>) => ({
 });
 
 const notes = [
-  note({ note_type: "advice", body: "Hire a product ops lead first.", source: "Prasanna Gopalakrishnan", created_at: "2026-09-30T10:00:00Z" }),
+  note({ note_type: "advice", body: "Hire a product ops lead first.", source: "Alex Adviser", created_at: "2026-09-30T10:00:00Z" }),
   note({ note_type: "decision", body: "Delegate Jira grooming.", created_at: "2026-09-30T10:05:00Z" }),
   note({ note_type: "action", body: "Draft the job description", action_owner: "Biju", due_date: "2026-10-15", created_at: "2026-09-30T10:10:00Z" }),
   note({ note_type: "action", body: "Share PostHog access", action_done: true, created_at: "2026-09-30T10:12:00Z" }),
@@ -82,7 +82,7 @@ describe("buildRecap", () => {
         "",
         "**Advice**",
         "",
-        "- **Prasanna Gopalakrishnan:** Hire a product ops lead first.",
+        "- **Alex Adviser:** Hire a product ops lead first.",
         "",
         "**Decisions**",
         "",
@@ -103,8 +103,8 @@ describe("buildRecap", () => {
 
   it("keeps multi-line notes inside their list item", () => {
     const md = buildRecap(categories, challenges, [
-      note({ note_type: "advice", body: "Line one\nLine two", source: "Prasanna Gopalakrishnan" }),
+      note({ note_type: "advice", body: "Line one\nLine two", source: "Alex Adviser" }),
     ]);
-    expect(md).toContain("- **Prasanna Gopalakrishnan:** Line one\n  Line two");
+    expect(md).toContain("- **Alex Adviser:** Line one\n  Line two");
   });
 });

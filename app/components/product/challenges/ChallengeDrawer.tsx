@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import { useForm } from "react-hook-form";
-import { Archive, ArchiveRestore, MessageSquarePlus } from "lucide-react";
+import { Archive, ArchiveRestore, MessageSquarePlus, Trash2 } from "lucide-react";
 import { zodResolver } from "@/lib/product/zod-resolver";
 import { challengeSchema, type ChallengeInput, type ChallengeValues } from "@/lib/product/schemas";
 import { CHALLENGE_PRIORITIES, CHALLENGE_STATUSES } from "@/lib/product/constants";
@@ -12,6 +12,7 @@ import { useSession } from "@/components/product/SessionContext";
 import { NoteComposer, NotesTimeline, type ComposerHandle } from "./Notes";
 import { StatusChip } from "./ChallengeCard";
 import { useChallengeMutations } from "./useChallenges";
+import { useConfirm } from "@/components/product/ui/Confirm";
 import { cn } from "@/lib/utils";
 
 function toInput(c: ChallengeWithCounts): ChallengeInput {
@@ -63,7 +64,7 @@ function ChallengeForm({
         <Field label="Description" htmlFor="ch-desc">
           <textarea id="ch-desc" rows={3} className={inputClass} {...register("description")} />
         </Field>
-        <Field label="Ask (the question we want Prasanna's view on)" htmlFor="ch-ask">
+        <Field label="Ask (the question we want advice on)" htmlFor="ch-ask">
           <textarea id="ch-ask" rows={2} className={cn(inputClass, "text-pm-link")} {...register("ask")} />
         </Field>
         <div className="grid gap-3 sm:grid-cols-3">
@@ -139,12 +140,34 @@ export default function ChallengeDrawer({
   onClose: () => void;
 }) {
   const { canEdit } = useSession();
-  const { update } = useChallengeMutations();
+  const { update, remove } = useChallengeMutations();
+  const confirm = useConfirm();
   const composer = useRef<ComposerHandle>(null);
   if (!challenge) return null;
   const cat = categories.find((c) => c.code === challenge.category);
   const related = roadmapCodes.find((r) => r.code === challenge.related_item_code);
   const challengeNotes = notes.filter((n) => n.challenge_id === challenge.id);
+
+  async function onDelete() {
+    if (!challenge) return;
+    const ok = await confirm({
+      title: "Delete this challenge?",
+      message: (
+        <>
+          <p>
+            <strong>{challenge.title}</strong>
+            {challengeNotes.length > 0 ? ` and its ${challengeNotes.length === 1 ? "1 note" : `${challengeNotes.length} notes`}` : ""}
+            {" will be permanently deleted. This can't be undone."}
+          </p>
+          {!challenge.archived_at && <p className="mt-2 text-pm-muted">To hide it but keep the record, use Archive instead.</p>}
+        </>
+      ),
+      confirmLabel: "Delete challenge",
+    });
+    if (!ok) return;
+    remove.mutate(challenge);
+    onClose();
+  }
 
   return (
     <Sheet
@@ -169,12 +192,15 @@ export default function ChallengeDrawer({
           <div className="flex flex-wrap justify-end gap-2">
             {!challenge.archived_at && (
               <Button size="sm" variant="primary" onClick={() => composer.current?.captureAdvice()}>
-                <MessageSquarePlus className="h-4 w-4" /> Capture Prasanna&apos;s input
+                <MessageSquarePlus className="h-4 w-4" /> Capture advice
               </Button>
             )}
             <Button size="sm" onClick={() => update.mutate({ id: challenge.id, patch: { archived_at: challenge.archived_at ? null : new Date().toISOString() } })}>
               {challenge.archived_at ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
               {challenge.archived_at ? "Restore" : "Archive"}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={onDelete} className="text-pm-warning hover:bg-pm-warning/10">
+              <Trash2 className="h-4 w-4" /> Delete
             </Button>
           </div>
         )
