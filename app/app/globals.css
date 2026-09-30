@@ -34,6 +34,45 @@
   --color-navy-800: #083a72;
   --color-navy-900: #002b61;
   --color-navy-950: #001730;
+
+  /* ── Product section (Roadmap & Priorities, Challenges) — workshop brand ─ */
+  --color-pm-navy: #001a57;
+  --color-pm-ink: #0b1d3f;
+  --color-pm-ocean: #026280;
+  --color-pm-teal: #02979d;
+  --color-pm-aqua: #03eecd;
+  --color-pm-warning: #b63b26;
+  /* theme-aware surfaces, defined on .product-app below */
+  --color-pm-bg: var(--pm-bg);
+  --color-pm-card: var(--pm-card);
+  --color-pm-border: var(--pm-border);
+  --color-pm-text: var(--pm-text);
+  --color-pm-muted: var(--pm-muted);
+  --color-pm-link: var(--pm-link);
+  --color-pm-accent: var(--pm-accent);
+  --color-pm-subtle: var(--pm-subtle);
+}
+
+.product-app {
+  --pm-bg: #f4f8fa;
+  --pm-card: #ffffff;
+  --pm-border: #d5e0e7;
+  --pm-text: #0b1d3f;
+  --pm-muted: #52627a;
+  --pm-link: #026280;
+  --pm-accent: #02979d;
+  --pm-subtle: #eaf1f5;
+  font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+}
+.dark .product-app {
+  --pm-bg: #07111f;
+  --pm-card: #0e1b30;
+  --pm-border: #22344f;
+  --pm-text: #e6edf7;
+  --pm-muted: #9fb0c8;
+  --pm-link: #5cc6e6;
+  --pm-accent: #22c4c9;
+  --pm-subtle: #132440;
 }
 
 :root {

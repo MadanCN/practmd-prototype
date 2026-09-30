@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Shield, HeartHandshake, Stethoscope, User, Banknote } from "lucide-react";
+import { Shield, HeartHandshake, Stethoscope, User, Banknote, Map } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PractMdLockup } from "@/components/brand/PractMdLogo";
 
@@ -51,6 +51,15 @@ const ROLES = [
     available: true,
     accent: "amber",
   },
+  {
+    id: "product",
+    label: "Product",
+    description: "Rank and plan the roadmap, and capture workshop challenges and advice",
+    icon: Map,
+    href: "/product/priorities",
+    available: true,
+    accent: "indigo",
+  },
 ] as const;
 
 const accentMap = {
@@ -93,6 +102,14 @@ const accentMap = {
     iconColor: "text-amber-500",
     badge: "bg-amber-600 text-white",
     hover: "hover:border-amber-400 hover:shadow-amber-100 dark:hover:shadow-amber-900/30",
+  },
+  indigo: {
+    ring: "ring-indigo-500",
+    bg: "bg-indigo-600",
+    iconBg: "bg-indigo-600/10",
+    iconColor: "text-indigo-400",
+    badge: "bg-indigo-600 text-white",
+    hover: "hover:border-indigo-400 hover:shadow-indigo-100 dark:hover:shadow-indigo-900/30",
   },
 };
 
